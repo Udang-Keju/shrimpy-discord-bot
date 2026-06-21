@@ -1014,10 +1014,6 @@ shrimpy-discord-bot/
 │   │   │   └── ratelimit.go          # API rate limiting
 │   │   └── server.go                 # chi router setup, middleware chain
 │   │
-│   │
-│   ├── cache/
-│   │   └── guild_config.go           # In-memory TTL cache for guild configs
-│   │
 │   └── config/
 │       └── config.go                 # Loads environment variables
 │

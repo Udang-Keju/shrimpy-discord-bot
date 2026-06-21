@@ -14,6 +14,7 @@ import (
 	auth_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild"
 	guild_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/model"
+	guild_repo "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole"
 	rr_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket"
@@ -23,7 +24,6 @@ import (
 	welcome_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/bot/handlers"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/cache"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/config"
 	"github.com/bwmarrin/discordgo"
 	"gorm.io/driver/postgres"
@@ -72,7 +72,7 @@ func main() {
 	}
 
 	// 4. Initialize Config Cache
-	guildCache := cache.NewGuildCache[*guild_model.Guild](time.Duration(cfg.CacheTTLSeconds) * time.Second)
+	guildCache := guild_repo.NewGuildCache[*guild_model.Guild](time.Duration(cfg.CacheTTLSeconds) * time.Second)
 
 	// 5. Load feature configs
 	ticketCfg := ticket_config.Load()

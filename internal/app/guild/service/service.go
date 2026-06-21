@@ -6,7 +6,6 @@ import (
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/repository"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/cache"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -35,11 +34,11 @@ type AutoRoleRepository interface {
 // GuildService manages server configuration, support staff roles, auto-roles, and bot nicknames.
 type GuildService struct {
 	repo  GuildRepository
-	cache *cache.GuildCache[*model.Guild]
+	cache *repository.GuildCache[*model.Guild]
 }
 
 // NewGuildService constructs a new GuildService with the given repository and cache.
-func NewGuildService(repo GuildRepository, cache *cache.GuildCache[*model.Guild]) *GuildService {
+func NewGuildService(repo GuildRepository, cache *repository.GuildCache[*model.Guild]) *GuildService {
 	return &GuildService{
 		repo:  repo,
 		cache: cache,

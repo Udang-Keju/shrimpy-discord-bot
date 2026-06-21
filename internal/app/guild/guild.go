@@ -6,7 +6,6 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/cache"
 	"github.com/bwmarrin/discordgo"
 	"gorm.io/gorm"
 )
@@ -21,7 +20,7 @@ type Module struct {
 }
 
 // Build compiles all layers of the guild feature.
-func Build(db *gorm.DB, guildCache *cache.GuildCache[*model.Guild], dg *discordgo.Session) *Module {
+func Build(db *gorm.DB, guildCache *repository.GuildCache[*model.Guild], dg *discordgo.Session) *Module {
 	repo := repository.NewGuildRepo(db)
 	svc := service.NewGuildService(repo, guildCache)
 	autoRoleSvc := service.NewAutoRoleService(repo)

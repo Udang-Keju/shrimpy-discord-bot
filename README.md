@@ -51,7 +51,6 @@ shrimpy-discord-bot/
 │   │   └── handlers/    # Bot action delegate context (events, commands, buttons, prefix)
 │   ├── api/             # REST API server definition and routes
 │   │   └── middleware/  # JWT auth, guild permissions, rate limiting
-│   ├── cache/           # In-memory TTL cache for guild configs
 │   └── config/          # Environment variable loader
 ├── migrations/          # SQL schema migrations
 ├── docs/
