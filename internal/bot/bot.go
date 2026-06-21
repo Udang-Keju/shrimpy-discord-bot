@@ -62,3 +62,23 @@ func (b *Bot) Stop() error {
 	fmt.Println("Bot: Closing gateway connection...")
 	return b.Session.Close()
 }
+
+// Reconnect updates the bot token and re-opens the Discord gateway connection.
+// Because the same *discordgo.Session pointer is reused, all AddHandler registrations
+// and all service references that hold this pointer remain valid after reconnection.
+func (b *Bot) Reconnect(newToken string) error {
+	fmt.Println("Bot: Reconnecting with updated token...")
+	b.Session.Token = "Bot " + newToken
+
+	// Best-effort close — ignore error since we're reconnecting anyway
+	if err := b.Session.Close(); err != nil {
+		fmt.Printf("Bot: Warning — session close error during reconnect: %v\n", err)
+	}
+
+	if err := b.Session.Open(); err != nil {
+		return fmt.Errorf("bot: failed to reopen gateway after reconnect: %w", err)
+	}
+
+	fmt.Println("Bot: Successfully reconnected to Discord Gateway.")
+	return nil
+}
