@@ -3,46 +3,65 @@ package repository
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/model"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
-// ErrNotFound is returned when the bot_settings row does not exist yet.
-var ErrNotFound = errors.New("bot_settings: record not found")
+// ErrNotFound is returned when a requested Discord application is not found.
+var ErrNotFound = errors.New("settings: app not found")
 
-// SettingsRepo handles database operations for the bot_settings singleton table.
+// SettingsRepo handles database operations for the discord_apps table.
 type SettingsRepo struct{ db *gorm.DB }
 
 // NewSettingsRepo creates a new concrete SettingsRepo instance.
 func NewSettingsRepo(db *gorm.DB) *SettingsRepo { return &SettingsRepo{db: db} }
 
-// Get returns the singleton bot_settings row.
-func (r *SettingsRepo) Get(ctx context.Context) (*model.BotSettings, error) {
-	var s model.BotSettings
-	result := r.db.WithContext(ctx).First(&s, "id = ?", 1)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
-	return &s, result.Error
+// GetAll returns all configured Discord applications.
+func (r *SettingsRepo) GetAll(ctx context.Context) ([]model.DiscordApp, error) {
+	var apps []model.DiscordApp
+	err := r.db.WithContext(ctx).Order("created_at").Find(&apps).Error
+	return apps, err
 }
 
-// Upsert inserts or replaces the singleton bot_settings row (id always = 1).
-func (r *SettingsRepo) Upsert(ctx context.Context, s *model.BotSettings) error {
-	s.ID = 1 // enforce singleton constraint
-	s.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "id"}},
-			DoUpdates: clause.Assignments(map[string]interface{}{
-				"discord_token_enc":          s.DiscordTokenEnc,
-				"discord_client_id":          s.DiscordClientID,
-				"discord_client_secret_enc":  s.DiscordClientSecretEnc,
-				"discord_redirect_uri":       s.DiscordRedirectURI,
-				"updated_at":                 s.UpdatedAt,
-			}),
-		}).
-		Create(s).Error
+// GetByID fetches a Discord application by its database ID (UUID).
+func (r *SettingsRepo) GetByID(ctx context.Context, id string) (*model.DiscordApp, error) {
+	var app model.DiscordApp
+	err := r.db.WithContext(ctx).First(&app, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &app, err
+}
+
+// GetByClientID fetches a Discord application by its client ID.
+func (r *SettingsRepo) GetByClientID(ctx context.Context, clientID string) (*model.DiscordApp, error) {
+	var app model.DiscordApp
+	err := r.db.WithContext(ctx).First(&app, "discord_client_id = ?", clientID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &app, err
+}
+
+// Create inserts a new Discord application record.
+func (r *SettingsRepo) Create(ctx context.Context, app *model.DiscordApp) error {
+	return r.db.WithContext(ctx).Create(app).Error
+}
+
+// Update saves an existing Discord application record.
+func (r *SettingsRepo) Update(ctx context.Context, app *model.DiscordApp) error {
+	return r.db.WithContext(ctx).Save(app).Error
+}
+
+// Delete removes a Discord application record by ID.
+func (r *SettingsRepo) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.DiscordApp{}, "id = ?", id).Error
+}
+
+// Count returns the total number of registered bot applications.
+func (r *SettingsRepo) Count(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.DiscordApp{}).Count(&count).Error
+	return count, err
 }

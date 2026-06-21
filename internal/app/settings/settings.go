@@ -16,11 +16,14 @@ type Module struct {
 }
 
 // Build compiles all layers of the settings feature.
-// reconnectFn is called with the new plaintext token whenever the bot token is updated.
-func Build(db *gorm.DB, tokenEncKey []byte, reconnectFn handler.ReconnectFn) *Module {
+func Build(
+	db *gorm.DB,
+	tokenEncKey []byte,
+	controller service.BotSessionController,
+) *Module {
 	repo := repository.NewSettingsRepo(db)
-	svc := service.NewSettingsService(repo, tokenEncKey)
-	h := handler.NewSettingsHandler(svc, reconnectFn)
+	svc := service.NewSettingsService(repo, tokenEncKey, controller)
+	h := handler.NewSettingsHandler(svc)
 	return &Module{
 		Repo:    repo,
 		Service: svc,
@@ -30,5 +33,5 @@ func Build(db *gorm.DB, tokenEncKey []byte, reconnectFn handler.ReconnectFn) *Mo
 
 // Models returns all GORM models used by the settings feature.
 func (m *Module) Models() []any {
-	return []any{&model.BotSettings{}}
+	return []any{&model.DiscordApp{}}
 }
