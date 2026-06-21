@@ -558,3 +558,13 @@ func (s *TicketService) LogMessage(ctx context.Context, ticketID string, authorI
 
 	return err
 }
+
+// GetByChannelID delegates to the ticket repository.
+func (s *TicketService) GetByChannelID(ctx context.Context, channelID int64) (*repository.Ticket, error) {
+	return s.ticketRepo.GetByChannelID(ctx, channelID)
+}
+
+// UpdatePriority delegates to the ticket repository.
+func (s *TicketService) UpdatePriority(ctx context.Context, ticketID string, priority repository.TicketPriority) (*repository.Ticket, error) {
+	return s.ticketRepo.UpdatePriority(ctx, ticketID, priority)
+}
