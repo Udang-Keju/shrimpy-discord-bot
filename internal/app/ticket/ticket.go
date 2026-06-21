@@ -7,7 +7,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/service"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +24,7 @@ type Module struct {
 }
 
 // Build compiles all layers of the ticket feature.
-func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, dg *discordgo.Session) *Module {
+func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, provider discordutil.DiscordSessionProvider) *Module {
 	categoryRepo := repository.NewCategoryRepo(db)
 	ticketRepo := repository.NewTicketRepo(db)
 	messageRepo := repository.NewMessageRepo(db)
@@ -35,7 +35,7 @@ func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, dg *discordgo.S
 	ticketSvc := service.NewTicketService(ticketRepo, categoryRepo, guildRepo, messageRepo, transcriptSvc)
 	schedulerSvc := service.NewScheduler(ticketRepo, ticketSvc, ticketCfg.AutoCloseCheckInterval)
 
-	h := handler.NewHandler(ticketSvc, categoryRepo, transcriptSvc, dg)
+	h := handler.NewHandler(ticketSvc, categoryRepo, transcriptSvc, provider)
 	b := bot.NewBotHandler(ticketSvc)
 
 	return &Module{

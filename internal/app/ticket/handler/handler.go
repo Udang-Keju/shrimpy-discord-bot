@@ -10,7 +10,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,16 +19,16 @@ type Handler struct {
 	ticketSvc    *service.TicketService
 	categoryRepo *repository.CategoryRepo
 	transcript   *service.TranscriptService
-	dg           *discordgo.Session
+	provider     discordutil.DiscordSessionProvider
 }
 
 // NewHandler constructs a new Handler.
-func NewHandler(ticketSvc *service.TicketService, categoryRepo *repository.CategoryRepo, transcript *service.TranscriptService, dg *discordgo.Session) *Handler {
+func NewHandler(ticketSvc *service.TicketService, categoryRepo *repository.CategoryRepo, transcript *service.TranscriptService, provider discordutil.DiscordSessionProvider) *Handler {
 	return &Handler{
 		ticketSvc:    ticketSvc,
 		categoryRepo: categoryRepo,
 		transcript:   transcript,
-		dg:           dg,
+		provider:     provider,
 	}
 }
 
@@ -287,14 +287,23 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ticket *model.Ticket
-	var err error
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
 
 	if payload.Claimed != nil {
 		if *payload.Claimed {
-			ticket, err = h.ticketSvc.Claim(r.Context(), h.dg, ticketID, callerUserID)
+			ticket, err = h.ticketSvc.Claim(r.Context(), dg, ticketID, callerUserID)
 		} else {
-			ticket, err = h.ticketSvc.Unclaim(r.Context(), h.dg, ticketID)
+			ticket, err = h.ticketSvc.Unclaim(r.Context(), dg, ticketID)
 		}
 		if err != nil {
 			apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Claim operation failed: "+err.Error())
@@ -307,14 +316,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		ticket, err = h.ticketSvc.UpdatePriority(r.Context(), ticketID, prio)
 		if err != nil {
 			apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update priority: "+err.Error())
-			return
-		}
-	}
-
-	if ticket == nil {
-		ticket, err = h.ticketSvc.GetByID(r.Context(), ticketID)
-		if err != nil {
-			apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch updated record")
 			return
 		}
 	}
@@ -335,7 +336,19 @@ func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
 	var payload closeTicketPayload
 	_ = json.NewDecoder(r.Body).Decode(&payload)
 
-	ticket, err := h.ticketSvc.Close(r.Context(), h.dg, ticketID, payload.Reason, callerUserID)
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	ticket, err = h.ticketSvc.Close(r.Context(), dg, ticketID, payload.Reason, callerUserID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to close ticket: "+err.Error())
 		return
@@ -348,7 +361,19 @@ func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Reopen(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticketId")
 
-	ticket, err := h.ticketSvc.Reopen(r.Context(), h.dg, ticketID)
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	ticket, err = h.ticketSvc.Reopen(r.Context(), dg, ticketID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to reopen ticket: "+err.Error())
 		return
@@ -361,7 +386,19 @@ func (h *Handler) Reopen(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticketId")
 
-	err := h.ticketSvc.Archive(r.Context(), h.dg, ticketID)
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	err = h.ticketSvc.Archive(r.Context(), dg, ticketID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to archive ticket: "+err.Error())
 		return
@@ -381,6 +418,12 @@ func (h *Handler) DownloadTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
 	var content string
 	var contentType string
 	var fileExt string
@@ -397,7 +440,7 @@ func (h *Handler) DownloadTranscript(w http.ResponseWriter, r *http.Request) {
 		}
 
 		openerName := "unknown"
-		openerUser, uErr := h.dg.User(fmt.Sprintf("%d", ticket.OpenedBy))
+		openerUser, uErr := dg.User(fmt.Sprintf("%d", ticket.OpenedBy))
 		if uErr == nil {
 			openerName = openerUser.Username
 		}
@@ -427,12 +470,18 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")
 	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
 
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
 	memberCount := 0
-	guild, err := h.dg.State.Guild(guildIDStr)
+	guild, err := dg.State.Guild(guildIDStr)
 	if err == nil {
 		memberCount = guild.MemberCount
 	} else {
-		guild, err = h.dg.Guild(guildIDStr)
+		guild, err = dg.Guild(guildIDStr)
 		if err == nil {
 			memberCount = guild.MemberCount
 		}

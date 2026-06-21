@@ -908,7 +908,7 @@ func NewScheduler(ticketRepo SchedulerRepository, ticketSvc *TicketService, inte
 }
 
 // Start initiates the periodic poll. Blocks until the context is cancelled.
-func (s *Scheduler) Start(ctx context.Context, dg *discordgo.Session) {
+func (s *Scheduler) Start(ctx context.Context, provider discordutil.DiscordSessionProvider) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -920,12 +920,12 @@ func (s *Scheduler) Start(ctx context.Context, dg *discordgo.Session) {
 			fmt.Println("Scheduler: Auto-close check stopped.")
 			return
 		case <-ticker.C:
-			s.runCheck(ctx, dg)
+			s.runCheck(ctx, provider)
 		}
 	}
 }
 
-func (s *Scheduler) runCheck(ctx context.Context, dg *discordgo.Session) {
+func (s *Scheduler) runCheck(ctx context.Context, provider discordutil.DiscordSessionProvider) {
 	tickets, err := s.ticketRepo.ListDueForAutoClose(ctx)
 	if err != nil {
 		fmt.Printf("Scheduler Error: failed to list due tickets: %v\n", err)
@@ -937,15 +937,22 @@ func (s *Scheduler) runCheck(ctx context.Context, dg *discordgo.Session) {
 	}
 
 	fmt.Printf("Scheduler: Found %d tickets due for auto-closing.\n", len(tickets))
-	botUser, err := dg.User("@me")
-	var botUserID int64
-	if err == nil {
-		botUserID, _ = discordutil.ParseID(botUser.ID)
-	}
 
 	for _, t := range tickets {
+		dg, err := provider.GetSessionForGuild(ctx, t.GuildID)
+		if err != nil {
+			fmt.Printf("Scheduler Error: failed to resolve bot session for guild %d: %v\n", t.GuildID, err)
+			continue
+		}
+
+		botUser, err := dg.User("@me")
+		var botUserID int64
+		if err == nil {
+			botUserID, _ = discordutil.ParseID(botUser.ID)
+		}
+
 		reason := "Auto-closed due to inactivity."
-		_, err := s.ticketSvc.Close(ctx, dg, t.ID, &reason, botUserID)
+		_, err = s.ticketSvc.Close(ctx, dg, t.ID, &reason, botUserID)
 		if err != nil {
 			fmt.Printf("Scheduler Error: failed to close ticket %s: %v\n", t.ID, err)
 		} else {
