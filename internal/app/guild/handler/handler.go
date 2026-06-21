@@ -8,6 +8,7 @@ import (
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-chi/chi/v5"
 )
@@ -15,14 +16,14 @@ import (
 // Handler handles dashboard requests for server configuration, roles and bot nickname.
 type Handler struct {
 	guildSvc *service.GuildService
-	dg       *discordgo.Session
+	provider discordutil.DiscordSessionProvider
 }
 
 // NewHandler constructs a new Handler.
-func NewHandler(guildSvc *service.GuildService, dg *discordgo.Session) *Handler {
+func NewHandler(guildSvc *service.GuildService, provider discordutil.DiscordSessionProvider) *Handler {
 	return &Handler{
 		guildSvc: guildSvc,
-		dg:       dg,
+		provider: provider,
 	}
 }
 
@@ -43,30 +44,35 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	var list []guildResponse
 	for _, idStr := range managedGuildIDs {
-		botJoined := true
-		guild, err := h.dg.State.Guild(idStr)
-		if err != nil {
-			guild, err = h.dg.Guild(idStr)
-			if err != nil {
-				botJoined = false
+		botJoined := h.provider.IsBotInGuild(idStr)
+		var gName, gIcon string
+
+		if botJoined {
+			gID, err := strconv.ParseInt(idStr, 10, 64)
+			if err == nil {
+				if dg, sErr := h.provider.GetSessionForGuild(r.Context(), gID); sErr == nil {
+					guild, err := dg.State.Guild(idStr)
+					if err != nil {
+						guild, err = dg.Guild(idStr)
+					}
+					if err == nil && guild != nil {
+						gName = guild.Name
+						gIcon = guild.Icon
+					}
+				}
 			}
 		}
 
-		if botJoined && guild != nil {
-			list = append(list, guildResponse{
-				ID:        guild.ID,
-				Name:      guild.Name,
-				Icon:      guild.Icon,
-				BotJoined: true,
-			})
-		} else {
-			list = append(list, guildResponse{
-				ID:        idStr,
-				Name:      "Server " + idStr,
-				Icon:      "",
-				BotJoined: false,
-			})
+		if gName == "" {
+			gName = "Server " + idStr
 		}
+
+		list = append(list, guildResponse{
+			ID:        idStr,
+			Name:      gName,
+			Icon:      gIcon,
+			BotJoined: botJoined,
+		})
 	}
 
 	apiutil.WriteJSON(w, http.StatusOK, list)
@@ -141,7 +147,13 @@ func (h *Handler) UpdateNickname(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.guildSvc.UpdateNickname(r.Context(), h.dg, guildID, payload.Nickname)
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	err = h.guildSvc.UpdateNickname(r.Context(), dg, guildID, payload.Nickname)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to set nickname: "+err.Error())
 		return
@@ -153,8 +165,15 @@ func (h *Handler) UpdateNickname(w http.ResponseWriter, r *http.Request) {
 // GetDiscordChannels returns text channels in the guild for dropdown selectors.
 func (h *Handler) GetDiscordChannels(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")
+	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
 
-	channels, err := h.dg.GuildChannels(guildIDStr)
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	channels, err := dg.GuildChannels(guildIDStr)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "DISCORD_ERROR", "Failed to fetch Discord channels: "+err.Error())
 		return
@@ -183,8 +202,15 @@ func (h *Handler) GetDiscordChannels(w http.ResponseWriter, r *http.Request) {
 // GetDiscordRoles returns roles in the guild for role pickers.
 func (h *Handler) GetDiscordRoles(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")
+	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
 
-	roles, err := h.dg.GuildRoles(guildIDStr)
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	roles, err := dg.GuildRoles(guildIDStr)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "DISCORD_ERROR", "Failed to fetch Discord roles: "+err.Error())
 		return

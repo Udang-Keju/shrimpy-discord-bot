@@ -27,8 +27,8 @@ func (h *BotHandler) OnGuildCreate(s *discordgo.Session, g *discordgo.GuildCreat
 		return
 	}
 
-	// Auto-register guild config in DB (upsert) to ensure defaults are populated
-	_, err = h.guildSvc.GetConfig(context.Background(), guildID)
+	// Auto-register guild config in DB associated with this bot application's client ID
+	_, err = h.guildSvc.RegisterGuild(context.Background(), guildID, s.State.User.ID)
 	if err != nil {
 		fmt.Printf("Bot Error: failed to register guild %d: %v\n", guildID, err)
 	} else {

@@ -11,10 +11,11 @@ import (
 
 // GuildRepository defines the database operations consumed by GuildService.
 type GuildRepository interface {
-	Upsert(ctx context.Context, guildID int64) (*model.Guild, error)
+	Upsert(ctx context.Context, guildID int64, appID *string) (*model.Guild, error)
 	GetByID(ctx context.Context, guildID int64) (*model.Guild, error)
 	Update(ctx context.Context, guildID int64, updates map[string]interface{}) (*model.Guild, error)
 	Deactivate(ctx context.Context, guildID int64) error
+	GetAppIDByClientID(ctx context.Context, clientID string) (string, error)
 
 	ListStaffRoles(ctx context.Context, guildID int64) ([]model.StaffRole, error)
 	AddStaffRole(ctx context.Context, guildID, roleID int64) (*model.StaffRole, error)
@@ -55,13 +56,34 @@ func (s *GuildService) GetConfig(ctx context.Context, guildID int64) (*model.Gui
 	if err != nil {
 		if err == repository.ErrNotFound {
 			// If not found in DB, auto-register (upsert) the guild.
-			cfg, err = s.repo.Upsert(ctx, guildID)
+			cfg, err = s.repo.Upsert(ctx, guildID, nil)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			return nil, err
 		}
+	}
+
+	s.cache.Set(guildID, cfg)
+	return cfg, nil
+}
+
+// RegisterGuild is called by the Gateway event handler when a bot joins a server or reconnects.
+func (s *GuildService) RegisterGuild(ctx context.Context, guildID int64, clientID string) (*model.Guild, error) {
+	appID, err := s.repo.GetAppIDByClientID(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("guild: failed to lookup application for client ID %s: %w", clientID, err)
+	}
+
+	var pAppID *string
+	if appID != "" {
+		pAppID = &appID
+	}
+
+	cfg, err := s.repo.Upsert(ctx, guildID, pAppID)
+	if err != nil {
+		return nil, fmt.Errorf("guild: failed to upsert config: %w", err)
 	}
 
 	s.cache.Set(guildID, cfg)

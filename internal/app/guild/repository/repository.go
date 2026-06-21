@@ -22,12 +22,16 @@ func NewGuildRepo(db *gorm.DB) *GuildRepo { return &GuildRepo{db: db} }
 // ─── Guild ────────────────────────────────────────────────────────────────────
 
 // Upsert registers a guild on first GUILD_CREATE, or re-activates it.
-func (r *GuildRepo) Upsert(ctx context.Context, guildID int64) (*model.Guild, error) {
-	g := model.Guild{GuildID: guildID}
+func (r *GuildRepo) Upsert(ctx context.Context, guildID int64, appID *string) (*model.Guild, error) {
+	g := model.Guild{GuildID: guildID, DiscordAppID: appID}
+	assignments := map[string]interface{}{"is_active": true}
+	if appID != nil {
+		assignments["discord_app_id"] = *appID
+	}
 	result := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "guild_id"}},
-			DoUpdates: clause.Assignments(map[string]interface{}{"is_active": true}),
+			DoUpdates: clause.Assignments(assignments),
 		}).
 		Create(&g)
 	return &g, result.Error
@@ -61,6 +65,15 @@ func (r *GuildRepo) Deactivate(ctx context.Context, guildID int64) error {
 		Model(&model.Guild{}).
 		Where("guild_id = ?", guildID).
 		Update("is_active", false).Error
+}
+
+// GetAppIDByClientID retrieves the database UUID for a Discord application client ID.
+func (r *GuildRepo) GetAppIDByClientID(ctx context.Context, clientID string) (string, error) {
+	var id string
+	err := r.db.WithContext(ctx).Table("discord_apps").
+		Where("discord_client_id = ?", clientID).
+		Pluck("id", &id).Error
+	return id, err
 }
 
 // ─── Staff Roles ──────────────────────────────────────────────────────────────

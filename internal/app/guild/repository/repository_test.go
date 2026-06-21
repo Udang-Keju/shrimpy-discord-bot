@@ -15,8 +15,21 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
+	err = db.Exec(`CREATE TABLE discord_apps (
+		id TEXT PRIMARY KEY,
+		name TEXT,
+		discord_token_enc BLOB,
+		discord_client_id TEXT UNIQUE,
+		discord_client_secret_enc BLOB,
+		discord_redirect_uri TEXT,
+		created_at DATETIME,
+		updated_at DATETIME
+	)`).Error
+	require.NoError(t, err)
+
 	err = db.Exec(`CREATE TABLE guilds (
 		guild_id INTEGER PRIMARY KEY,
+		discord_app_id TEXT,
 		prefix TEXT DEFAULT '!',
 		language TEXT DEFAULT 'en',
 		bot_nickname TEXT,
@@ -57,7 +70,7 @@ func TestGuildRepo_UpsertAndGetByID(t *testing.T) {
 		repo := repository.NewGuildRepo(db)
 
 		// 1. Initial Upsert
-		g, err := repo.Upsert(ctx, guildID)
+		g, err := repo.Upsert(ctx, guildID, nil)
 		assert.NoError(t, err)
 		assert.Equal(t, guildID, g.GuildID)
 		assert.True(t, g.IsActive)
@@ -77,7 +90,7 @@ func TestGuildRepo_UpsertAndGetByID(t *testing.T) {
 		assert.False(t, fetched.IsActive)
 
 		// 4. Re-activate via Upsert (On Conflict)
-		g, err = repo.Upsert(ctx, guildID)
+		g, err = repo.Upsert(ctx, guildID, nil)
 		assert.NoError(t, err)
 		assert.True(t, g.IsActive)
 
@@ -102,7 +115,7 @@ func TestGuildRepo_Update(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewGuildRepo(db)
 
-	_, err := repo.Upsert(ctx, guildID)
+	_, err := repo.Upsert(ctx, guildID, nil)
 	require.NoError(t, err)
 
 	nickname := "MyBotNick"
@@ -124,6 +137,25 @@ func TestGuildRepo_Update(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, nickname, *fetched.BotNickname)
 	assert.Equal(t, logChanID, *fetched.LogChannelID)
+}
+
+func TestGuildRepo_GetAppIDByClientID(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	repo := repository.NewGuildRepo(db)
+
+	// Insert test app
+	err := db.Exec(`INSERT INTO discord_apps (id, name, discord_client_id) VALUES ('app-uuid-123', 'Test App', 'client-id-123')`).Error
+	require.NoError(t, err)
+
+	appID, err := repo.GetAppIDByClientID(ctx, "client-id-123")
+	assert.NoError(t, err)
+	assert.Equal(t, "app-uuid-123", appID)
+
+	// Query for non-existent client ID
+	appID, err = repo.GetAppIDByClientID(ctx, "non-existent")
+	assert.NoError(t, err)
+	assert.Empty(t, appID)
 }
 
 func TestGuildRepo_StaffRoles(t *testing.T) {

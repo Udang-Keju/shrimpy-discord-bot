@@ -5,6 +5,7 @@ import "time"
 // Guild maps to the guilds table.
 type Guild struct {
 	GuildID      int64   `gorm:"primaryKey;column:guild_id;autoIncrement:false"`
+	DiscordAppID *string `gorm:"column:discord_app_id;type:uuid"`
 	Prefix       string  `gorm:"column:prefix;default:'!'"`
 	Language     string  `gorm:"column:language;default:'en'"`
 	BotNickname  *string `gorm:"column:bot_nickname"`

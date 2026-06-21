@@ -33,22 +33,23 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // MockGuildRepository implements service.GuildRepository and service.AutoRoleRepository
 type MockGuildRepository struct {
-	UpsertFunc          func(ctx context.Context, guildID int64) (*model.Guild, error)
-	GetByIDFunc         func(ctx context.Context, guildID int64) (*model.Guild, error)
-	UpdateFunc          func(ctx context.Context, guildID int64, updates map[string]interface{}) (*model.Guild, error)
-	DeactivateFunc      func(ctx context.Context, guildID int64) error
-	ListStaffRolesFunc  func(ctx context.Context, guildID int64) ([]model.StaffRole, error)
-	AddStaffRoleFunc    func(ctx context.Context, guildID, roleID int64) (*model.StaffRole, error)
-	RemoveStaffRoleFunc func(ctx context.Context, guildID, roleID int64) error
-	IsStaffRoleFunc     func(ctx context.Context, guildID int64, roleIDs []int64) (bool, error)
-	ListAutoRolesFunc   func(ctx context.Context, guildID int64) ([]model.AutoRole, error)
-	AddAutoRoleFunc     func(ctx context.Context, guildID, roleID int64) (*model.AutoRole, error)
-	RemoveAutoRoleFunc  func(ctx context.Context, guildID, roleID int64) error
+	UpsertFunc             func(ctx context.Context, guildID int64, appID *string) (*model.Guild, error)
+	GetByIDFunc            func(ctx context.Context, guildID int64) (*model.Guild, error)
+	UpdateFunc             func(ctx context.Context, guildID int64, updates map[string]interface{}) (*model.Guild, error)
+	DeactivateFunc         func(ctx context.Context, guildID int64) error
+	GetAppIDByClientIDFunc func(ctx context.Context, clientID string) (string, error)
+	ListStaffRolesFunc     func(ctx context.Context, guildID int64) ([]model.StaffRole, error)
+	AddStaffRoleFunc       func(ctx context.Context, guildID, roleID int64) (*model.StaffRole, error)
+	RemoveStaffRoleFunc    func(ctx context.Context, guildID, roleID int64) error
+	IsStaffRoleFunc        func(ctx context.Context, guildID int64, roleIDs []int64) (bool, error)
+	ListAutoRolesFunc      func(ctx context.Context, guildID int64) ([]model.AutoRole, error)
+	AddAutoRoleFunc        func(ctx context.Context, guildID, roleID int64) (*model.AutoRole, error)
+	RemoveAutoRoleFunc     func(ctx context.Context, guildID, roleID int64) error
 }
 
-func (m *MockGuildRepository) Upsert(ctx context.Context, guildID int64) (*model.Guild, error) {
+func (m *MockGuildRepository) Upsert(ctx context.Context, guildID int64, appID *string) (*model.Guild, error) {
 	if m.UpsertFunc != nil {
-		return m.UpsertFunc(ctx, guildID)
+		return m.UpsertFunc(ctx, guildID, appID)
 	}
 	return nil, nil
 }
@@ -72,6 +73,13 @@ func (m *MockGuildRepository) Deactivate(ctx context.Context, guildID int64) err
 		return m.DeactivateFunc(ctx, guildID)
 	}
 	return nil
+}
+
+func (m *MockGuildRepository) GetAppIDByClientID(ctx context.Context, clientID string) (string, error) {
+	if m.GetAppIDByClientIDFunc != nil {
+		return m.GetAppIDByClientIDFunc(ctx, clientID)
+	}
+	return "", nil
 }
 
 func (m *MockGuildRepository) ListStaffRoles(ctx context.Context, guildID int64) ([]model.StaffRole, error) {
@@ -166,7 +174,7 @@ func TestGuildService_GetConfig(t *testing.T) {
 				repo.GetByIDFunc = func(c context.Context, id int64) (*model.Guild, error) {
 					return nil, repository.ErrNotFound
 				}
-				repo.UpsertFunc = func(c context.Context, id int64) (*model.Guild, error) {
+				repo.UpsertFunc = func(c context.Context, id int64, appID *string) (*model.Guild, error) {
 					*called = true
 					return expectedGuild, nil
 				}
