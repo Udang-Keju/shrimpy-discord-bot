@@ -64,7 +64,6 @@ func NewServer(
 	}
 }
 
-
 // SetupRoutes registers global middlewares, sets up public/private route groups, and mounts handlers.
 func (s *Server) SetupRoutes(allowedOrigins string) {
 	// 1. Global Middlewares
@@ -154,21 +153,20 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 			})
 		})
 
-			// Admin-only: bot application settings
-			r.Group(func(r chi.Router) {
-				r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
-				r.Use(api_middleware.AdminMiddleware)
+		// Admin-only: bot application settings
+		r.Group(func(r chi.Router) {
+			r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
+			r.Use(api_middleware.AdminMiddleware)
 
-				r.Get("/admin/apps", s.settingsHandler.List)
-				r.Post("/admin/apps", s.settingsHandler.Create)
-				r.Get("/admin/apps/{id}", s.settingsHandler.Get)
-				r.Put("/admin/apps/{id}", s.settingsHandler.Update)
-				r.Delete("/admin/apps/{id}", s.settingsHandler.Delete)
-				r.Post("/admin/apps/{id}/reconnect", s.settingsHandler.Reconnect)
-			})
+			r.Get("/admin/apps", s.settingsHandler.List)
+			r.Post("/admin/apps", s.settingsHandler.Create)
+			r.Get("/admin/apps/{id}", s.settingsHandler.Get)
+			r.Put("/admin/apps/{id}", s.settingsHandler.Update)
+			r.Delete("/admin/apps/{id}", s.settingsHandler.Delete)
+			r.Post("/admin/apps/{id}/reconnect", s.settingsHandler.Reconnect)
+		})
 	})
 }
-
 
 // Start launches the HTTP server listening on the configured port.
 func (s *Server) Start() error {
