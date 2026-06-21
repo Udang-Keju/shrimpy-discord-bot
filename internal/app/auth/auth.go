@@ -14,9 +14,10 @@ type Module struct {
 }
 
 // Build compiles all layers of the auth feature.
-func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte) *Module {
+// settings is used by the handler to load live OAuth2 credentials from the DB.
+func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte, settings handler.SettingsProvider) *Module {
 	repo := repository.NewUserRepo(db)
-	h := handler.NewAuthHandler(repo, jwtSecret, tokenEncKey)
+	h := handler.NewAuthHandler(repo, jwtSecret, tokenEncKey, settings)
 	return &Module{
 		Repo:    repo,
 		Handler: h,
@@ -27,4 +28,5 @@ func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte) *Module {
 func (m *Module) Models() []any {
 	return []any{&model.User{}}
 }
+
 

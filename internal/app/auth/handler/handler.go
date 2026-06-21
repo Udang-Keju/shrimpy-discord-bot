@@ -7,13 +7,18 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/api/crypto"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/api/middleware"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/crypto"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+// SettingsProvider is satisfied by the settings service and provides live OAuth2 credentials.
+type SettingsProvider interface {
+	GetDecryptedCredentials(ctx context.Context) (token, clientID, clientSecret, redirectURI string, err error)
+}
 
 // AuthUserRepo defines the user database operations needed by AuthHandler.
 type AuthUserRepo interface {
@@ -26,14 +31,16 @@ type AuthHandler struct {
 	userRepo    AuthUserRepo
 	jwtSecret   []byte
 	tokenEncKey []byte
+	settings    SettingsProvider
 }
 
 // NewAuthHandler constructs a new AuthHandler.
-func NewAuthHandler(userRepo AuthUserRepo, jwtSecret []byte, tokenEncKey []byte) *AuthHandler {
+func NewAuthHandler(userRepo AuthUserRepo, jwtSecret []byte, tokenEncKey []byte, settings SettingsProvider) *AuthHandler {
 	return &AuthHandler{
 		userRepo:    userRepo,
 		jwtSecret:   jwtSecret,
 		tokenEncKey: tokenEncKey,
+		settings:    settings,
 	}
 }
 
@@ -64,6 +71,13 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	var payload callbackPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid payload")
+		return
+	}
+
+	// Load live OAuth2 credentials from DB (cached for 30s)
+	_, _, _, _, err := h.settings.GetDecryptedCredentials(r.Context())
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to load OAuth2 credentials")
 		return
 	}
 
