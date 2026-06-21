@@ -15,12 +15,12 @@ import (
 	settings_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/handler"
 	ticket_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/handler"
 	welcome_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/handler"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Server coordinates routing, HTTP middlewares, and mounts the dashboard endpoint handlers.
+// Server encapsulates the Chi router and all REST API sub-handlers.
 type Server struct {
 	router      *chi.Mux
 	port        string
@@ -37,7 +37,7 @@ type Server struct {
 
 	// Services/Deps needed by middleware
 	guildSvc *guild_svc.GuildService
-	dg       *discordgo.Session
+	provider discordutil.DiscordSessionProvider
 }
 
 // NewServer constructs a new REST API Server.
@@ -46,7 +46,7 @@ func NewServer(
 	jwtSecret []byte,
 	tokenEncKey []byte,
 	modules *app.Modules,
-	dg *discordgo.Session,
+	provider discordutil.DiscordSessionProvider,
 ) *Server {
 	return &Server{
 		router:              chi.NewRouter(),
@@ -60,7 +60,7 @@ func NewServer(
 		reactionRoleHandler: modules.ReactionRole.Handler,
 		settingsHandler:     modules.Settings.Handler,
 		guildSvc:            modules.Guild.Service,
-		dg:                  dg,
+		provider:            provider,
 	}
 }
 
@@ -98,7 +98,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 
 			// Guild Permission Gateways (for server-specific actions)
 			r.Route("/guilds/{guildId}", func(r chi.Router) {
-				r.Use(api_middleware.GuildPermissionMiddleware(s.guildSvc, s.dg))
+				r.Use(api_middleware.GuildPermissionMiddleware(s.guildSvc, s.provider))
 
 				// Guild Settings & Pickers
 				r.Get("/", s.guildHandler.GetConfig)
@@ -154,14 +154,17 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 			})
 		})
 
-			// Admin-only: bot credential management
+			// Admin-only: bot application settings
 			r.Group(func(r chi.Router) {
 				r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
 				r.Use(api_middleware.AdminMiddleware)
 
-				r.Get("/admin/settings", s.settingsHandler.Get)
-				r.Put("/admin/settings", s.settingsHandler.Update)
-				r.Post("/admin/settings/reconnect", s.settingsHandler.Reconnect)
+				r.Get("/admin/apps", s.settingsHandler.List)
+				r.Post("/admin/apps", s.settingsHandler.Create)
+				r.Get("/admin/apps/{id}", s.settingsHandler.Get)
+				r.Put("/admin/apps/{id}", s.settingsHandler.Update)
+				r.Delete("/admin/apps/{id}", s.settingsHandler.Delete)
+				r.Post("/admin/apps/{id}/reconnect", s.settingsHandler.Reconnect)
 			})
 	})
 }

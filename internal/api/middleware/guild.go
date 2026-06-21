@@ -8,7 +8,7 @@ import (
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -23,7 +23,7 @@ var (
 )
 
 // GuildPermissionMiddleware checks if the authenticated user has dashboard access to the requested guild.
-func GuildPermissionMiddleware(guildSvc *service.GuildService, dg *discordgo.Session) func(http.Handler) http.Handler {
+func GuildPermissionMiddleware(guildSvc *service.GuildService, provider discordutil.DiscordSessionProvider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			guildIDStr := chi.URLParam(r, "guildId")
@@ -72,6 +72,11 @@ func GuildPermissionMiddleware(guildSvc *service.GuildService, dg *discordgo.Ses
 			}
 
 			if userRoles == nil {
+				dg, err := provider.GetSessionForGuild(r.Context(), guildID)
+				if err != nil {
+					http.Error(w, `{"error": {"code": "NOT_FOUND", "message": "Bot session not found for this server: `+err.Error()+`"}}`, http.StatusNotFound)
+					return
+				}
 				// Query member roles from Discord
 				member, err := dg.GuildMember(guildIDStr, userIDStr)
 				if err != nil {

@@ -17,7 +17,7 @@ import (
 
 // SettingsProvider is satisfied by the settings service and provides live OAuth2 credentials.
 type SettingsProvider interface {
-	GetDecryptedCredentials(ctx context.Context) (token, clientID, clientSecret, redirectURI string, err error)
+	GetDecryptedCredentials(ctx context.Context, id string) (token, clientID, clientSecret, redirectURI string, err error)
 }
 
 // AuthUserRepo defines the user database operations needed by AuthHandler.
@@ -71,13 +71,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	var payload callbackPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid payload")
-		return
-	}
-
-	// Load live OAuth2 credentials from DB (cached for 30s)
-	_, _, _, _, err := h.settings.GetDecryptedCredentials(r.Context())
-	if err != nil {
-		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to load OAuth2 credentials")
 		return
 	}
 

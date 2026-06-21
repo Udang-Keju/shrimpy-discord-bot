@@ -7,10 +7,10 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings"
-	settings_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/handler"
+	settings_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"gorm.io/gorm"
 )
 
@@ -25,21 +25,20 @@ type Modules struct {
 }
 
 // Build compiles and connects all modules with their respective layers.
-// reconnectFn is passed to the settings module so the dashboard can trigger live bot reconnects.
 func Build(
 	db *gorm.DB,
-	dg *discordgo.Session,
+	provider discordutil.DiscordSessionProvider,
+	controller settings_svc.BotSessionController,
 	jwtSecret []byte,
 	tokenEncKey []byte,
 	guildCacheTTL time.Duration,
-	reconnectFn settings_handler.ReconnectFn,
 ) *Modules {
-	settingsMod := settings.Build(db, tokenEncKey, reconnectFn)
+	settingsMod := settings.Build(db, tokenEncKey, controller)
 	authMod := auth.Build(db, jwtSecret, tokenEncKey, settingsMod.Service)
-	guildMod := guild.Build(db, guildCacheTTL, dg)
+	guildMod := guild.Build(db, guildCacheTTL, provider)
 	welcomeMod := welcome.Build(db)
-	reactionRoleMod := reactionrole.Build(db, dg)
-	ticketMod := ticket.Build(db, guildMod.Repo, dg)
+	reactionRoleMod := reactionrole.Build(db, provider)
+	ticketMod := ticket.Build(db, guildMod.Repo, provider)
 
 	return &Modules{
 		Settings:     settingsMod,
