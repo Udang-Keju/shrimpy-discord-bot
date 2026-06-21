@@ -1,4 +1,4 @@
-﻿# Technical Specification Document
+# Technical Specification Document
 ## Project: **Shrimpy** 🦐 — Discord Bot Technical Architecture
 
 > **Version**: 1.0.0-draft
@@ -76,7 +76,7 @@ graph TD
 ### Key Architectural Decisions
 
 - **Single binary**: The Go bot and REST API run in the same process, sharing the service layer. This simplifies deployment and eliminates inter-service latency.
-- **Service layer isolation**: All business logic lives in `internal/service/`, keeping handlers thin and testable.
+- **Vertical feature packages & layer isolation**: Business logic, models, repositories, API endpoints, and bot commands are packaged vertically by feature scope under `internal/app/<feature>/` (subdivided by layers), keeping the modules highly encapsulated.
 - **Caching**: Guild configuration is cached in-memory (with TTL) to avoid a DB round-trip on every Discord event.
 - **Asynchronous transcript generation**: Transcript building is done in a goroutine pool to avoid blocking Discord event processing.
 
@@ -958,9 +958,49 @@ shrimpy-discord-bot/
 │       └── main.go                   # Entry point; wires dependencies
 │
 ├── internal/
+│   ├── app/                          # Vertical business features (encapsulating logic)
+│   │   ├── auth/                     # Authentication & OAuth session management
+│   │   │   ├── model/model.go
+│   │   │   ├── repository/repository.go
+│   │   │   ├── handler/handler.go
+│   │   │   └── auth.go               # Module builder/entry point
+│   │   ├── guild/                    # Server configuration, support staff & auto-roles
+│   │   │   ├── model/model.go
+│   │   │   ├── repository/repository.go
+│   │   │   ├── service/service.go
+│   │   │   ├── handler/handler.go
+│   │   │   ├── bot/bot.go
+│   │   │   └── guild.go              # Module builder/entry point
+│   │   ├── welcome/                  # Welcome messages (DMs & channel greetings)
+│   │   │   ├── model/model.go
+│   │   │   ├── repository/repository.go
+│   │   │   ├── service/service.go
+│   │   │   ├── handler/handler.go
+│   │   │   ├── bot/bot.go
+│   │   │   └── welcome.go            # Module builder/entry point
+│   │   ├── reactionrole/             # Emoji reaction to Discord role mappings
+│   │   │   ├── model/model.go
+│   │   │   ├── repository/repository.go
+│   │   │   ├── service/service.go
+│   │   │   ├── handler/handler.go
+│   │   │   ├── bot/bot.go
+│   │   │   └── reactionrole.go       # Module builder/entry point
+│   │   └── ticket/                   # Interactive ticketing panels & transcripts
+│   │       ├── model/model.go
+│   │       ├── config/config.go      # Feature-specific config settings
+│   │       ├── repository/repository.go
+│   │       ├── service/service.go
+│   │       ├── handler/handler.go
+│   │       ├── bot/bot.go
+│   │       └── ticket.go             # Module builder/entry point
+│   │
+│   ├── pkg/                          # Shared packages (circular import resolution)
+│   │   ├── apiutil/                  # API responses & JWT context getters
+│   │   └── discordutil/              # EmbedMedia definitions & Snowflake validation
+│   │
 │   ├── bot/
 │   │   ├── handlers/
-│   │   │   ├── commands.go           # Slash command registration & routing
+│   │   │   ├── commands.go           # Slash command registrations & routing
 │   │   │   ├── components.go         # Button & select menu interaction routing
 │   │   │   ├── contextmenu.go        # Right-click context menu handlers
 │   │   │   ├── events.go             # Guild/member/message event handlers
@@ -972,32 +1012,8 @@ shrimpy-discord-bot/
 │   │   │   ├── auth.go               # JWT validation middleware
 │   │   │   ├── guild.go              # Guild permission check middleware
 │   │   │   └── ratelimit.go          # API rate limiting
-│   │   ├── handlers/
-│   │   │   ├── auth.go               # OAuth2 endpoints
-│   │   │   ├── guilds.go             # Guild settings endpoints
-│   │   │   ├── tickets.go            # Ticket CRUD endpoints
-│   │   │   ├── categories.go         # Ticket category/panel endpoints
-│   │   │   ├── welcome.go            # Welcome config endpoints
-│   │   │   ├── autoroles.go          # Auto-role endpoints
-│   │   │   └── stats.go              # Statistics endpoint
 │   │   └── server.go                 # chi router setup, middleware chain
 │   │
-│   ├── service/
-│   │   ├── ticket.go                 # Ticket business logic
-│   │   ├── welcome.go                # Welcome message logic
-│   │   ├── autorole.go               # Auto-role assignment logic
-│   │   ├── transcript.go             # Transcript generation
-│   │   ├── guild.go                  # Guild config management
-│   │   └── scheduler.go              # Auto-close background scheduler
-│   │
-│   ├── repository/
-│   │   ├── guild.go                  # guilds table queries
-│   │   ├── ticket.go                 # tickets table queries
-│   │   ├── category.go               # ticket_categories table queries
-│   │   ├── message.go                # ticket_messages table queries
-│   │   ├── welcome.go                # welcome_config table queries
-│   │   ├── autorole.go               # auto_roles table queries
-│   │   └── user.go                   # users table queries
 │   │
 │   ├── cache/
 │   │   └── guild_config.go           # In-memory TTL cache for guild configs

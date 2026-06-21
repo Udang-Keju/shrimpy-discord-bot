@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/service"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-chi/chi/v5"
 )
@@ -37,14 +38,14 @@ func GuildPermissionMiddleware(guildSvc *service.GuildService, dg *discordgo.Ses
 				return
 			}
 
-			userIDStr := GetUserID(r.Context())
+			userIDStr := apiutil.GetUserID(r.Context())
 			if userIDStr == "" {
 				http.Error(w, `{"error": {"code": "UNAUTHORIZED", "message": "User not authenticated"}}`, http.StatusUnauthorized)
 				return
 			}
 
 			// 1. Level 1 Access: Check if guild is in JWT managed_guilds claim
-			managedGuilds := GetManagedGuilds(r.Context())
+			managedGuilds := apiutil.GetManagedGuilds(r.Context())
 			isManaged := false
 			for _, g := range managedGuilds {
 				if g == guildIDStr {

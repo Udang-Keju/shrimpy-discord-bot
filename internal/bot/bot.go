@@ -15,24 +15,12 @@ type Bot struct {
 }
 
 // New constructs a new Bot instance.
-func New(token string, ctx *handlers.HandlerContext, devGuildID string) (*Bot, error) {
-	dg, err := discordgo.New("Bot " + token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create discord session: %w", err)
-	}
-
-	// Request Gateway Intents
-	dg.Identify.Intents = discordgo.IntentsGuilds |
-		discordgo.IntentsGuildMembers |
-		discordgo.IntentsGuildMessages |
-		discordgo.IntentsGuildMessageReactions |
-		discordgo.IntentMessageContent
-
+func New(dg *discordgo.Session, ctx *handlers.HandlerContext, devGuildID string) *Bot {
 	return &Bot{
 		Session:    dg,
 		Ctx:        ctx,
 		DevGuildID: devGuildID,
-	}, nil
+	}
 }
 
 // Start registers all event listeners, opens the Gateway connection, and bulk overwrites slash commands.

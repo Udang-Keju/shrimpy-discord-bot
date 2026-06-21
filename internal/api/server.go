@@ -7,9 +7,12 @@ import (
 	"time"
 
 	api_middleware "github.com/Udang-Keju/shrimpy-discord-bot/internal/api/middleware"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/api/handlers"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/repository"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/service"
+	auth_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/handler"
+	guild_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/handler"
+	guild_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
+	rr_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/handler"
+	ticket_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/handler"
+	welcome_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/handler"
 	"github.com/bwmarrin/discordgo"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,20 +25,16 @@ type Server struct {
 	jwtSecret   []byte
 	tokenEncKey []byte
 
-	// Repositories needed directly by some handlers
-	categoryRepo *repository.CategoryRepo
-	userRepo     *repository.UserRepo
+	// Handlers
+	authHandler         *auth_handler.AuthHandler
+	guildHandler        *guild_handler.Handler
+	welcomeHandler      *welcome_handler.Handler
+	ticketHandler       *ticket_handler.Handler
+	reactionRoleHandler *rr_handler.Handler
 
-	// Services
-	guildSvc        *service.GuildService
-	welcomeSvc      *service.WelcomeService
-	autoRoleSvc     *service.AutoRoleService
-	reactionRoleSvc *service.ReactionRoleService
-	ticketSvc       *service.TicketService
-	transcriptSvc   *service.TranscriptService
-
-	// Discord Session
-	dg *discordgo.Session
+	// Services/Deps needed by middleware
+	guildSvc *guild_svc.GuildService
+	dg       *discordgo.Session
 }
 
 // NewServer constructs a new REST API Server.
@@ -43,30 +42,26 @@ func NewServer(
 	port string,
 	jwtSecret []byte,
 	tokenEncKey []byte,
-	categoryRepo *repository.CategoryRepo,
-	userRepo *repository.UserRepo,
-	guildSvc *service.GuildService,
-	welcomeSvc *service.WelcomeService,
-	autoRoleSvc *service.AutoRoleService,
-	reactionRoleSvc *service.ReactionRoleService,
-	ticketSvc *service.TicketService,
-	transcriptSvc *service.TranscriptService,
+	authHandler *auth_handler.AuthHandler,
+	guildHandler *guild_handler.Handler,
+	welcomeHandler *welcome_handler.Handler,
+	ticketHandler *ticket_handler.Handler,
+	reactionRoleHandler *rr_handler.Handler,
+	guildSvc *guild_svc.GuildService,
 	dg *discordgo.Session,
 ) *Server {
 	return &Server{
-		router:          chi.NewRouter(),
-		port:            port,
-		jwtSecret:       jwtSecret,
-		tokenEncKey:     tokenEncKey,
-		categoryRepo:    categoryRepo,
-		userRepo:        userRepo,
-		guildSvc:        guildSvc,
-		welcomeSvc:      welcomeSvc,
-		autoRoleSvc:     autoRoleSvc,
-		reactionRoleSvc: reactionRoleSvc,
-		ticketSvc:       ticketSvc,
-		transcriptSvc:   transcriptSvc,
-		dg:              dg,
+		router:              chi.NewRouter(),
+		port:                port,
+		jwtSecret:           jwtSecret,
+		tokenEncKey:         tokenEncKey,
+		authHandler:         authHandler,
+		guildHandler:        guildHandler,
+		welcomeHandler:      welcomeHandler,
+		ticketHandler:       ticketHandler,
+		reactionRoleHandler: reactionRoleHandler,
+		guildSvc:            guildSvc,
+		dg:                  dg,
 	}
 }
 
@@ -81,16 +76,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 	s.router.Use(api_middleware.RateLimitMiddleware)
 	s.router.Use(corsMiddleware(allowedOrigins))
 
-	// 2. Instantiate Handlers
-	authHandler := handlers.NewAuthHandler(s.userRepo, s.jwtSecret, s.tokenEncKey)
-	guildHandler := handlers.NewGuildHandler(s.guildSvc, s.dg)
-	welcomeHandler := handlers.NewWelcomeHandler(s.welcomeSvc)
-	categoryHandler := handlers.NewCategoryHandler(s.categoryRepo, s.dg)
-	ticketHandler := handlers.NewTicketHandler(s.ticketSvc, s.categoryRepo, s.transcriptSvc, s.dg)
-	autoRolesHandler := handlers.NewAutoRolesHandler(s.guildSvc, s.reactionRoleSvc, s.dg)
-	statsHandler := handlers.NewStatsHandler(s.ticketSvc, s.categoryRepo, s.dg)
-
-	// 3. Register Routes
+	// 2. Register Routes
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status": "ok"}`))
@@ -99,76 +85,77 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 	// V1 API Group
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// Public Auth Callbacks
-		r.Post("/auth/callback", authHandler.Callback)
+		r.Post("/auth/callback", s.authHandler.Callback)
 
 		// Authenticated Routes
 		r.Group(func(r chi.Router) {
 			r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
 
-			r.Get("/auth/me", authHandler.Me)
-			r.Delete("/auth/logout", authHandler.Logout)
+			r.Get("/auth/me", s.authHandler.Me)
+			r.Delete("/auth/logout", s.authHandler.Logout)
 
-			r.Get("/guilds", guildHandler.List)
+			r.Get("/guilds", s.guildHandler.List)
 
 			// Guild Permission Gateways (for server-specific actions)
 			r.Route("/guilds/{guildId}", func(r chi.Router) {
 				r.Use(api_middleware.GuildPermissionMiddleware(s.guildSvc, s.dg))
 
 				// Guild Settings & Pickers
-				r.Get("/", guildHandler.GetConfig)
-				r.Patch("/", guildHandler.UpdateConfig)
-				r.Patch("/nickname", guildHandler.UpdateNickname)
-				r.Get("/discord/channels", guildHandler.GetDiscordChannels)
-				r.Get("/discord/roles", guildHandler.GetDiscordRoles)
+				r.Get("/", s.guildHandler.GetConfig)
+				r.Patch("/", s.guildHandler.UpdateConfig)
+				r.Patch("/nickname", s.guildHandler.UpdateNickname)
+				r.Get("/discord/channels", s.guildHandler.GetDiscordChannels)
+				r.Get("/discord/roles", s.guildHandler.GetDiscordRoles)
 
 				// Welcome onboarding config
-				r.Get("/welcome", welcomeHandler.Get)
-				r.Put("/welcome", welcomeHandler.Save)
-				r.Delete("/welcome", welcomeHandler.Delete)
+				r.Get("/welcome", s.welcomeHandler.Get)
+				r.Put("/welcome", s.welcomeHandler.Save)
+				r.Delete("/welcome", s.welcomeHandler.Delete)
 
 				// Auto-roles & Staff list config
-				r.Get("/auto-roles", autoRolesHandler.ListAutoRoles)
-				r.Post("/auto-roles", autoRolesHandler.AddAutoRole)
-				r.Delete("/auto-roles/{roleId}", autoRolesHandler.RemoveAutoRole)
+				r.Get("/auto-roles", s.guildHandler.ListAutoRoles)
+				r.Post("/auto-roles", s.guildHandler.AddAutoRole)
+				r.Delete("/auto-roles/{roleId}", s.guildHandler.RemoveAutoRole)
 
-				r.Get("/staff-roles", autoRolesHandler.ListStaffRoles)
-				r.Post("/staff-roles", autoRolesHandler.AddStaffRole)
-				r.Delete("/staff-roles/{roleId}", autoRolesHandler.RemoveStaffRole)
+				r.Get("/staff-roles", s.guildHandler.ListStaffRoles)
+				r.Post("/staff-roles", s.guildHandler.AddStaffRole)
+				r.Delete("/staff-roles/{roleId}", s.guildHandler.RemoveStaffRole)
 
 				// Stats
-				r.Get("/stats", statsHandler.GetStats)
+				r.Get("/stats", s.ticketHandler.GetStats)
 
 				// Reaction Role messages
-				r.Get("/reaction-roles", autoRolesHandler.ListReactionRoles)
-				r.Post("/reaction-roles", autoRolesHandler.CreateReactionRole)
-				r.Get("/reaction-roles/{msgId}", autoRolesHandler.GetReactionRole)
-				r.Delete("/reaction-roles/{msgId}", autoRolesHandler.DeleteReactionRole)
-				r.Post("/reaction-roles/{msgId}/emojis", autoRolesHandler.AddEmojiMapping)
-				r.Delete("/reaction-roles/{msgId}/emojis", autoRolesHandler.RemoveEmojiMapping)
+				r.Get("/reaction-roles", s.reactionRoleHandler.ListReactionRoles)
+				r.Post("/reaction-roles", s.reactionRoleHandler.CreateReactionRole)
+				r.Get("/reaction-roles/{msgId}", s.reactionRoleHandler.GetReactionRole)
+				r.Delete("/reaction-roles/{msgId}", s.reactionRoleHandler.DeleteReactionRole)
+				r.Post("/reaction-roles/{msgId}/emojis", s.reactionRoleHandler.AddEmojiMapping)
+				r.Delete("/reaction-roles/{msgId}/emojis", s.reactionRoleHandler.RemoveEmojiMapping)
 
 				// Ticket Panels & Categories CRUD
-				r.Get("/panels", categoryHandler.ListPanels)
-				r.Post("/panels", categoryHandler.CreatePanel)
-				r.Patch("/panels/{panelId}", categoryHandler.UpdatePanel)
-				r.Delete("/panels/{panelId}", categoryHandler.DeletePanel)
+				r.Get("/panels", s.ticketHandler.ListPanels)
+				r.Post("/panels", s.ticketHandler.CreatePanel)
+				r.Patch("/panels/{panelId}", s.ticketHandler.UpdatePanel)
+				r.Delete("/panels/{panelId}", s.ticketHandler.DeletePanel)
 
-				r.Get("/panels/{panelId}/categories", categoryHandler.ListCategories)
-				r.Post("/panels/{panelId}/categories", categoryHandler.CreateCategory)
-				r.Patch("/panels/{panelId}/categories/{catId}", categoryHandler.UpdateCategory)
-				r.Delete("/panels/{panelId}/categories/{catId}", categoryHandler.DeleteCategory)
+				r.Get("/panels/{panelId}/categories", s.ticketHandler.ListCategories)
+				r.Post("/panels/{panelId}/categories", s.ticketHandler.CreateCategory)
+				r.Patch("/panels/{panelId}/categories/{catId}", s.ticketHandler.UpdateCategory)
+				r.Delete("/panels/{panelId}/categories/{catId}", s.ticketHandler.DeleteCategory)
 
 				// Ticket Management
-				r.Get("/tickets", ticketHandler.List)
-				r.Get("/tickets/{ticketId}", ticketHandler.Get)
-				r.Patch("/tickets/{ticketId}", ticketHandler.Update)
-				r.Post("/tickets/{ticketId}/close", ticketHandler.Close)
-				r.Post("/tickets/{ticketId}/reopen", ticketHandler.Reopen)
-				r.Post("/tickets/{ticketId}/archive", ticketHandler.Archive)
-				r.Get("/tickets/{ticketId}/transcript", ticketHandler.DownloadTranscript)
+				r.Get("/tickets", s.ticketHandler.List)
+				r.Get("/tickets/{ticketId}", s.ticketHandler.Get)
+				r.Patch("/tickets/{ticketId}", s.ticketHandler.Update)
+				r.Post("/tickets/{ticketId}/close", s.ticketHandler.Close)
+				r.Post("/tickets/{ticketId}/reopen", s.ticketHandler.Reopen)
+				r.Post("/tickets/{ticketId}/archive", s.ticketHandler.Archive)
+				r.Get("/tickets/{ticketId}/transcript", s.ticketHandler.DownloadTranscript)
 			})
 		})
 	})
 }
+
 
 // Start launches the HTTP server listening on the configured port.
 func (s *Server) Start() error {

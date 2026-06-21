@@ -6,14 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 	"github.com/golang-jwt/jwt/v5"
-)
-
-type contextKey string
-
-const (
-	UserIDKey        contextKey = "user_id"
-	ManagedGuildsKey contextKey = "managed_guilds"
 )
 
 // Claims defines the custom claims stored inside the JWT session token.
@@ -67,27 +61,11 @@ func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Inject user info into context
-			ctx := context.WithValue(r.Context(), UserIDKey, claims.Subject)
-			ctx = context.WithValue(ctx, ManagedGuildsKey, claims.ManagedGuilds)
+			// Inject user info into context using apiutil keys
+			ctx := context.WithValue(r.Context(), apiutil.UserIDKey, claims.Subject)
+			ctx = context.WithValue(ctx, apiutil.ManagedGuildsKey, claims.ManagedGuilds)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-}
-
-// GetUserID retrieves the Discord user ID string from the request context.
-func GetUserID(ctx context.Context) string {
-	if val, ok := ctx.Value(UserIDKey).(string); ok {
-		return val
-	}
-	return ""
-}
-
-// GetManagedGuilds retrieves the list of guild IDs the user has dashboard access permissions for.
-func GetManagedGuilds(ctx context.Context) []string {
-	if val, ok := ctx.Value(ManagedGuildsKey).([]string); ok {
-		return val
-	}
-	return nil
 }

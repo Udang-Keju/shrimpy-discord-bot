@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -35,8 +34,6 @@ type Config struct {
 
 	// Performance
 	CacheTTLSeconds        int
-	TranscriptWorkerCount  int
-	AutoCloseCheckInterval time.Duration
 }
 
 // Load reads configuration from environment variables.
@@ -46,8 +43,6 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cacheTTL, _ := strconv.Atoi(getEnv("CACHE_TTL_SECONDS", "300"))
-	transcriptWorkers, _ := strconv.Atoi(getEnv("TRANSCRIPT_WORKER_COUNT", "4"))
-	autoCloseInterval, _ := time.ParseDuration(getEnv("AUTO_CLOSE_CHECK_INTERVAL", "15m"))
 
 	encKeyHex := getEnv("TOKEN_ENCRYPTION_KEY", "")
 	encKey, err := decodeHexKey(encKeyHex)
@@ -74,8 +69,6 @@ func Load() (*Config, error) {
 		LogLevel:    getEnv("LOG_LEVEL", "info"),
 
 		CacheTTLSeconds:        cacheTTL,
-		TranscriptWorkerCount:  transcriptWorkers,
-		AutoCloseCheckInterval: autoCloseInterval,
 	}, nil
 }
 

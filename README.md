@@ -1,4 +1,4 @@
-﻿# Shrimpy 🦐
+# Shrimpy 🦐
 
 > A Go-powered Discord server management & help desk bot with a web-based admin dashboard.
 
@@ -38,13 +38,19 @@ A single compiled Go binary acts as both the **Discord bot** and the **REST API 
 shrimpy-discord-bot/
 ├── cmd/shrimpy/          # Application entrypoint
 ├── internal/
-│   ├── bot/             # discordgo session, event & command routing
-│   │   └── handlers/    # Slash commands, buttons, prefix, events
-│   ├── api/             # REST API server (chi router)
-│   │   ├── handlers/    # HTTP route handlers
+│   ├── app/             # Vertical business features
+│   │   ├── auth/        # Auth feature (model, repository, handler)
+│   │   ├── guild/       # Guild configs/roles (model, repository, service, handler, bot)
+│   │   ├── welcome/     # Welcome/onboarding (model, repository, service, handler, bot)
+│   │   ├── reactionrole/# Reaction roles (model, repository, service, handler, bot)
+│   │   └── ticket/      # Ticketing system (model, repository, service, handler, bot, config)
+│   ├── pkg/             # Shared utility packages
+│   │   ├── apiutil/     # Common HTTP API response & context helpers
+│   │   └── discordutil/ # Common Discord types & Snowflake validation helpers
+│   ├── bot/             # discordgo session and event dispatching logic
+│   │   └── handlers/    # Bot action delegate context (events, commands, buttons, prefix)
+│   ├── api/             # REST API server definition and routes
 │   │   └── middleware/  # JWT auth, guild permissions, rate limiting
-│   ├── service/         # Business logic (tickets, welcome, scheduler)
-│   ├── repository/      # PostgreSQL queries (pgx)
 │   ├── cache/           # In-memory TTL cache for guild configs
 │   └── config/          # Environment variable loader
 ├── migrations/          # SQL schema migrations
