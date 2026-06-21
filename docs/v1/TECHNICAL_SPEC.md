@@ -158,15 +158,18 @@ The web dashboard follows the **Shrimpy Design System**, fully documented in [DE
 
 ```mermaid
 erDiagram
-    bot_settings {
-        SMALLINT id PK
+    discord_apps {
+        UUID id PK
+        VARCHAR name
         BYTEA discord_token_enc
         VARCHAR discord_client_id
         BYTEA discord_client_secret_enc
         TEXT discord_redirect_uri
+        TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
 
+    discord_apps ||--o{ guilds : "manages"
     guilds ||--o{ ticket_panels : "has"
     guilds ||--o{ tickets : "has"
     guilds ||--|| welcome_config : "has"
@@ -181,6 +184,7 @@ erDiagram
 
     guilds {
         BIGINT guild_id PK
+        UUID discord_app_id FK
         VARCHAR prefix
         VARCHAR language
         VARCHAR bot_nickname
@@ -315,22 +319,24 @@ erDiagram
 ### 3.2 Table Definitions (DDL)
 
 ```sql
--- ─── Bot application credential settings (singleton) ────────────────────────
--- Always exactly one row (id = 1). Managed via the dashboard admin panel.
+-- ─── Discord Application Settings (Multi-Bot support) ────────────────────────
+-- Stores multiple Discord bots/applications managed by this backend.
 -- All sensitive values are AES-256-GCM encrypted at rest.
-CREATE TABLE bot_settings (
-    id                          SMALLINT    PRIMARY KEY DEFAULT 1,
+CREATE TABLE discord_apps (
+    id                          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                        VARCHAR(255)NOT NULL,
     discord_token_enc           BYTEA       NOT NULL,   -- AES-256-GCM encrypted bot token
-    discord_client_id           VARCHAR(30) NOT NULL,
+    discord_client_id           VARCHAR(30) NOT NULL UNIQUE,
     discord_client_secret_enc   BYTEA       NOT NULL,   -- AES-256-GCM encrypted
     discord_redirect_uri        TEXT        NOT NULL,
-    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT singleton CHECK (id = 1)
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Guild configuration root table
 CREATE TABLE guilds (
     guild_id       BIGINT       PRIMARY KEY,
+    discord_app_id UUID         REFERENCES discord_apps(id) ON DELETE SET NULL,
     prefix         VARCHAR(10)  NOT NULL DEFAULT '!',
     language       VARCHAR(10)  NOT NULL DEFAULT 'en',
     bot_nickname   VARCHAR(32),                        -- Custom display name for this server; NULL = use global name "Shrimpy"
@@ -650,57 +656,61 @@ DELETE /api/v1/guilds/:guildId/staff-roles/:roleId     # Remove a staff role
 GET /api/v1/guilds/:guildId/stats    # Ticket counts by status, avg resolution time, member count
 ```
 
-### 4.9 Admin — Bot Credential Settings
+### 4.9 Admin — Discord Bot Applications
 
-These endpoints allow the bot owner or any admin to manage the Discord credentials stored in the `bot_settings` table **without changing Railway environment variables**.
+These endpoints allow the bot owner or any admin to manage the Discord credentials stored in the `discord_apps` table. The backend dynamically starts, stops, and reconnects bot sessions based on these configurations.
 
 ```
-GET  /api/v1/admin/settings           # Read current credentials (secrets masked as "***")
-PUT  /api/v1/admin/settings           # Update any credential field
-POST /api/v1/admin/settings/reconnect # Manually reconnect the bot using the current DB token
+GET    /api/v1/admin/apps              # List all configured applications (secrets masked)
+POST   /api/v1/admin/apps              # Create a new Discord application
+PUT    /api/v1/admin/apps/:id          # Update a Discord application's configuration
+DELETE /api/v1/admin/apps/:id          # Delete a Discord application and stop its session
+POST   /api/v1/admin/apps/:id/reconnect # Manually reconnect a specific Discord application
 ```
 
 > [!IMPORTANT]
 > These endpoints require the `AdminMiddleware`, which is layered on top of the standard `AuthMiddleware`. A request is considered admin if the authenticated user has a non-empty `managed_guilds` JWT claim (meaning they hold `ADMINISTRATOR` or `MANAGE_GUILD` on at least one bot guild). An optional `OWNER_DISCORD_ID` env var grants unconditional access.
 
-**GET /api/v1/admin/settings** response:
+**GET /api/v1/admin/apps** response:
+```json
+[
+  {
+    "id": "7f6d2b3c-5e4a-4e2b-8a1a-0a2b3c4d5e6f",
+    "name": "Production Bot",
+    "discord_token": "***",
+    "discord_client_id": "123456789012345678",
+    "discord_client_secret": "***",
+    "discord_redirect_uri": "https://your-railway-domain/api/v1/auth/callback",
+    "created_at": "2026-06-21T12:00:00Z",
+    "updated_at": "2026-06-21T12:00:00Z"
+  }
+]
+```
+
+**POST /api/v1/admin/apps** body:
 ```json
 {
-  "discord_token": "***",
-  "discord_client_id": "123456789012345678",
-  "discord_client_secret": "***",
-  "discord_redirect_uri": "https://your-railway-domain/api/v1/auth/callback",
-  "updated_at": "2026-06-21T12:00:00Z"
+  "name": "Development Bot",
+  "discord_token": "your-bot-token",
+  "discord_client_id": "876543210987654321",
+  "discord_client_secret": "your-client-secret",
+  "discord_redirect_uri": "http://localhost:3000/api/v1/auth/callback"
 }
 ```
 
-**PUT /api/v1/admin/settings** body (all fields optional — only include what you want to change):
+**PUT /api/v1/admin/apps/:id** body (all fields optional):
 ```json
 {
+  "name": "Updated Bot Name",
   "discord_token": "new-bot-token",
-  "discord_client_id": "123456789012345678",
+  "discord_client_id": "876543210987654321",
   "discord_client_secret": "new-client-secret",
-  "discord_redirect_uri": "https://your-new-domain/api/v1/auth/callback"
+  "discord_redirect_uri": "http://localhost:3000/api/v1/auth/callback"
 }
 ```
 
 > [!NOTE]
-> If `discord_token` is updated, the bot **automatically reconnects** to the Discord Gateway without any restart required. The same `*discordgo.Session` pointer is reused with the new token, so all registered event handlers and service references remain valid. The `POST /reconnect` endpoint can be used to manually force a reconnect using the current DB token (e.g., after a network issue).
-
-**Response example:**
-```json
-{
-  "memberCount": 1500,
-  "tickets": {
-    "open": 12,
-    "claimed": 5,
-    "closedThisMonth": 87,
-    "archivedTotal": 342
-  },
-  "avgResolutionMinutes": 148,
-  "topCategory": "Technical Support"
-}
-```
+> If `discord_token` is updated via PUT, or if a new app is created via POST, the bot session is dynamically started/reconnected in the background. If an application is deleted via DELETE, its gateway session is stopped and closed.
 
 ### 4.9 Error Format
 
@@ -1023,11 +1033,11 @@ shrimpy-discord-bot/
 │   │   │   ├── repository/repository.go
 │   │   │   ├── handler/handler.go
 │   │   │   └── auth.go               # Module builder/entry point
-│   │   ├── settings/                 # Bot credential management (singleton DB settings)
-│   │   │   ├── model/model.go        # BotSettings GORM model (bot_settings table)
+│   │   ├── settings/                 # Bot credential management (multi-app settings)
+│   │   │   ├── model/model.go        # DiscordApp GORM model (discord_apps table)
 │   │   │   ├── repository/repository.go
 │   │   │   ├── service/service.go    # Encryption, 30s cache, seed from env
-│   │   │   ├── handler/handler.go    # GET/PUT /admin/settings, POST /reconnect
+│   │   │   ├── handler/handler.go    # CRUD /admin/apps, reconnect endpoints
 │   │   │   └── settings.go          # Module builder/entry point
 │   │   ├── guild/                    # Server configuration, support staff & auto-roles
 │   │   │   ├── model/model.go
@@ -1124,16 +1134,16 @@ All configuration is loaded from environment variables (12-factor app style). A 
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DISCORD_TOKEN` | ⚠️ First boot | — | Bot token — seeds `bot_settings` on first boot; removable after |
-| `DISCORD_CLIENT_ID` | ⚠️ First boot | — | Application client ID — seeds `bot_settings` on first boot |
-| `DISCORD_CLIENT_SECRET` | ⚠️ First boot | — | OAuth2 client secret — seeds `bot_settings` on first boot |
-| `DISCORD_REDIRECT_URI` | ⚠️ First boot | — | OAuth2 callback URL — seeds `bot_settings` on first boot |
+| `DISCORD_TOKEN` | ⚠️ First boot | — | Bot token — seeds `discord_apps` on first boot; removable after |
+| `DISCORD_CLIENT_ID` | ⚠️ First boot | — | Application client ID — seeds `discord_apps` on first boot |
+| `DISCORD_CLIENT_SECRET` | ⚠️ First boot | — | OAuth2 client secret — seeds `discord_apps` on first boot |
+| `DISCORD_REDIRECT_URI` | ⚠️ First boot | — | OAuth2 callback URL — seeds `discord_apps` on first boot |
 | `DATABASE_URL` | ✅ Always | — | PostgreSQL connection string |
 | `JWT_SECRET` | ✅ Always | — | Random 32+ byte string for signing JWTs |
 | `TOKEN_ENCRYPTION_KEY` | ✅ Always | — | 64-character hex string (32 bytes) for AES-256-GCM encryption |
 | `PORT` | ✅ Railway | — | Injected by Railway automatically — takes priority over `API_PORT` |
 | `API_PORT` | ❌ | `8080` | Port for the REST API server (fallback when `PORT` is not set) |
-| `OWNER_DISCORD_ID` | ❌ | — | Discord user ID with unconditional admin access to `/api/v1/admin/settings` |
+| `OWNER_DISCORD_ID` | ❌ | — | Discord user ID with unconditional admin access to `/api/v1/admin/apps` |
 | `BOT_PREFIX` | ❌ | `!` | Global default prefix (overridden per-guild) |
 | `ENVIRONMENT` | ❌ | `development` | `development` or `production` |
 | `LOG_LEVEL` | ❌ | `info` | `debug`, `info`, `warn`, `error` |
@@ -1143,10 +1153,10 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `CORS_ALLOWED_ORIGINS` | ❌ | `http://localhost:3000` | Comma-separated allowed origins for the API |
 
 > [!IMPORTANT]
-> **First-boot seeding**: On startup, if the `bot_settings` table row does not exist, the app reads all four `DISCORD_*` env vars and seeds the table. This happens exactly once. After the first successful boot, those env vars can be safely **removed from Railway** — the credentials are now stored encrypted in PostgreSQL and managed via the dashboard (`PUT /api/v1/admin/settings`).
+> **First-boot seeding**: On startup, if the `discord_apps` table is empty, the app reads all four `DISCORD_*` env vars and seeds the table with a default app named "First Boot App". This happens exactly once. After the first successful boot, those env vars can be safely **removed from Railway** — the credentials are now stored encrypted in PostgreSQL and managed via the dashboard (`GET/POST/PUT/DELETE /api/v1/admin/apps`).
 
 > [!CAUTION]
-> If neither the `bot_settings` row nor the `DISCORD_*` env vars are present, **the app will refuse to start**. Always set the four `DISCORD_*` vars on first deploy.
+> If neither the `discord_apps` table entries nor the `DISCORD_*` env vars are present, **the app will refuse to start**. Always set the four `DISCORD_*` vars on first deploy.
 
 ### Next.js Frontend (Vercel)
 
@@ -1159,7 +1169,7 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `NEXT_PUBLIC_API_URL` | ✅ | URL of the Go REST API (`https://<your-railway-domain>`) |
 
 > [!NOTE]
-> The frontend always needs `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` as Vercel env vars — Auth.js (`DiscordProvider`) performs the OAuth2 code exchange server-side and requires them at runtime. These are **separate** from the values stored in the Go backend's `bot_settings` table.
+> The frontend always needs `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` as Vercel env vars — Auth.js (`DiscordProvider`) performs the OAuth2 code exchange server-side and requires them at runtime. These are **separate** from the values stored in the Go backend's `discord_apps` table.
 
 ---
 

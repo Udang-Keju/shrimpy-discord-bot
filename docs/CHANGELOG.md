@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## [Unreleased]
+### Added
+- **Multi-Bot Support Design**: Drafted database and runtime architecture specs for supporting multiple Discord Applications simultaneously, mapped to Guilds (Option 1).
+- **`discord_apps` schema migration**: Planned SQL migration to replace `bot_settings` singleton table with a multi-tenant `discord_apps` table and link `guilds` via `discord_app_id` foreign key.
+- **REST API Endpoints for Apps**: Designed CRUD routes at `/api/v1/admin/apps` replacing single-bot `/api/v1/admin/settings`.
+
 ### Changed
 - Renamed bot display name from **Shrimp** to **Shrimpy** across all documentation.
 
