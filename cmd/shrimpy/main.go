@@ -18,6 +18,9 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/bot/handlers"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/config"
 	"github.com/bwmarrin/discordgo"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -43,6 +46,21 @@ func main() {
 		sqlDB.SetMaxIdleConns(5)
 		sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	}
+
+	// 2b. Run database schema migrations using golang-migrate
+	migrationURL := os.Getenv("DIRECT_DATABASE_URL")
+	if migrationURL == "" {
+		migrationURL = cfg.DatabaseURL
+	}
+	fmt.Println("DB: Running database migrations (golang-migrate)...")
+	m, err := migrate.New("file://migrations", migrationURL)
+	if err != nil {
+		log.Fatalf("Fatal: failed to initialize migrator: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatalf("Fatal: failed to apply database migrations: %v", err)
+	}
+	fmt.Println("DB: Database migrations completed successfully.")
 
 	// 3. Migrate discord_apps early so we can seed/read credentials before sessions are built.
 	if err := db.AutoMigrate(&settings_model.DiscordApp{}); err != nil {
