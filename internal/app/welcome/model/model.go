@@ -10,7 +10,7 @@ import (
 // WelcomeConfig maps to the welcome_config table.
 type WelcomeConfig struct {
 	GuildID        int64          `gorm:"primaryKey;column:guild_id;autoIncrement:false"`
-	Enabled        bool           `gorm:"column:enabled;default:true"`
+	Enabled        bool           `gorm:"column:enabled"`
 	DMMessage      *string        `gorm:"column:dm_message"`
 	ChannelID      *int64         `gorm:"column:channel_id"`
 	ChannelMessage *string        `gorm:"column:channel_message"`

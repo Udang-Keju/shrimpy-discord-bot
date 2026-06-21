@@ -86,6 +86,7 @@ func (r *GuildRepo) AddStaffRole(ctx context.Context, guildID, roleID int64) (*m
 	}
 	// If nothing was inserted (conflict), fetch the existing record
 	if result.RowsAffected == 0 {
+		sr.ID = ""
 		result = r.db.WithContext(ctx).
 			Where("guild_id = ? AND role_id = ?", guildID, roleID).
 			First(&sr)
@@ -131,6 +132,7 @@ func (r *GuildRepo) AddAutoRole(ctx context.Context, guildID, roleID int64) (*mo
 		return nil, result.Error
 	}
 	if result.RowsAffected == 0 {
+		ar.ID = ""
 		result = r.db.WithContext(ctx).
 			Where("guild_id = ? AND role_id = ?", guildID, roleID).
 			First(&ar)
