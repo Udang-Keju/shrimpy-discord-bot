@@ -62,9 +62,12 @@ func main() {
 	}
 	fmt.Println("DB: Database migrations completed successfully.")
 
-	// 3. Migrate discord_apps early so we can seed/read credentials before sessions are built.
-	if err := db.AutoMigrate(&settings_model.DiscordApp{}); err != nil {
-		log.Fatalf("Fatal: failed to migrate discord_apps table: %v", err)
+	// 3. Migrate discord_apps early (Dev only)
+	if cfg.IsDevelopment() {
+		fmt.Println("DB: Running GORM early auto-migration...")
+		if err := db.AutoMigrate(&settings_model.DiscordApp{}); err != nil {
+			log.Fatalf("Fatal: failed to migrate discord_apps table: %v", err)
+		}
 	}
 
 	// 4. Instantiate Registry with nil handlers first to break the circular dependency.
@@ -106,10 +109,12 @@ func main() {
 		time.Duration(cfg.CacheTTLSeconds)*time.Second,
 	)
 
-	// 8. Perform automatic database migrations for all remaining models
-	fmt.Println("DB: Running migrations/schema auto-sync...")
-	if err := db.AutoMigrate(modules.Models()...); err != nil {
-		log.Fatalf("Fatal: failed to auto-migrate database schema: %v", err)
+	// 8. Perform automatic database migrations for all remaining models (Dev only)
+	if cfg.IsDevelopment() {
+		fmt.Println("DB: Running GORM migrations/schema auto-sync...")
+		if err := db.AutoMigrate(modules.Models()...); err != nil {
+			log.Fatalf("Fatal: failed to auto-migrate database schema: %v", err)
+		}
 	}
 
 	// 9. Wire bot handler context and register handlers post-instantiation
