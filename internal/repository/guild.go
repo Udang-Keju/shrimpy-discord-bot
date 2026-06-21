@@ -12,6 +12,7 @@ import (
 // GuildRepo handles database operations for guilds, staff_roles, and auto_roles.
 type GuildRepo struct{ db *gorm.DB }
 
+// NewGuildRepo creates a new concrete GuildRepo instance.
 func NewGuildRepo(db *gorm.DB) *GuildRepo { return &GuildRepo{db: db} }
 
 // ─── Guild ────────────────────────────────────────────────────────────────────

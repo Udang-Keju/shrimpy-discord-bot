@@ -11,6 +11,7 @@ import (
 // WelcomeRepo handles database operations for the welcome_config table.
 type WelcomeRepo struct{ db *gorm.DB }
 
+// NewWelcomeRepo creates a new concrete WelcomeRepo instance.
 func NewWelcomeRepo(db *gorm.DB) *WelcomeRepo { return &WelcomeRepo{db: db} }
 
 // Get returns the welcome configuration for a guild.

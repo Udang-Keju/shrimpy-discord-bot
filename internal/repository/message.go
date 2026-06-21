@@ -10,6 +10,7 @@ import (
 // MessageRepo handles database operations for the ticket_messages table.
 type MessageRepo struct{ db *gorm.DB }
 
+// NewMessageRepo creates a new concrete MessageRepo instance.
 func NewMessageRepo(db *gorm.DB) *MessageRepo { return &MessageRepo{db: db} }
 
 // Add appends a message (or staff note) to a ticket transcript.

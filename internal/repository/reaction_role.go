@@ -12,6 +12,7 @@ import (
 // ReactionRoleRepo handles database operations for reaction role messages and emojis.
 type ReactionRoleRepo struct{ db *gorm.DB }
 
+// NewReactionRoleRepo creates a new concrete ReactionRoleRepo instance.
 func NewReactionRoleRepo(db *gorm.DB) *ReactionRoleRepo { return &ReactionRoleRepo{db: db} }
 
 // ─── Reaction Role Messages ───────────────────────────────────────────────────

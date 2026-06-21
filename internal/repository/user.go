@@ -12,6 +12,7 @@ import (
 // UserRepo handles database operations for the users table.
 type UserRepo struct{ db *gorm.DB }
 
+// NewUserRepo creates a new concrete UserRepo instance.
 func NewUserRepo(db *gorm.DB) *UserRepo { return &UserRepo{db: db} }
 
 // Upsert inserts or updates a user's public Discord profile.

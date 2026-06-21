@@ -12,6 +12,7 @@ import (
 // CategoryRepo handles database operations for ticket_panels and ticket_categories.
 type CategoryRepo struct{ db *gorm.DB }
 
+// NewCategoryRepo creates a new concrete CategoryRepo instance.
 func NewCategoryRepo(db *gorm.DB) *CategoryRepo { return &CategoryRepo{db: db} }
 
 // ─── Ticket Panels ────────────────────────────────────────────────────────────

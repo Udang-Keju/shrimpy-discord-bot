@@ -12,6 +12,7 @@ import (
 // TicketRepo handles database operations for the tickets table.
 type TicketRepo struct{ db *gorm.DB }
 
+// NewTicketRepo creates a new concrete TicketRepo instance.
 func NewTicketRepo(db *gorm.DB) *TicketRepo { return &TicketRepo{db: db} }
 
 // TicketFilter holds optional filters for listing tickets.
