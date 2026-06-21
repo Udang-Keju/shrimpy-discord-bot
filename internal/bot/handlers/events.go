@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app"
 	guild_bot "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/bot"
 	guild_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
 	rr_bot "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/bot"
@@ -32,29 +33,20 @@ type HandlerContext struct {
 }
 
 // NewHandlerContext creates a new HandlerContext.
-func NewHandlerContext(
-	guildSvc *guild_svc.GuildService,
-	autoRoleSvc *guild_svc.AutoRoleService,
-	welcomeSvc *welcome_svc.WelcomeService,
-	reactionRoleSvc *rr_svc.ReactionRoleService,
-	ticketSvc *ticket_svc.TicketService,
-	guildBot *guild_bot.BotHandler,
-	welcomeBot *welcome_bot.BotHandler,
-	reactionRoleBot *rr_bot.BotHandler,
-	ticketBot *ticket_bot.BotHandler,
-) *HandlerContext {
+func NewHandlerContext(modules *app.Modules) *HandlerContext {
 	return &HandlerContext{
-		GuildSvc:        guildSvc,
-		AutoRoleSvc:     autoRoleSvc,
-		WelcomeSvc:      welcomeSvc,
-		ReactionRoleSvc: reactionRoleSvc,
-		TicketSvc:       ticketSvc,
-		GuildBot:        guildBot,
-		WelcomeBot:      welcomeBot,
-		ReactionRoleBot: reactionRoleBot,
-		TicketBot:       ticketBot,
+		GuildSvc:        modules.Guild.Service,
+		AutoRoleSvc:     modules.Guild.AutoRoleSvc,
+		WelcomeSvc:      modules.Welcome.Service,
+		ReactionRoleSvc: modules.ReactionRole.Service,
+		TicketSvc:       modules.Ticket.TicketSvc,
+		GuildBot:        modules.Guild.Bot,
+		WelcomeBot:      modules.Welcome.Bot,
+		ReactionRoleBot: modules.ReactionRole.Bot,
+		TicketBot:       modules.Ticket.Bot,
 	}
 }
+
 
 
 // OnReady logs when the bot is successfully connected to the Gateway.

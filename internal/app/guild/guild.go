@@ -1,6 +1,8 @@
 package guild
 
 import (
+	"time"
+
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/handler"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/model"
@@ -20,7 +22,8 @@ type Module struct {
 }
 
 // Build compiles all layers of the guild feature.
-func Build(db *gorm.DB, guildCache *repository.GuildCache[*model.Guild], dg *discordgo.Session) *Module {
+func Build(db *gorm.DB, cacheTTL time.Duration, dg *discordgo.Session) *Module {
+	guildCache := repository.NewGuildCache[*model.Guild](cacheTTL)
 	repo := repository.NewGuildRepo(db)
 	svc := service.NewGuildService(repo, guildCache)
 	autoRoleSvc := service.NewAutoRoleService(repo)
@@ -35,3 +38,13 @@ func Build(db *gorm.DB, guildCache *repository.GuildCache[*model.Guild], dg *dis
 		Bot:         b,
 	}
 }
+
+// Models returns all GORM models utilized by the guild feature.
+func (m *Module) Models() []any {
+	return []any{
+		&model.Guild{},
+		&model.StaffRole{},
+		&model.AutoRole{},
+	}
+}
+

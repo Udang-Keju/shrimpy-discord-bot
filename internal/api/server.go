@@ -7,6 +7,7 @@ import (
 	"time"
 
 	api_middleware "github.com/Udang-Keju/shrimpy-discord-bot/internal/api/middleware"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app"
 	auth_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/handler"
 	guild_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/handler"
 	guild_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
@@ -42,12 +43,7 @@ func NewServer(
 	port string,
 	jwtSecret []byte,
 	tokenEncKey []byte,
-	authHandler *auth_handler.AuthHandler,
-	guildHandler *guild_handler.Handler,
-	welcomeHandler *welcome_handler.Handler,
-	ticketHandler *ticket_handler.Handler,
-	reactionRoleHandler *rr_handler.Handler,
-	guildSvc *guild_svc.GuildService,
+	modules *app.Modules,
 	dg *discordgo.Session,
 ) *Server {
 	return &Server{
@@ -55,15 +51,16 @@ func NewServer(
 		port:                port,
 		jwtSecret:           jwtSecret,
 		tokenEncKey:         tokenEncKey,
-		authHandler:         authHandler,
-		guildHandler:        guildHandler,
-		welcomeHandler:      welcomeHandler,
-		ticketHandler:       ticketHandler,
-		reactionRoleHandler: reactionRoleHandler,
-		guildSvc:            guildSvc,
+		authHandler:         modules.Auth.Handler,
+		guildHandler:        modules.Guild.Handler,
+		welcomeHandler:      modules.Welcome.Handler,
+		ticketHandler:       modules.Ticket.Handler,
+		reactionRoleHandler: modules.ReactionRole.Handler,
+		guildSvc:            modules.Guild.Service,
 		dg:                  dg,
 	}
 }
+
 
 // SetupRoutes registers global middlewares, sets up public/private route groups, and mounts handlers.
 func (s *Server) SetupRoutes(allowedOrigins string) {

@@ -4,6 +4,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/config"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/handler"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/service"
 	"github.com/bwmarrin/discordgo"
@@ -23,10 +24,12 @@ type Module struct {
 }
 
 // Build compiles all layers of the ticket feature.
-func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, ticketCfg *config.Config, dg *discordgo.Session) *Module {
+func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, dg *discordgo.Session) *Module {
 	categoryRepo := repository.NewCategoryRepo(db)
 	ticketRepo := repository.NewTicketRepo(db)
 	messageRepo := repository.NewMessageRepo(db)
+
+	ticketCfg := config.Load()
 
 	transcriptSvc := service.NewTranscriptService(messageRepo)
 	ticketSvc := service.NewTicketService(ticketRepo, categoryRepo, guildRepo, messageRepo, transcriptSvc)
@@ -46,3 +49,14 @@ func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, ticketCfg *conf
 		Bot:           b,
 	}
 }
+
+// Models returns all GORM models utilized by the ticket feature.
+func (m *Module) Models() []any {
+	return []any{
+		&model.TicketPanel{},
+		&model.TicketCategory{},
+		&model.Ticket{},
+		&model.TicketMessage{},
+	}
+}
+

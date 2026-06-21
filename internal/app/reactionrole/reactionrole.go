@@ -3,6 +3,7 @@ package reactionrole
 import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/handler"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/service"
 	"github.com/bwmarrin/discordgo"
@@ -31,3 +32,12 @@ func Build(db *gorm.DB, dg *discordgo.Session) *Module {
 		Bot:     b,
 	}
 }
+
+// Models returns all GORM models utilized by the reaction role feature.
+func (m *Module) Models() []any {
+	return []any{
+		&model.ReactionRoleMessage{},
+		&model.ReactionRoleEmoji{},
+	}
+}
+

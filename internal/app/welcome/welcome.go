@@ -3,6 +3,7 @@ package welcome
 import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/handler"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/service"
 	"gorm.io/gorm"
@@ -30,3 +31,9 @@ func Build(db *gorm.DB) *Module {
 		Bot:     b,
 	}
 }
+
+// Models returns all GORM models utilized by the welcome feature.
+func (m *Module) Models() []any {
+	return []any{&model.WelcomeConfig{}}
+}
+

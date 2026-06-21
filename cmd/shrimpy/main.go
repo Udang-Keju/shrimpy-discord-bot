@@ -10,18 +10,7 @@ import (
 	"time"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/api"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth"
-	auth_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/model"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild"
-	guild_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/model"
-	guild_repo "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/repository"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole"
-	rr_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket"
-	ticket_config "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/config"
-	ticket_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/model"
-	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome"
-	welcome_model "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/model"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/bot"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/bot/handlers"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/config"
@@ -52,32 +41,7 @@ func main() {
 		sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	}
 
-	// 3. Perform automatic database migrations
-	fmt.Println("DB: Running migrations/schema auto-sync...")
-	err = db.AutoMigrate(
-		&guild_model.Guild{},
-		&auth_model.User{},
-		&guild_model.StaffRole{},
-		&guild_model.AutoRole{},
-		&welcome_model.WelcomeConfig{},
-		&ticket_model.TicketPanel{},
-		&ticket_model.TicketCategory{},
-		&ticket_model.Ticket{},
-		&ticket_model.TicketMessage{},
-		&rr_model.ReactionRoleMessage{},
-		&rr_model.ReactionRoleEmoji{},
-	)
-	if err != nil {
-		log.Fatalf("Fatal: failed to auto-migrate database schema: %v", err)
-	}
-
-	// 4. Initialize Config Cache
-	guildCache := guild_repo.NewGuildCache[*guild_model.Guild](time.Duration(cfg.CacheTTLSeconds) * time.Second)
-
-	// 5. Load feature configs
-	ticketCfg := ticket_config.Load()
-
-	// 6. Initialize DiscordGo Session Early (solves chicken-and-egg initialization)
+	// 3. Initialize DiscordGo Session Early (solves chicken-and-egg initialization)
 	dg, err := discordgo.New("Bot " + cfg.DiscordToken)
 	if err != nil {
 		log.Fatalf("Fatal: failed to construct Discord session: %v", err)
@@ -88,51 +52,45 @@ func main() {
 		discordgo.IntentsGuildMessageReactions |
 		discordgo.IntentMessageContent
 
-	// 7. Build Business Feature Modules
-	authModule := auth.Build(db, []byte(cfg.JWTSecret), cfg.TokenEncryptionKey)
-	guildModule := guild.Build(db, guildCache, dg)
-	welcomeModule := welcome.Build(db)
-	reactionRoleModule := reactionrole.Build(db, dg)
-	ticketModule := ticket.Build(db, guildModule.Repo, ticketCfg, dg)
-
-	// 8. Initialize Bot Handler Context
-	handlerCtx := handlers.NewHandlerContext(
-		guildModule.Service,
-		guildModule.AutoRoleSvc,
-		welcomeModule.Service,
-		reactionRoleModule.Service,
-		ticketModule.TicketSvc,
-		guildModule.Bot,
-		welcomeModule.Bot,
-		reactionRoleModule.Bot,
-		ticketModule.Bot,
+	// 4. Build Business Feature Modules
+	modules := app.Build(
+		db,
+		dg,
+		[]byte(cfg.JWTSecret),
+		cfg.TokenEncryptionKey,
+		time.Duration(cfg.CacheTTLSeconds)*time.Second,
 	)
 
-	// 9. Initialize Bot
+	// 5. Perform automatic database migrations
+	fmt.Println("DB: Running migrations/schema auto-sync...")
+	err = db.AutoMigrate(modules.Models()...)
+	if err != nil {
+		log.Fatalf("Fatal: failed to auto-migrate database schema: %v", err)
+	}
+
+	// 6. Initialize Bot Handler Context
+	handlerCtx := handlers.NewHandlerContext(modules)
+
+	// 7. Initialize Bot
 	devGuildID := os.Getenv("DEV_GUILD_ID") // Optional, for instant slash command dev testing
 	discordBot := bot.New(dg, handlerCtx, devGuildID)
 
-	// 10. Initialize REST API Server
+	// 8. Initialize REST API Server
 	apiServer := api.NewServer(
 		cfg.APIPort,
 		[]byte(cfg.JWTSecret),
 		cfg.TokenEncryptionKey,
-		authModule.Handler,
-		guildModule.Handler,
-		welcomeModule.Handler,
-		ticketModule.Handler,
-		reactionRoleModule.Handler,
-		guildModule.Service,
+		modules,
 		dg,
 	)
 	apiServer.SetupRoutes(cfg.CORSAllowedOrigins)
 
-	// 11. Startup Services
+	// 9. Startup Services
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Start auto-close background worker
-	go ticketModule.SchedulerSvc.Start(ctx, dg)
+	go modules.Ticket.SchedulerSvc.Start(ctx, dg)
 
 	// Start Discord Gateway connection
 	fmt.Println("Bot: Connecting to Discord Gateway...")

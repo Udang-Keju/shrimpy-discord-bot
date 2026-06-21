@@ -2,6 +2,7 @@ package auth
 
 import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/handler"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/repository"
 	"gorm.io/gorm"
 )
@@ -21,3 +22,9 @@ func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte) *Module {
 		Handler: h,
 	}
 }
+
+// Models returns all GORM models utilized by the auth feature.
+func (m *Module) Models() []any {
+	return []any{&model.User{}}
+}
+
