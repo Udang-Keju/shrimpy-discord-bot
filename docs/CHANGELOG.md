@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to the **Shrimpy 🦐** Discord Bot project documentation and specifications will be documented in this file.
 

@@ -1,4 +1,4 @@
-module github.com/Udang-Keju/shrimpy-discord-bot
+﻿module github.com/Udang-Keju/shrimpy-discord-bot
 
 go 1.26.4
 

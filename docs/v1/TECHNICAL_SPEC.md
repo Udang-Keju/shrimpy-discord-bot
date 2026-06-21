@@ -1,4 +1,4 @@
-# Technical Specification Document
+﻿# Technical Specification Document
 ## Project: **Shrimpy** 🦐 — Discord Bot Technical Architecture
 
 > **Version**: 1.0.0-draft

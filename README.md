@@ -1,4 +1,4 @@
-# Shrimpy 🦐
+﻿# Shrimpy 🦐
 
 > A Go-powered Discord server management & help desk bot with a web-based admin dashboard.
 
