@@ -309,6 +309,12 @@ type ReactionRoleMessage struct {
 
 func (ReactionRoleMessage) TableName() string { return "reaction_role_messages" }
 
+func (r *ReactionRoleMessage) GetMedia() (*EmbedMedia, error) { return DecodeMedia(r.EmbedMedia) }
+func (r *ReactionRoleMessage) SetMedia(m *EmbedMedia) (err error) {
+	r.EmbedMedia, err = EncodeMedia(m)
+	return
+}
+
 // ReactionRoleEmoji maps to the reaction_role_emojis table.
 type ReactionRoleEmoji struct {
 	ID        string    `gorm:"primaryKey;type:uuid"`
