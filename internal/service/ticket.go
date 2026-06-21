@@ -23,6 +23,7 @@ type TicketRepository interface {
 	UpdatePriority(ctx context.Context, ticketID string, priority repository.TicketPriority) (*repository.Ticket, error)
 	SetChannel(ctx context.Context, ticketID string, channelID, threadID *int64) error
 	ResetAutoClose(ctx context.Context, ticketID string, autoCloseAt *time.Time) error
+	GetStats(ctx context.Context, guildID int64) (*repository.TicketStats, error)
 }
 
 // TicketCategoryRepository defines operations on panels and categories.
@@ -567,4 +568,19 @@ func (s *TicketService) GetByChannelID(ctx context.Context, channelID int64) (*r
 // UpdatePriority delegates to the ticket repository.
 func (s *TicketService) UpdatePriority(ctx context.Context, ticketID string, priority repository.TicketPriority) (*repository.Ticket, error) {
 	return s.ticketRepo.UpdatePriority(ctx, ticketID, priority)
+}
+
+// GetByID delegates to the ticket repository.
+func (s *TicketService) GetByID(ctx context.Context, ticketID string) (*repository.Ticket, error) {
+	return s.ticketRepo.GetByID(ctx, ticketID)
+}
+
+// List delegates to the ticket repository.
+func (s *TicketService) List(ctx context.Context, guildID int64, f repository.TicketFilter) ([]repository.Ticket, int64, error) {
+	return s.ticketRepo.List(ctx, guildID, f)
+}
+
+// GetStats delegates to the ticket repository.
+func (s *TicketService) GetStats(ctx context.Context, guildID int64) (*repository.TicketStats, error) {
+	return s.ticketRepo.GetStats(ctx, guildID)
 }

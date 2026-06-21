@@ -171,3 +171,56 @@ func (r *TicketRepo) ListDueForAutoClose(ctx context.Context) ([]Ticket, error) 
 		Find(&tickets)
 	return tickets, result.Error
 }
+
+// TicketStats holds computed stats for the dashboard.
+type TicketStats struct {
+	Open             int64
+	Claimed          int64
+	ClosedThisMonth  int64
+	ArchivedTotal    int64
+	AvgResolutionMin int64
+	TopCategoryID    string
+}
+
+// GetStats calculates guild ticket stats directly via SQL aggregations.
+func (r *TicketRepo) GetStats(ctx context.Context, guildID int64) (*TicketStats, error) {
+	var stats TicketStats
+
+	// 1. Open count
+	r.db.WithContext(ctx).Model(&Ticket{}).Where("guild_id = ? AND status = ?", guildID, TicketStatusOpen).Count(&stats.Open)
+
+	// 2. Claimed count
+	r.db.WithContext(ctx).Model(&Ticket{}).Where("guild_id = ? AND status = ?", guildID, TicketStatusClaimed).Count(&stats.Claimed)
+
+	// 3. Closed this month
+	firstOfMonth := time.Now().UTC().AddDate(0, 0, -time.Now().UTC().Day()+1)
+	r.db.WithContext(ctx).Model(&Ticket{}).Where("guild_id = ? AND status = ? AND closed_at >= ?", guildID, TicketStatusClosed, firstOfMonth).Count(&stats.ClosedThisMonth)
+
+	// 4. Archived count
+	r.db.WithContext(ctx).Model(&Ticket{}).Where("guild_id = ? AND status = ?", guildID, TicketStatusArchived).Count(&stats.ArchivedTotal)
+
+	// 5. Avg resolution time in minutes
+	var avgSec float64
+	row := r.db.WithContext(ctx).Model(&Ticket{}).
+		Select("COALESCE(AVG(EXTRACT(EPOCH FROM (closed_at - created_at))), 0)").
+		Where("guild_id = ? AND closed_at IS NOT NULL", guildID).
+		Row()
+	_ = row.Scan(&avgSec)
+	stats.AvgResolutionMin = int64(avgSec / 60)
+
+	// 6. Top Category ID
+	var topCat struct {
+		CategoryID string
+		Count      int64
+	}
+	r.db.WithContext(ctx).Model(&Ticket{}).
+		Select("category_id, count(*) as count").
+		Where("guild_id = ?", guildID).
+		Group("category_id").
+		Order("count DESC").
+		Limit(1).
+		Scan(&topCat)
+	stats.TopCategoryID = topCat.CategoryID
+
+	return &stats, nil
+}
