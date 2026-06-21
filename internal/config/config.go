@@ -51,10 +51,10 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		DiscordToken:        mustGetEnv("DISCORD_TOKEN"),
-		DiscordClientID:     mustGetEnv("DISCORD_CLIENT_ID"),
-		DiscordClientSecret: mustGetEnv("DISCORD_CLIENT_SECRET"),
-		DiscordRedirectURI:  mustGetEnv("DISCORD_REDIRECT_URI"),
+		DiscordToken:        getEnv("DISCORD_TOKEN", ""),
+		DiscordClientID:     getEnv("DISCORD_CLIENT_ID", ""),
+		DiscordClientSecret: getEnv("DISCORD_CLIENT_SECRET", ""),
+		DiscordRedirectURI:  getEnv("DISCORD_REDIRECT_URI", ""),
 
 		DatabaseURL: mustGetEnv("DATABASE_URL"),
 
@@ -68,13 +68,22 @@ func Load() (*Config, error) {
 		Environment: getEnv("ENVIRONMENT", "development"),
 		LogLevel:    getEnv("LOG_LEVEL", "info"),
 
-		CacheTTLSeconds:        cacheTTL,
+		CacheTTLSeconds: cacheTTL,
 	}, nil
 }
 
 // IsDevelopment returns true when running in a non-production environment.
 func (c *Config) IsDevelopment() bool {
 	return c.Environment != "production"
+}
+
+// HasDiscordSeed returns true when all four Discord credentials are present in the environment,
+// meaning the bot_settings table can be seeded from env vars on first boot.
+func (c *Config) HasDiscordSeed() bool {
+	return c.DiscordToken != "" &&
+		c.DiscordClientID != "" &&
+		c.DiscordClientSecret != "" &&
+		c.DiscordRedirectURI != ""
 }
 
 // getEnv returns the environment variable value or a fallback.
