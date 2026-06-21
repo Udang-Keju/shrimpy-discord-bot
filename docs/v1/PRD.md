@@ -1,5 +1,5 @@
 # Product Requirements Document (PRD)
-## Project: **Shrimp** 🦐 — Go-Powered Discord Server Management & Help Desk Bot
+## Project: **Shrimpy** 🦐 — Go-Powered Discord Server Management & Help Desk Bot
 
 > **Version**: 1.0.0-draft
 > **Status**: In Review
@@ -24,13 +24,13 @@
 
 ## 1. Project Overview
 
-**Shrimp** is a general-purpose Discord bot written in Go, designed to serve as the backbone of community server management and structured user support. It combines server lifecycle management (welcoming members, assigning roles) with a full-featured ticket/help-desk system powered by Discord's native UI components — slash commands, interactive buttons, and embedded messages.
+**Shrimpy** is a general-purpose Discord bot written in Go, designed to serve as the backbone of community server management and structured user support. It combines server lifecycle management (welcoming members, assigning roles) with a full-featured ticket/help-desk system powered by Discord's native UI components — slash commands, interactive buttons, and embedded messages.
 
-Shrimp is designed to be deployed for a single server initially but is **architecturally multi-tenant from day one**, enabling straightforward onboarding of additional guilds without code changes. A companion **web-based admin dashboard** provides a graphical interface for server administrators and support staff to manage configuration, monitor tickets, and export transcripts — without ever needing to use Discord commands.
+Shrimpy is designed to be deployed for a single server initially but is **architecturally multi-tenant from day one**, enabling straightforward onboarding of additional guilds without code changes. A companion **web-based admin dashboard** provides a graphical interface for server administrators and support staff to manage configuration, monitor tickets, and export transcripts — without ever needing to use Discord commands.
 
 ### Name Rationale
 
-> **Shrimp** 🦐 — a playful, memorable, and unique name that stands out in any server's member list. While unconventional, the name is instantly recognizable, easy to mention (`@Shrimp`), and gives the bot a distinct personality. The shrimp motif carries through the web dashboard's design language — coral pinks, ocean teals, and warm sandy tones — forming a cohesive brand identity.
+> **Shrimpy** 🦐 — a playful, memorable, and unique name that stands out in any server's member list. While unconventional, the name is instantly recognizable, easy to mention (`@Shrimpy`), and gives the bot a distinct personality. The Shrimpy motif carries through the web dashboard's design language — coral pinks, ocean teals, and warm sandy tones — forming a cohesive brand identity.
 
 ---
 
@@ -82,7 +82,7 @@ Shrimp is designed to be deployed for a single server initially but is **archite
 
 ## 4. MVP Scope
 
-The MVP delivers the **core value proposition** of Shrimp: structured ticket management and automated member onboarding.
+The MVP delivers the **core value proposition** of Shrimpy: structured ticket management and automated member onboarding.
 
 ### 4.1 In-Scope for MVP
 
@@ -277,4 +277,4 @@ The following items are explicitly **not** part of the MVP and will be considere
 
 ---
 
-*End of Product Requirements Document — Shrimp v1.0.0-draft*
+*End of Product Requirements Document — Shrimpy v1.0.0-draft*

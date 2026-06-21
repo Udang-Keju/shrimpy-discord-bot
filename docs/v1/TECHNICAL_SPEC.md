@@ -1,5 +1,5 @@
 # Technical Specification Document
-## Project: **Shrimp** 🦐 — Discord Bot Technical Architecture
+## Project: **Shrimpy** 🦐 — Discord Bot Technical Architecture
 
 > **Version**: 1.0.0-draft
 > **Status**: In Review
@@ -26,7 +26,7 @@
 
 ## 1. Architecture Overview
 
-Shrimp follows a **monorepo, multi-tier architecture**. A single Go binary acts as both the Discord bot and the REST API server for the web dashboard. The Next.js frontend communicates exclusively with this API. All persistent state lives in PostgreSQL.
+Shrimpy follows a **monorepo, multi-tier architecture**. A single Go binary acts as both the Discord bot and the REST API server for the web dashboard. The Next.js frontend communicates exclusively with this API. All persistent state lives in PostgreSQL.
 
 ```mermaid
 graph TD
@@ -36,7 +36,7 @@ graph TD
         D_CDN["Discord CDN\n(Attachments)"]
     end
 
-    subgraph Bot["Shrimp Go Binary"]
+    subgraph Bot["Shrimpy Go Binary"]
         GW["Gateway Handler\n(discordgo)"]
         CMD["Command Router\n(Slash / Prefix / Context Menu)"]
         COMP["Component Handler\n(Button Interactions)"]
@@ -135,13 +135,13 @@ graph TD
 
 Lightweight, idiomatic HTTP router that adds middleware support and URL parameter parsing on top of `net/http` without a heavy framework dependency.
 
-### 2.6 Design System — Shrimp Visual Identity
+### 2.6 Design System — Shrimpy Visual Identity
 
-The web dashboard follows the **Shrimp Design System**, fully documented in [DESIGN_SYSTEM.md](file:///C:/Users/salma/.gemini/antigravity/brain/b4030e12-7742-4037-8993-2a82af0962f3/DESIGN_SYSTEM.md).
+The web dashboard follows the **Shrimpy Design System**, fully documented in [DESIGN_SYSTEM.md](file:///C:/Users/salma/.gemini/antigravity/brain/b4030e12-7742-4037-8993-2a82af0962f3/DESIGN_SYSTEM.md).
 
 | Aspect | Choice | Rationale |
 |--------|--------|-----------|
-| **Dark Theme** | Deep navy (`#1A1830`) base, coral primary (`#FF7B6B`), ocean teal accent (`#4ECDC4`) | Ocean-at-night aesthetic; warm coral reinforces the Shrimp brand identity |
+| **Dark Theme** | Deep navy (`#1A1830`) base, coral primary (`#FF7B6B`), ocean teal accent (`#4ECDC4`) | Ocean-at-night aesthetic; warm coral reinforces the Shrimpy brand identity |
 | **Light Theme** | Sandy cream (`#FFF8F2`) base, deep coral primary (`#E8503A`), deep teal accent (`#2A9D8F`) | Tropical beach aesthetic; maintains brand coherence with sufficient WCAG contrast |
 | **Typography** | Outfit (display), Inter (body), JetBrains Mono (code) | Modern, friendly, highly readable — all available on Google Fonts |
 | **Theme Switching** | `data-theme` on `<html>`, persisted in `localStorage` | Zero-flash theme switching with FOUC-prevention inline script |
@@ -311,7 +311,7 @@ CREATE TABLE guilds (
     guild_id       BIGINT       PRIMARY KEY,
     prefix         VARCHAR(10)  NOT NULL DEFAULT '!',
     language       VARCHAR(10)  NOT NULL DEFAULT 'en',
-    bot_nickname   VARCHAR(32),                        -- Custom display name for this server; NULL = use global name "Shrimp"
+    bot_nickname   VARCHAR(32),                        -- Custom display name for this server; NULL = use global name "Shrimpy"
     log_channel_id BIGINT,
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
@@ -499,7 +499,7 @@ GET    /api/v1/guilds/:guildId/discord/emojis    # List custom emojis available 
 // Set custom nickname
 { "nickname": "ModBot" }
 
-// Reset to global name "Shrimp"
+// Reset to global name "Shrimpy"
 { "nickname": null }
 ```
 
@@ -527,7 +527,7 @@ DELETE /api/v1/guilds/:guildId/panels/:panelId/categories/:catId  # Delete categ
   "embedDescription": "Click a button below to get help.",
   "embedColor": 16736107,
   "embedMedia": {
-    "author": { "name": "Shrimp Support", "iconUrl": "https://example.com/logo.png" },
+    "author": { "name": "Shrimpy Support", "iconUrl": "https://example.com/logo.png" },
     "footer": { "text": "Response time: 24h" }
   }
 }
@@ -952,9 +952,9 @@ Auth (JWT Validation)
 ## 8. Project Directory Structure
 
 ```
-shrimp/
+shrimpy-discord-bot/
 ├── cmd/
-│   └── shrimp/
+│   └── shrimpy/
 │       └── main.go                   # Entry point; wires dependencies
 │
 ├── internal/
@@ -1062,7 +1062,7 @@ All configuration is loaded from environment variables (12-factor app style). A 
 
 ## 10. Deployment Architecture
 
-Shrimp uses a **three-service split** across best-in-class managed platforms, keeping total monthly cost at approximately **$5/month**.
+Shrimpy uses a **three-service split** across best-in-class managed platforms, keeping total monthly cost at approximately **$5/month**.
 
 ```
 +---------------------------------------------------------------+
@@ -1108,16 +1108,16 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /shrimp ./cmd/shrimp
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /shrimpy ./cmd/shrimpy
 
 # --- Run Stage ---
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
-COPY --from=builder /shrimp .
+COPY --from=builder /shrimpy .
 COPY migrations/ ./migrations/
 EXPOSE 8080
-CMD ["./shrimp"]
+CMD ["./shrimpy"]
 ```
 
 #### Railway Configuration (`railway.toml`)
@@ -1226,15 +1226,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: shrimp
-      POSTGRES_USER: shrimp
+      POSTGRES_DB: shrimpy
+      POSTGRES_USER: shrimpy
       POSTGRES_PASSWORD: devpassword
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shrimp"]
+      test: ["CMD-SHELL", "pg_isready -U shrimpy"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -1244,7 +1244,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     environment:
-      - DATABASE_URL=postgres://shrimp:devpassword@db:5432/shrimp?sslmode=disable
+      - DATABASE_URL=postgres://shrimpy:devpassword@db:5432/shrimpy?sslmode=disable
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
@@ -1347,4 +1347,4 @@ Recommended: configure Railway to run database migrations as a pre-deploy comman
 
 ---
 
-*End of Technical Specification — Shrimp v1.0.0-draft*
+*End of Technical Specification — Shrimpy v1.0.0-draft*

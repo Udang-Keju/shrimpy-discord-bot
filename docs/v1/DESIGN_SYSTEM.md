@@ -1,5 +1,5 @@
 # Design System
-## Project: **Shrimp** 🦐 — Dashboard Visual Identity & Color System
+## Project: **Shrimpy** 🦐 — Dashboard Visual Identity & Color System
 
 > **Version**: 1.0.0-draft
 > **Status**: In Review
@@ -25,7 +25,7 @@
 
 ## 1. Brand Identity
 
-**Shrimp** draws its visual personality from the ocean — the warm coral tones of a shrimp's shell, the deep navy of the sea at night, and the bright teal of shallow tropical waters.
+**Shrimpy** draws its visual personality from the ocean — the warm coral tones of a Shrimpy's shell, the deep navy of the sea at night, and the bright teal of shallow tropical waters.
 
 ### Core Brand Values
 
@@ -42,7 +42,7 @@ These are the raw hue anchors from which all theme tokens are derived:
 
 | Name | Hex | HSL | Description |
 |------|-----|-----|-------------|
-| **Shrimp Coral** | `#FF7B6B` | `hsl(6, 100%, 71%)` | Primary brand color — warm coral pink |
+| **Shrimpy Coral** | `#FF7B6B` | `hsl(6, 100%, 71%)` | Primary brand color — warm coral pink |
 | **Deep Coral** | `#E8503A` | `hsl(9, 78%, 57%)` | Darker coral for light-mode primary |
 | **Ocean Teal** | `#4ECDC4` | `hsl(177, 52%, 55%)` | Accent — bright tropical teal |
 | **Deep Teal** | `#2A9D8F` | `hsl(174, 57%, 39%)` | Darker teal for light-mode accent |
@@ -293,7 +293,7 @@ Full CSS variable sheet to be placed in `dashboard/app/globals.css`:
 
 ```css
 /* ============================================
-   SHRIMP DESIGN SYSTEM — globals.css
+   Shrimpy DESIGN SYSTEM — globals.css
    ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -532,19 +532,19 @@ export function getSystemTheme(): Theme {
 
 export function applyTheme(theme: Theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('shrimp-theme', theme);
+  localStorage.setItem('Shrimpy-theme', theme);
 }
 
 export function getSavedTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
-  const saved = localStorage.getItem('shrimp-theme') as Theme | null;
+  const saved = localStorage.getItem('Shrimpy-theme') as Theme | null;
   return saved ?? getSystemTheme();
 }
 ```
 
 ### Storing Theme Preference
 
-- Theme preference is stored in `localStorage` under the key `shrimp-theme`.
+- Theme preference is stored in `localStorage` under the key `Shrimpy-theme`.
 - On initial load, the system default is respected if no preference is saved.
 - The theme toggle button is rendered in the top navigation bar.
 
@@ -558,7 +558,7 @@ Add this inline script to `dashboard/app/layout.tsx` **before any CSS loads**:
   dangerouslySetInnerHTML={{
     __html: `
       (function() {
-        var theme = localStorage.getItem('shrimp-theme') ||
+        var theme = localStorage.getItem('Shrimpy-theme') ||
           (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-theme', theme);
       })();
@@ -569,4 +569,4 @@ Add this inline script to `dashboard/app/layout.tsx` **before any CSS loads**:
 
 ---
 
-*End of Design System — Shrimp v1.0.0-draft*
+*End of Design System — Shrimpy v1.0.0-draft*

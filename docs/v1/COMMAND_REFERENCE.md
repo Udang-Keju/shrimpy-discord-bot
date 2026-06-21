@@ -1,5 +1,5 @@
 # Bot Command Reference
-## Project: **Shrimp** 🦐 — Discord Bot Command Reference
+## Project: **Shrimpy** 🦐 — Discord Bot Command Reference
 
 > **Version**: 1.0.0-draft
 > **Last Updated**: 2026-06-21
@@ -245,14 +245,14 @@
 | Field | Detail |
 |-------|--------|
 | **Syntax** | `/set nickname <name>` |
-| **Description** | Sets the bot's display name (nickname) in this server. Use `/set nickname reset` to revert to the global name **"Shrimp"**. |
+| **Description** | Sets the bot's display name (nickname) in this server. Use `/set nickname reset` to revert to the global name **"Shrimpy"**. |
 | **Permission** | ⚙️ Administrator |
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `name` | String | Required | The nickname to display in this server. Max 32 characters. Pass `reset` to clear the custom nickname and revert to "Shrimp". |
+| `name` | String | Required | The nickname to display in this server. Max 32 characters. Pass `reset` to clear the custom nickname and revert to "Shrimpy". |
 
 **Example:**
 ```
@@ -261,7 +261,7 @@
 > Bot will now appear as **ModBot** in this server. Reverting: `/set nickname reset`
 
 > [!NOTE]
-> The nickname is stored in the database and **automatically reapplied** if the bot leaves and rejoins the server. The bot's global application name ("Shrimp") is unchanged on Discord's side.
+> The nickname is stored in the database and **automatically reapplied** if the bot leaves and rejoins the server. The bot's global application name ("Shrimpy") is unchanged on Discord's side.
 
 ---
 
@@ -758,8 +758,8 @@
 | **Syntax** | `/botinfo` |
 | **Description** | Display detailed technical information about the bot: version, Go runtime version, uptime, memory usage, guild count, total tickets handled, database connection status. |
 | **Permission** | ⚙️ Administrator |
-| **Global Name** | The bot's global (application) name is **Shrimp** 🦐. |
-| **Per-Server Name** | Configurable via `/set nickname`. Defaults to **"Shrimp"** if no custom nickname is set for this server. |
+| **Global Name** | The bot's global (application) name is **Shrimpy** 🦐. |
+| **Per-Server Name** | Configurable via `/set nickname`. Defaults to **"Shrimpy"** if no custom nickname is set for this server. |
 
 **Example:**
 ```
@@ -968,4 +968,4 @@ Head to #rules to get started, and feel free to open a ticket if you need help!
 
 ---
 
-*End of Bot Command Reference — Shrimp v1.0.0-draft*
+*End of Bot Command Reference — Shrimpy v1.0.0-draft*
