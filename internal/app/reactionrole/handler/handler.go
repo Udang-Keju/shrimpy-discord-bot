@@ -8,21 +8,20 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
-	"github.com/bwmarrin/discordgo"
 	"github.com/go-chi/chi/v5"
 )
 
 // Handler manages reaction role message dashboard configurations.
 type Handler struct {
 	reactionSvc *service.ReactionRoleService
-	dg          *discordgo.Session
+	provider    discordutil.DiscordSessionProvider
 }
 
 // NewHandler constructs a new Handler.
-func NewHandler(reactionSvc *service.ReactionRoleService, dg *discordgo.Session) *Handler {
+func NewHandler(reactionSvc *service.ReactionRoleService, provider discordutil.DiscordSessionProvider) *Handler {
 	return &Handler{
 		reactionSvc: reactionSvc,
-		dg:          dg,
+		provider:    provider,
 	}
 }
 
@@ -75,7 +74,13 @@ func (h *Handler) CreateReactionRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := h.reactionSvc.Create(r.Context(), h.dg, guildID, chID, payload.Title, payload.Description, payload.Color, payload.Media)
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	msg, err := h.reactionSvc.Create(r.Context(), dg, guildID, chID, payload.Title, payload.Description, payload.Color, payload.Media)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create reaction role: "+err.Error())
 		return
@@ -87,7 +92,19 @@ func (h *Handler) CreateReactionRole(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteReactionRole(w http.ResponseWriter, r *http.Request) {
 	msgID := chi.URLParam(r, "msgId")
 
-	err := h.reactionSvc.Delete(r.Context(), h.dg, msgID)
+	msg, err := h.reactionSvc.Get(r.Context(), msgID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Reaction role message not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), msg.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	err = h.reactionSvc.Delete(r.Context(), dg, msgID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete reaction role message: "+err.Error())
 		return
@@ -116,7 +133,19 @@ func (h *Handler) AddEmojiMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.reactionSvc.AddEmoji(r.Context(), h.dg, msgID, payload.Emoji, roleID)
+	msg, err := h.reactionSvc.Get(r.Context(), msgID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Reaction role message not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), msg.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	created, err := h.reactionSvc.AddEmoji(r.Context(), dg, msgID, payload.Emoji, roleID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to add emoji mapping")
 		return
@@ -134,7 +163,19 @@ func (h *Handler) RemoveEmojiMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.reactionSvc.RemoveEmoji(r.Context(), h.dg, msgID, emoji)
+	msg, err := h.reactionSvc.Get(r.Context(), msgID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Reaction role message not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), msg.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	err = h.reactionSvc.RemoveEmoji(r.Context(), dg, msgID, emoji)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to remove emoji mapping")
 		return

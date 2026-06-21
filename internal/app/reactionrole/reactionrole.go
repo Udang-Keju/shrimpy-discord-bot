@@ -6,7 +6,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/repository"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/service"
-	"github.com/bwmarrin/discordgo"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"gorm.io/gorm"
 )
 
@@ -19,10 +19,10 @@ type Module struct {
 }
 
 // Build compiles all layers of the reaction role feature.
-func Build(db *gorm.DB, dg *discordgo.Session) *Module {
+func Build(db *gorm.DB, provider discordutil.DiscordSessionProvider) *Module {
 	repo := repository.NewReactionRoleRepo(db)
 	svc := service.NewReactionRoleService(repo)
-	h := handler.NewHandler(svc, dg)
+	h := handler.NewHandler(svc, provider)
 	b := bot.NewBotHandler(svc)
 
 	return &Module{
