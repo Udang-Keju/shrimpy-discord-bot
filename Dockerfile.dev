@@ -1,0 +1,16 @@
+FROM golang:1.26-alpine
+
+WORKDIR /app
+
+# Install git and compile tools if needed
+RUN apk add --no-cache git build-base
+
+# Copy dependency configs
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Run entry point directly in watch-ready mode via go run
+CMD ["go", "run", "cmd/shrimpy/main.go"]

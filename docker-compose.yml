@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: shrimpy
+      POSTGRES_USER: shrimpy
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shrimpy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      - DATABASE_URL=postgres://shrimpy:devpassword@db:5432/shrimpy?sslmode=disable
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:8080/api/v1/auth/callback}
+      - JWT_SECRET=${JWT_SECRET:-devjwtsecretstringforlocallogin32bytes}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - API_PORT=8080
+      - ENVIRONMENT=development
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_dev_data:
