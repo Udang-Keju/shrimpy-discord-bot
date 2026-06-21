@@ -12,6 +12,7 @@ import (
 	guild_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/handler"
 	guild_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
 	rr_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/handler"
+	settings_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/handler"
 	ticket_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/handler"
 	welcome_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/handler"
 	"github.com/bwmarrin/discordgo"
@@ -32,6 +33,7 @@ type Server struct {
 	welcomeHandler      *welcome_handler.Handler
 	ticketHandler       *ticket_handler.Handler
 	reactionRoleHandler *rr_handler.Handler
+	settingsHandler     *settings_handler.SettingsHandler
 
 	// Services/Deps needed by middleware
 	guildSvc *guild_svc.GuildService
@@ -56,6 +58,7 @@ func NewServer(
 		welcomeHandler:      modules.Welcome.Handler,
 		ticketHandler:       modules.Ticket.Handler,
 		reactionRoleHandler: modules.ReactionRole.Handler,
+		settingsHandler:     modules.Settings.Handler,
 		guildSvc:            modules.Guild.Service,
 		dg:                  dg,
 	}
@@ -150,6 +153,16 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Get("/tickets/{ticketId}/transcript", s.ticketHandler.DownloadTranscript)
 			})
 		})
+
+			// Admin-only: bot credential management
+			r.Group(func(r chi.Router) {
+				r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
+				r.Use(api_middleware.AdminMiddleware)
+
+				r.Get("/admin/settings", s.settingsHandler.Get)
+				r.Put("/admin/settings", s.settingsHandler.Update)
+				r.Post("/admin/settings/reconnect", s.settingsHandler.Reconnect)
+			})
 	})
 }
 
