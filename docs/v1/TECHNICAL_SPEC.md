@@ -158,6 +158,15 @@ The web dashboard follows the **Shrimpy Design System**, fully documented in [DE
 
 ```mermaid
 erDiagram
+    bot_settings {
+        SMALLINT id PK
+        BYTEA discord_token_enc
+        VARCHAR discord_client_id
+        BYTEA discord_client_secret_enc
+        TEXT discord_redirect_uri
+        TIMESTAMPTZ updated_at
+    }
+
     guilds ||--o{ ticket_panels : "has"
     guilds ||--o{ tickets : "has"
     guilds ||--|| welcome_config : "has"
@@ -306,6 +315,19 @@ erDiagram
 ### 3.2 Table Definitions (DDL)
 
 ```sql
+-- ─── Bot application credential settings (singleton) ────────────────────────
+-- Always exactly one row (id = 1). Managed via the dashboard admin panel.
+-- All sensitive values are AES-256-GCM encrypted at rest.
+CREATE TABLE bot_settings (
+    id                          SMALLINT    PRIMARY KEY DEFAULT 1,
+    discord_token_enc           BYTEA       NOT NULL,   -- AES-256-GCM encrypted bot token
+    discord_client_id           VARCHAR(30) NOT NULL,
+    discord_client_secret_enc   BYTEA       NOT NULL,   -- AES-256-GCM encrypted
+    discord_redirect_uri        TEXT        NOT NULL,
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT singleton CHECK (id = 1)
+);
+
 -- Guild configuration root table
 CREATE TABLE guilds (
     guild_id       BIGINT       PRIMARY KEY,
@@ -627,6 +649,43 @@ DELETE /api/v1/guilds/:guildId/staff-roles/:roleId     # Remove a staff role
 ```
 GET /api/v1/guilds/:guildId/stats    # Ticket counts by status, avg resolution time, member count
 ```
+
+### 4.9 Admin — Bot Credential Settings
+
+These endpoints allow the bot owner or any admin to manage the Discord credentials stored in the `bot_settings` table **without changing Railway environment variables**.
+
+```
+GET  /api/v1/admin/settings           # Read current credentials (secrets masked as "***")
+PUT  /api/v1/admin/settings           # Update any credential field
+POST /api/v1/admin/settings/reconnect # Manually reconnect the bot using the current DB token
+```
+
+> [!IMPORTANT]
+> These endpoints require the `AdminMiddleware`, which is layered on top of the standard `AuthMiddleware`. A request is considered admin if the authenticated user has a non-empty `managed_guilds` JWT claim (meaning they hold `ADMINISTRATOR` or `MANAGE_GUILD` on at least one bot guild). An optional `OWNER_DISCORD_ID` env var grants unconditional access.
+
+**GET /api/v1/admin/settings** response:
+```json
+{
+  "discord_token": "***",
+  "discord_client_id": "123456789012345678",
+  "discord_client_secret": "***",
+  "discord_redirect_uri": "https://your-railway-domain/api/v1/auth/callback",
+  "updated_at": "2026-06-21T12:00:00Z"
+}
+```
+
+**PUT /api/v1/admin/settings** body (all fields optional — only include what you want to change):
+```json
+{
+  "discord_token": "new-bot-token",
+  "discord_client_id": "123456789012345678",
+  "discord_client_secret": "new-client-secret",
+  "discord_redirect_uri": "https://your-new-domain/api/v1/auth/callback"
+}
+```
+
+> [!NOTE]
+> If `discord_token` is updated, the bot **automatically reconnects** to the Discord Gateway without any restart required. The same `*discordgo.Session` pointer is reused with the new token, so all registered event handlers and service references remain valid. The `POST /reconnect` endpoint can be used to manually force a reconnect using the current DB token (e.g., after a network issue).
 
 **Response example:**
 ```json
@@ -964,6 +1023,12 @@ shrimpy-discord-bot/
 │   │   │   ├── repository/repository.go
 │   │   │   ├── handler/handler.go
 │   │   │   └── auth.go               # Module builder/entry point
+│   │   ├── settings/                 # Bot credential management (singleton DB settings)
+│   │   │   ├── model/model.go        # BotSettings GORM model (bot_settings table)
+│   │   │   ├── repository/repository.go
+│   │   │   ├── service/service.go    # Encryption, 30s cache, seed from env
+│   │   │   ├── handler/handler.go    # GET/PUT /admin/settings, POST /reconnect
+│   │   │   └── settings.go          # Module builder/entry point
 │   │   ├── guild/                    # Server configuration, support staff & auto-roles
 │   │   │   ├── model/model.go
 │   │   │   ├── repository/repository.go
@@ -1009,6 +1074,7 @@ shrimpy-discord-bot/
 │   │
 │   ├── api/
 │   │   ├── middleware/
+│   │   │   ├── admin.go              # Admin-only access check (managed_guilds or OWNER_DISCORD_ID)
 │   │   │   ├── auth.go               # JWT validation middleware
 │   │   │   ├── guild.go              # Guild permission check middleware
 │   │   │   └── ratelimit.go          # API rate limiting
@@ -1020,7 +1086,8 @@ shrimpy-discord-bot/
 ├── migrations/
 │   ├── 001_init.up.sql
 │   ├── 001_init.down.sql
-│   └── ...
+│   ├── 002_bot_settings.up.sql
+│   └── 002_bot_settings.down.sql
 │
 ├── dashboard/                         # Next.js frontend
 │   ├── app/
@@ -1053,15 +1120,20 @@ shrimpy-discord-bot/
 
 All configuration is loaded from environment variables (12-factor app style). A `.env` file is supported in development via `godotenv`.
 
+### Go Backend (Railway)
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DISCORD_TOKEN` | ✅ | — | Bot token from Discord Developer Portal |
-| `DISCORD_CLIENT_ID` | ✅ | — | Application client ID |
-| `DISCORD_CLIENT_SECRET` | ✅ | — | OAuth2 client secret |
-| `DISCORD_REDIRECT_URI` | ✅ | — | OAuth2 callback URL |
-| `DATABASE_URL` | ✅ | — | PostgreSQL connection string |
-| `JWT_SECRET` | ✅ | — | Random 32+ byte string for signing JWTs |
-| `API_PORT` | ❌ | `8080` | Port for the REST API server |
+| `DISCORD_TOKEN` | ⚠️ First boot | — | Bot token — seeds `bot_settings` on first boot; removable after |
+| `DISCORD_CLIENT_ID` | ⚠️ First boot | — | Application client ID — seeds `bot_settings` on first boot |
+| `DISCORD_CLIENT_SECRET` | ⚠️ First boot | — | OAuth2 client secret — seeds `bot_settings` on first boot |
+| `DISCORD_REDIRECT_URI` | ⚠️ First boot | — | OAuth2 callback URL — seeds `bot_settings` on first boot |
+| `DATABASE_URL` | ✅ Always | — | PostgreSQL connection string |
+| `JWT_SECRET` | ✅ Always | — | Random 32+ byte string for signing JWTs |
+| `TOKEN_ENCRYPTION_KEY` | ✅ Always | — | 64-character hex string (32 bytes) for AES-256-GCM encryption |
+| `PORT` | ✅ Railway | — | Injected by Railway automatically — takes priority over `API_PORT` |
+| `API_PORT` | ❌ | `8080` | Port for the REST API server (fallback when `PORT` is not set) |
+| `OWNER_DISCORD_ID` | ❌ | — | Discord user ID with unconditional admin access to `/api/v1/admin/settings` |
 | `BOT_PREFIX` | ❌ | `!` | Global default prefix (overridden per-guild) |
 | `ENVIRONMENT` | ❌ | `development` | `development` or `production` |
 | `LOG_LEVEL` | ❌ | `info` | `debug`, `info`, `warn`, `error` |
@@ -1069,6 +1141,25 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `TRANSCRIPT_WORKER_COUNT` | ❌ | `4` | Number of goroutines for transcript generation |
 | `AUTO_CLOSE_CHECK_INTERVAL` | ❌ | `15m` | How often the scheduler checks for tickets to auto-close |
 | `CORS_ALLOWED_ORIGINS` | ❌ | `http://localhost:3000` | Comma-separated allowed origins for the API |
+
+> [!IMPORTANT]
+> **First-boot seeding**: On startup, if the `bot_settings` table row does not exist, the app reads all four `DISCORD_*` env vars and seeds the table. This happens exactly once. After the first successful boot, those env vars can be safely **removed from Railway** — the credentials are now stored encrypted in PostgreSQL and managed via the dashboard (`PUT /api/v1/admin/settings`).
+
+> [!CAUTION]
+> If neither the `bot_settings` row nor the `DISCORD_*` env vars are present, **the app will refuse to start**. Always set the four `DISCORD_*` vars on first deploy.
+
+### Next.js Frontend (Vercel)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_CLIENT_ID` | ✅ | Application client ID — needed by Auth.js `DiscordProvider` to initiate OAuth2 |
+| `DISCORD_CLIENT_SECRET` | ✅ | OAuth2 client secret — needed by Auth.js to exchange the authorization code |
+| `NEXTAUTH_SECRET` | ✅ | Random string for Auth.js session encryption (`openssl rand -hex 32`) |
+| `NEXTAUTH_URL` | ✅ | Public URL of the frontend (`https://<your-vercel-domain>`) |
+| `NEXT_PUBLIC_API_URL` | ✅ | URL of the Go REST API (`https://<your-railway-domain>`) |
+
+> [!NOTE]
+> The frontend always needs `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` as Vercel env vars — Auth.js (`DiscordProvider`) performs the OAuth2 code exchange server-side and requires them at runtime. These are **separate** from the values stored in the Go backend's `bot_settings` table.
 
 ---
 
@@ -1150,20 +1241,24 @@ CMD ["./shrimpy"]
 
 Set these in the Railway project dashboard under **Variables**:
 
-| Variable | Value Source |
-|----------|--------------|
-| `DISCORD_TOKEN` | Discord Developer Portal |
-| `DISCORD_CLIENT_ID` | Discord Developer Portal |
-| `DISCORD_CLIENT_SECRET` | Discord Developer Portal |
-| `DISCORD_REDIRECT_URI` | `https://<your-railway-domain>/api/v1/auth/callback` |
-| `DATABASE_URL` | Supabase → Settings → Database → URI (Transaction mode, port 6543) |
-| `JWT_SECRET` | `openssl rand -hex 32` |
-| `TOKEN_ENCRYPTION_KEY` | `openssl rand -hex 32` |
-| `CORS_ALLOWED_ORIGINS` | `https://<your-vercel-domain>` |
-| `ENVIRONMENT` | `production` |
+| Variable | Required | Value Source |
+|----------|----------|--------------|
+| `DISCORD_TOKEN` | ⚠️ First boot only | Discord Developer Portal — Bot → Token |
+| `DISCORD_CLIENT_ID` | ⚠️ First boot only | Discord Developer Portal — OAuth2 → Client ID |
+| `DISCORD_CLIENT_SECRET` | ⚠️ First boot only | Discord Developer Portal — OAuth2 → Client Secret |
+| `DISCORD_REDIRECT_URI` | ⚠️ First boot only | `https://<your-railway-domain>/api/v1/auth/callback` |
+| `DATABASE_URL` | ✅ Always | Supabase → Settings → Database → URI (Transaction mode, port 6543) |
+| `JWT_SECRET` | ✅ Always | `openssl rand -hex 32` |
+| `TOKEN_ENCRYPTION_KEY` | ✅ Always | `openssl rand -hex 64` (64 hex chars = 32 bytes for AES-256) |
+| `CORS_ALLOWED_ORIGINS` | ✅ Always | `https://<your-vercel-domain>` |
+| `ENVIRONMENT` | ✅ Always | `production` |
+| `OWNER_DISCORD_ID` | ❌ Optional | Your Discord user ID — grants unconditional access to `/admin/settings` |
 
 > [!IMPORTANT]
-> Use Supabase's **Transaction mode** connection string (port `6543`) for the `DATABASE_URL` on Railway. This routes through PgBouncer connection pooling, which is essential for handling concurrent bot events without exhausting PostgreSQL's connection limit.
+> **First-boot workflow**: Set all four `DISCORD_*` vars → deploy → the app seeds `bot_settings` automatically → you can then delete those four vars from Railway (credentials now live in DB). After first boot, update credentials via the dashboard at `PUT /api/v1/admin/settings`.
+
+> [!IMPORTANT]
+> Use Supabase's **Transaction mode** connection string (port `6543`) for `DATABASE_URL`. Add `?pgbouncer=true` to disable prepared statements, which PgBouncer's transaction pooling mode cannot cache.
 
 ---
 
@@ -1208,22 +1303,28 @@ Vercel is the optimal Next.js host — zero-config deployments, automatic previe
 
 #### Vercel Environment Variables
 
-| Variable | Value |
-|----------|-------|
-| `DISCORD_CLIENT_ID` | Discord Developer Portal |
-| `DISCORD_CLIENT_SECRET` | Discord Developer Portal |
-| `NEXTAUTH_SECRET` | `openssl rand -hex 32` |
-| `NEXTAUTH_URL` | `https://<your-vercel-domain>` |
-| `NEXT_PUBLIC_API_URL` | `https://<your-railway-domain>` |
+| Variable | Required | Value |
+|----------|----------|-------|
+| `DISCORD_CLIENT_ID` | ✅ | Discord Developer Portal — OAuth2 → Client ID |
+| `DISCORD_CLIENT_SECRET` | ✅ | Discord Developer Portal — OAuth2 → Client Secret |
+| `NEXTAUTH_SECRET` | ✅ | `openssl rand -hex 32` |
+| `NEXTAUTH_URL` | ✅ | `https://<your-vercel-domain>` |
+| `NEXT_PUBLIC_API_URL` | ✅ | `https://<your-railway-domain>` |
+
+> [!NOTE]
+> `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` must remain as Vercel env vars permanently — Auth.js requires them at runtime to initiate the OAuth2 login flow. These are **independent** of the copies stored in the Go backend's `bot_settings` table.
 
 #### Discord OAuth2 Redirect URIs
 
-In **Discord Developer Portal → OAuth2 → Redirects**, add both:
+In **Discord Developer Portal → OAuth2 → Redirects**, add:
 
 ```
-https://<your-vercel-domain>/api/auth/callback/discord    <- Production
+https://<your-vercel-domain>/api/auth/callback/discord    <- Auth.js (user login)
 http://localhost:3000/api/auth/callback/discord            <- Development
 ```
+
+> [!NOTE]
+> The redirect URI registered in the Developer Portal must match `DISCORD_REDIRECT_URI` stored in the `bot_settings` table (used by the Go backend's auth callback) **and** the Vercel domain redirect (used by Auth.js). Update both the portal and the DB value when your domain changes.
 
 ---
 
@@ -1257,9 +1358,14 @@ services:
       dockerfile: Dockerfile.dev
     environment:
       - DATABASE_URL=postgres://shrimpy:devpassword@db:5432/shrimpy?sslmode=disable
+      - JWT_SECRET=devjwtsecret
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}   # 64-char hex required
+      # DISCORD_* vars below are only needed on first boot to seed bot_settings.
+      # After first boot they can be removed; update via dashboard PUT /api/v1/admin/settings.
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - DISCORD_REDIRECT_URI=http://localhost:8080/api/v1/auth/callback
     ports:
       - "8080:8080"
     depends_on:

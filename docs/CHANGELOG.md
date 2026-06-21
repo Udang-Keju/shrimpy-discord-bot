@@ -12,6 +12,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.1.0] - 2026-06-21
+### Added
+- **`bot_settings` singleton table** (`migrations/002_bot_settings.up.sql`): Stores all four Discord credentials (`DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`) encrypted at rest with AES-256-GCM. Eliminates the need to update Railway environment variables when credentials change.
+- **`internal/app/settings/` vertical module**: Full model / repository / service / handler stack following the established vertical module pattern.
+- **Admin REST API endpoints** (`GET`, `PUT /api/v1/admin/settings`, `POST /api/v1/admin/settings/reconnect`): Dashboard-facing CRUD for bot credentials. Token and client secret are always masked in GET responses.
+- **Live bot reconnect** (`bot.Reconnect()`): Updating the token via `PUT /api/v1/admin/settings` automatically closes and reopens the Discord Gateway connection on the same `*discordgo.Session` pointer — no restart required, all handlers preserved.
+- **`internal/api/middleware/admin.go`**: Admin-only middleware that checks `managed_guilds` JWT claim or `OWNER_DISCORD_ID` env var override.
+- **`OWNER_DISCORD_ID` env var**: Optional; grants a specific Discord user unconditional access to the admin settings endpoints.
+- **First-boot seeding**: On startup, if `bot_settings` is empty and `DISCORD_*` env vars are set, credentials are automatically encrypted and persisted to the DB. After first boot, env vars can be safely removed from Railway.
+
+### Changed
+- **`internal/config/config.go`**: All four `DISCORD_*` environment variables changed from required (`mustGetEnv`) to optional (`getEnv`). Added `HasDiscordSeed()` helper and `getEnvFallback()` for Railway's `PORT` precedence.
+- **`cmd/shrimpy/main.go`**: Startup sequence reordered — `bot_settings` table migrated first, credentials seeded/loaded from DB, Discord session constructed from DB token, then remaining modules built.
+- **`internal/app/auth/handler/handler.go`**: Auth callback now fetches OAuth2 credentials from the settings service (30s cached DB lookup) instead of from startup config.
+- **`internal/api/server.go`**: Admin route group added under `/api/v1/admin/`.
+- **`railway.toml`**: `healthcheckTimeout` increased from 10s to 30s to accommodate cold-start DB connection + migration time.
+- **Technical Spec** ([TECHNICAL_SPEC.md](file:///d:/Pesronal/Projects/Discord Bot/docs/v1/TECHNICAL_SPEC.md)): Updated sections 3 (schema), 4 (API), 8 (directory structure), 9 (config), 10.2 (Railway vars), 10.4 (Vercel vars), 10.5 (docker-compose).
+
+### Fixed
+- **Railway health check failure**: HTTP server now starts before the Discord Gateway connection so `/health` is reachable during Railway's health check window.
+- **Railway `PORT` env var**: Config now reads Railway's injected `PORT` variable first, falling back to `API_PORT`, then `8080`.
+
+---
+
 ## [1.0.0] - 2026-06-21
 ### Added
 - **Initial MVP Specifications ([v1](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/))**:
