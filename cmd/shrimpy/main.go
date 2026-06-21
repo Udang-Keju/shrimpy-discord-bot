@@ -92,18 +92,18 @@ func main() {
 	// Start auto-close background worker
 	go modules.Ticket.SchedulerSvc.Start(ctx, dg)
 
-	// Start Discord Gateway connection
-	fmt.Println("Bot: Connecting to Discord Gateway...")
-	if err := discordBot.Start(); err != nil {
-		log.Fatalf("Fatal: failed to start Discord bot: %v", err)
-	}
-
-	// Start HTTP REST API server
+	// Start HTTP REST API server FIRST so Railway health checks pass immediately
 	go func() {
 		if err := apiServer.Start(); err != nil {
 			log.Fatalf("Fatal: REST API server crashed: %v", err)
 		}
 	}()
+
+	// Start Discord Gateway connection
+	fmt.Println("Bot: Connecting to Discord Gateway...")
+	if err := discordBot.Start(); err != nil {
+		log.Fatalf("Fatal: failed to start Discord bot: %v", err)
+	}
 
 	fmt.Println("Shrimpy Backend is now fully operational!")
 

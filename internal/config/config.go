@@ -61,7 +61,7 @@ func Load() (*Config, error) {
 		JWTSecret:          mustGetEnv("JWT_SECRET"),
 		TokenEncryptionKey: encKey,
 
-		APIPort:            getEnv("API_PORT", "8080"),
+		APIPort:            getEnvFallback("PORT", "API_PORT", "8080"),
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 
 		BotPrefix:   getEnv("BOT_PREFIX", "!"),
@@ -84,6 +84,23 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
+
+// getEnvFallback tries each key in order and returns the first non-empty value,
+// falling back to the default if none are set. Used to handle Railway's PORT vs API_PORT.
+func getEnvFallback(keys ...string) string {
+	// Last element is the default value
+	if len(keys) == 0 {
+		return ""
+	}
+	defaultVal := keys[len(keys)-1]
+	for _, key := range keys[:len(keys)-1] {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return defaultVal
+}
+
 
 // mustGetEnv panics if the required environment variable is not set.
 func mustGetEnv(key string) string {
