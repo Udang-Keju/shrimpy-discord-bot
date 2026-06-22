@@ -162,7 +162,11 @@ func runMigrations(cfg *config.Config) error {
 
 func seedDiscordApps(ctx context.Context, cfg *config.Config, repo *settings_repo.SettingsRepo, svc *settings_svc.SettingsService) error {
 	count, countErr := repo.Count(ctx)
-	if countErr == nil && count == 0 {
+	if countErr != nil {
+		return countErr
+	}
+
+	if count == 0 {
 		if cfg.HasDiscordSeed() {
 			fmt.Println("DB: Seeding discord_apps from environment variables (first boot)...")
 			if err := svc.SeedFromEnv(ctx,
@@ -179,7 +183,28 @@ func seedDiscordApps(ctx context.Context, cfg *config.Config, repo *settings_rep
 				"Set DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_REDIRECT_URI\n" +
 				"in your environment for the first boot.")
 		}
+	} else if count == 1 {
+		// If there is exactly one app, check if it was seeded with placeholder credentials and we have new ones in env vars.
+		apps, err := repo.GetAll(ctx)
+		if err == nil && len(apps) == 1 {
+			app := apps[0]
+			if app.DiscordClientID == "your_application_client_id" && cfg.DiscordClientID != "your_application_client_id" && cfg.DiscordClientID != "" {
+				fmt.Println("DB: Upgrading placeholder discord_app with actual environment variables...")
+				_, _, err = svc.Update(ctx, app.ID, settings_svc.UpdateRequest{
+					Name:                "First Boot App",
+					DiscordToken:        cfg.DiscordToken,
+					DiscordClientID:     cfg.DiscordClientID,
+					DiscordClientSecret: cfg.DiscordClientSecret,
+					DiscordRedirectURI:  cfg.DiscordRedirectURI,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to upgrade placeholder discord_app: %w", err)
+				}
+				fmt.Println("DB: discord_app upgraded successfully.")
+			}
+		}
 	}
+
 	return nil
 }
 
