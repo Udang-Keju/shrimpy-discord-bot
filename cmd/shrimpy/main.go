@@ -34,32 +34,15 @@ func main() {
 	}
 
 	// 2. Connect to PostgreSQL via GORM
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	db, err := initDB(cfg)
 	if err != nil {
-		log.Fatalf("Fatal: failed to connect to database: %v", err)
-	}
-
-	sqlDB, err := db.DB()
-	if err == nil {
-		sqlDB.SetMaxOpenConns(25)
-		sqlDB.SetMaxIdleConns(5)
-		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+		log.Fatalf("Fatal: %v", err)
 	}
 
 	// 2b. Run database schema migrations using golang-migrate
-	migrationURL := os.Getenv("DIRECT_DATABASE_URL")
-	if migrationURL == "" {
-		migrationURL = cfg.DatabaseURL
+	if err := runMigrations(cfg); err != nil {
+		log.Fatalf("Fatal: %v", err)
 	}
-	fmt.Println("DB: Running database migrations (golang-migrate)...")
-	m, err := migrate.New("file://migrations", migrationURL)
-	if err != nil {
-		log.Fatalf("Fatal: failed to initialize migrator: %v", err)
-	}
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("Fatal: failed to apply database migrations: %v", err)
-	}
-	fmt.Println("DB: Database migrations completed successfully.")
 
 	// 4. Instantiate Registry with nil handlers first to break the circular dependency.
 	registry := bot.NewRegistry(db, os.Getenv("DEV_GUILD_ID"), nil)
@@ -70,24 +53,8 @@ func main() {
 
 	// 6. Seed discord_apps from env vars if the count is 0 (first boot)
 	ctx := context.Background()
-	count, countErr := bootRepo.Count(ctx)
-	if countErr == nil && count == 0 {
-		if cfg.HasDiscordSeed() {
-			fmt.Println("DB: Seeding discord_apps from environment variables (first boot)...")
-			if err := bootSvc.SeedFromEnv(ctx,
-				cfg.DiscordToken,
-				cfg.DiscordClientID,
-				cfg.DiscordClientSecret,
-				cfg.DiscordRedirectURI,
-			); err != nil {
-				log.Fatalf("Fatal: failed to seed discord_apps: %v", err)
-			}
-			fmt.Println("DB: discord_apps seeded successfully.")
-		} else {
-			log.Fatalf("Fatal: no bot applications found in DB and no DISCORD_* env vars set for seeding.\n" +
-				"Set DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_REDIRECT_URI\n" +
-				"in your environment for the first boot.")
-		}
+	if err := seedDiscordApps(ctx, cfg, bootRepo, bootSvc); err != nil {
+		log.Fatalf("Fatal: %v", err)
 	}
 
 	// 7. Build Business Feature Modules using Registry as Provider and Controller
@@ -139,20 +106,8 @@ func main() {
 	}()
 
 	// Connect to Discord Gateway for all registered applications
-	fmt.Println("Bot: Starting session gateways for registered applications...")
-	apps, err := bootRepo.GetAll(ctx)
-	if err != nil {
-		log.Fatalf("Fatal: failed to load bot applications from DB: %v", err)
-	}
-	for _, app := range apps {
-		decryptedToken, _, _, _, err := bootSvc.GetDecryptedCredentials(ctx, app.ID)
-		if err != nil {
-			fmt.Printf("Warning: failed to decrypt token for app %s (%s): %v\n", app.Name, app.ID, err)
-			continue
-		}
-		if err := registry.StartSession(app.ID, decryptedToken); err != nil {
-			fmt.Printf("Warning: failed to start session gateway for app %s (%s): %v\n", app.Name, app.ID, err)
-		}
+	if err := startDiscordSessions(ctx, bootRepo, bootSvc, registry); err != nil {
+		log.Fatalf("Fatal: %v", err)
 	}
 
 	fmt.Println("Shrimpy Backend is now fully operational! 🦐")
@@ -168,4 +123,78 @@ func main() {
 	registry.Clear()
 
 	fmt.Println("Shrimpy Backend successfully stopped. Goodbye! 🦐")
+}
+
+func initDB(cfg *config.Config) (*gorm.DB, error) {
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err == nil {
+		sqlDB.SetMaxOpenConns(25)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	}
+	return db, nil
+}
+
+func runMigrations(cfg *config.Config) error {
+	migrationURL := os.Getenv("DIRECT_DATABASE_URL")
+	if migrationURL == "" {
+		migrationURL = cfg.DatabaseURL
+	}
+	fmt.Println("DB: Running database migrations (golang-migrate)...")
+	m, err := migrate.New("file://migrations", migrationURL)
+	if err != nil {
+		return fmt.Errorf("failed to initialize migrator: %w", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to apply database migrations: %w", err)
+	}
+	fmt.Println("DB: Database migrations completed successfully.")
+	return nil
+}
+
+func seedDiscordApps(ctx context.Context, cfg *config.Config, repo *settings_repo.SettingsRepo, svc *settings_svc.SettingsService) error {
+	count, countErr := repo.Count(ctx)
+	if countErr == nil && count == 0 {
+		if cfg.HasDiscordSeed() {
+			fmt.Println("DB: Seeding discord_apps from environment variables (first boot)...")
+			if err := svc.SeedFromEnv(ctx,
+				cfg.DiscordToken,
+				cfg.DiscordClientID,
+				cfg.DiscordClientSecret,
+				cfg.DiscordRedirectURI,
+			); err != nil {
+				return fmt.Errorf("failed to seed discord_apps: %w", err)
+			}
+			fmt.Println("DB: discord_apps seeded successfully.")
+		} else {
+			return fmt.Errorf("no bot applications found in DB and no DISCORD_* env vars set for seeding.\n" +
+				"Set DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_REDIRECT_URI\n" +
+				"in your environment for the first boot.")
+		}
+	}
+	return nil
+}
+
+func startDiscordSessions(ctx context.Context, repo *settings_repo.SettingsRepo, svc *settings_svc.SettingsService, registry *bot.Registry) error {
+	fmt.Println("Bot: Starting session gateways for registered applications...")
+	apps, err := repo.GetAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load bot applications from DB: %w", err)
+	}
+	for _, app := range apps {
+		decryptedToken, _, _, _, err := svc.GetDecryptedCredentials(ctx, app.ID)
+		if err != nil {
+			fmt.Printf("Warning: failed to decrypt token for app %s (%s): %v\n", app.Name, app.ID, err)
+			continue
+		}
+		if err := registry.StartSession(app.ID, decryptedToken); err != nil {
+			fmt.Printf("Warning: failed to start session gateway for app %s (%s): %v\n", app.Name, app.ID, err)
+		}
+	}
+	return nil
 }
