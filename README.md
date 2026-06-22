@@ -27,7 +27,7 @@ A single compiled Go binary acts as both the **Discord bot** and the **REST API 
 | **HTTP router** | [go-chi/chi](https://github.com/go-chi/chi) |
 | **Database** | PostgreSQL 16 via [pgx/v5](https://github.com/jackc/pgx) |
 | **Auth** | Discord OAuth2, JWT ([golang-jwt/jwt](https://github.com/golang-jwt/jwt)) |
-| **Dashboard** | Next.js 15 + TypeScript *(coming soon)* |
+| **Dashboard** | Next.js 16, TypeScript, CSS Modules |
 | **Deployment** | Railway (bot + API), Supabase (DB), Vercel (dashboard) |
 
 ---
@@ -53,6 +53,10 @@ shrimpy-discord-bot/
 │   │   └── middleware/  # JWT auth, guild permissions, rate limiting
 │   └── config/          # Environment variable loader
 ├── migrations/          # SQL schema migrations
+├── dashboard/           # Next.js 16 Web Admin Dashboard
+│   ├── app/             # App Router pages and styling
+│   ├── lib/             # Theme & API client helpers
+│   └── Dockerfile.dev   # Frontend dev container configuration
 ├── docs/
 │   ├── CHANGELOG.md     # Version history
 │   └── v1/              # v1.0 specifications
@@ -63,7 +67,7 @@ shrimpy-discord-bot/
 ├── .env.example         # Environment variable template
 ├── .CLAUDE.md           # AI assistant developer guidelines
 ├── Dockerfile           # Production multi-stage image
-├── docker-compose.yml   # Local dev stack
+├── docker-compose.yml   # Local dev stack (db, backend, frontend)
 └── Makefile             # Build & dev tasks
 ```
 
@@ -74,6 +78,7 @@ shrimpy-discord-bot/
 ### Prerequisites
 
 - [Go 1.26+](https://go.dev/dl/)
+- [Node.js 20+](https://nodejs.org/)
 - [PostgreSQL 16+](https://www.postgresql.org/) (or Docker)
 - A [Discord Application](https://discord.com/developers/applications) with a bot token
 
@@ -101,20 +106,43 @@ cp .env.example .env
 | `API_PORT` | ❌ | REST API port (default: `8080`) |
 | `ENVIRONMENT` | ❌ | `development` or `production` |
 
-### 3. Run the database migrations
+---
 
+## Running Locally
+
+### Option A: Using Docker Compose (Full Stack)
+Make sure **Docker Desktop** is running, then run:
+
+```bash
+# Clean up and build/start all services (DB, backend, frontend)
+make docker-fresh
+
+# Stop the containers
+make docker-down
+```
+- **Go REST API & Bot** runs at `http://localhost:8080`
+- **Dashboard Web UI** runs at `http://localhost:3000` (changes are automatically hot-reloaded)
+
+### Option B: Bare Metal Development
+If you prefer running services directly on your host machine:
+
+#### Start PostgreSQL database
+Ensure PostgreSQL is active on port `5432` with a database named `shrimpy`. Apply migrations:
 ```bash
 make migrate-up
 ```
 
-### 4. Start the bot
-
+#### Run Go Bot & REST API
 ```bash
-# Development (with hot reload via Air)
-make dev
-
-# Or run directly
 go run cmd/shrimpy/main.go
+```
+
+#### Run Next.js Dashboard
+In a separate terminal, start the Next.js development server:
+```bash
+cd dashboard
+npm install
+npm run dev
 ```
 
 ---
