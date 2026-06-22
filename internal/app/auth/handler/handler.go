@@ -122,13 +122,13 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	discUser, err := h.fetchDiscordUser(r.Context(), tokenData.AccessToken)
 	if err != nil {
-		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Failed to fetch user details from Discord")
+		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Failed to fetch user details from Discord: "+err.Error())
 		return
 	}
 
 	discGuilds, err := h.fetchDiscordGuilds(r.Context(), tokenData.AccessToken)
 	if err != nil {
-		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Failed to fetch user guilds from Discord")
+		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Failed to fetch user guilds from Discord: "+err.Error())
 		return
 	}
 
