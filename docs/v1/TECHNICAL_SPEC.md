@@ -1126,7 +1126,7 @@ All configuration is loaded from environment variables (12-factor app style). A 
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | ✅ | URL of the Go REST API (`https://<your-railway-domain>`) |
+| `NEXT_PUBLIC_SHRIMPY_API_URL` | ✅ | URL of the Go REST API (`https://<your-railway-domain>`) |
 
 > [!NOTE]
 > The frontend does not require any Discord client credentials or secrets. The session is managed securely via the HttpOnly cookie set by the Go backend.
@@ -1275,14 +1275,10 @@ Vercel is the optimal Next.js host — zero-config deployments, automatic previe
 
 | Variable | Required | Value |
 |----------|----------|-------|
-| `DISCORD_CLIENT_ID` | ✅ | Discord Developer Portal — OAuth2 → Client ID |
-| `DISCORD_CLIENT_SECRET` | ✅ | Discord Developer Portal — OAuth2 → Client Secret |
-| `NEXTAUTH_SECRET` | ✅ | `openssl rand -hex 32` |
-| `NEXTAUTH_URL` | ✅ | `https://<your-vercel-domain>` |
-| `NEXT_PUBLIC_API_URL` | ✅ | `https://<your-railway-domain>` |
+| `NEXT_PUBLIC_SHRIMPY_API_URL` | ✅ | `https://<your-railway-domain>` |
 
 > [!NOTE]
-> `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` must remain as Vercel env vars permanently — Auth.js requires them at runtime to initiate the OAuth2 login flow. These are **independent** of the copies stored in the Go backend's `bot_settings` table.
+> The frontend does not require any Discord client credentials or secrets. The session is managed securely via the HttpOnly cookie set by the Go backend.
 
 #### Discord OAuth2 Redirect URIs
 
@@ -1349,11 +1345,7 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile.dev
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
-      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
-      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-      - NEXTAUTH_SECRET=devsecret
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SHRIMPY_API_URL=http://backend:8080
     ports:
       - "3000:3000"
     depends_on:

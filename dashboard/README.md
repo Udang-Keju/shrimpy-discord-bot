@@ -38,16 +38,8 @@ dashboard/
 To run the dashboard, create a `.env.local` file in this directory (or set them in your deployment host environment):
 
 ```env
-# Discord OAuth Application Credentials
-DISCORD_CLIENT_ID=your_discord_client_id
-DISCORD_CLIENT_SECRET=your_discord_client_secret
-
-# Session Auth Settings (Auth.js)
-NEXTAUTH_SECRET=your_32_character_hex_secret # Generate using: openssl rand -hex 32
-NEXTAUTH_URL=http://localhost:3000
-
 # Go Backend Endpoint
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_SHRIMPY_API_URL=http://localhost:8080
 ```
 
 ---

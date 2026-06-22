@@ -45,11 +45,7 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile.dev
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
-      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
-      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-      - NEXTAUTH_SECRET=devsecret
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_SHRIMPY_API_URL=http://localhost:8080
     ports:
       - "3000:3000"
     depends_on:
