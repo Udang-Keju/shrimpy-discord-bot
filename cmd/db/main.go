@@ -18,7 +18,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatalf("Usage: shrimpy-db <migrate-up|migrate-down|seed>")
+		log.Fatalf("Usage: shrimpy-db <migrate-up|migrate-down|seed|migrate-and-seed>")
 	}
 
 	cmd := os.Args[1]
@@ -41,8 +41,15 @@ func main() {
 		if err := seedDatabase(cfg); err != nil {
 			log.Fatalf("Fatal: %v", err)
 		}
+	case "migrate-and-seed":
+		if err := runMigrationsUp(cfg); err != nil {
+			log.Fatalf("Fatal: %v", err)
+		}
+		if err := seedDatabase(cfg); err != nil {
+			log.Fatalf("Fatal: %v", err)
+		}
 	default:
-		log.Fatalf("Unknown command: %s. Use migrate-up, migrate-down, or seed.", cmd)
+		log.Fatalf("Unknown command: %s. Use migrate-up, migrate-down, seed, or migrate-and-seed.", cmd)
 	}
 }
 

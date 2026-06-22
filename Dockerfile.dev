@@ -13,4 +13,4 @@ RUN go mod download
 COPY . .
 
 # Run entry point directly, applying migrations and seeding first, then starting server
-CMD ["sh", "-c", "go run cmd/db/main.go migrate-up && go run cmd/db/main.go seed && go run cmd/shrimpy/main.go"]
+CMD ["sh", "-c", "go run cmd/db/main.go migrate-and-seed && go run cmd/shrimpy/main.go"]
