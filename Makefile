@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-up docker-down
+.PHONY: build run test clean docker-up docker-down docker-clean docker-fresh
 
 # Build the application binary
 build:
@@ -29,3 +29,13 @@ docker-up:
 docker-down:
 	@echo "Stopping local containers..."
 	@docker-compose down -v
+
+# Clean all docker containers, local images, and volumes
+docker-clean:
+	@echo "Cleaning up local containers, volumes, and built images..."
+	@docker-compose down -v --rmi local --remove-orphans
+
+# Perform a fresh start of all services with clean volumes and rebuilt images
+docker-fresh: docker-clean
+	@echo "Starting local environment with a fresh clean setup..."
+	@docker-compose up --build --force-recreate
