@@ -57,11 +57,34 @@ type discordUser struct {
 	Avatar        *string `json:"avatar"`
 }
 
+type JSONPermissions int64
+
+func (jp *JSONPermissions) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	var num int64
+	if err := json.Unmarshal(data, &num); err == nil {
+		*jp = JSONPermissions(num)
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		val, parseErr := strconv.ParseInt(str, 10, 64)
+		if parseErr != nil {
+			return parseErr
+		}
+		*jp = JSONPermissions(val)
+		return nil
+	}
+	return fmt.Errorf("cannot unmarshal %s into permissions (expected string or number)", string(data))
+}
+
 type discordGuild struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Permissions string `json:"permissions"`
-	Owner       bool   `json:"owner"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Permissions JSONPermissions `json:"permissions"`
+	Owner       bool            `json:"owner"`
 }
 
 type tokenResponse struct {
@@ -140,11 +163,9 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	var managedGuilds []string
 	for _, g := range discGuilds {
-		perms, err := strconv.ParseInt(g.Permissions, 10, 64)
-		if err == nil {
-			if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
-				managedGuilds = append(managedGuilds, g.ID)
-			}
+		perms := int64(g.Permissions)
+		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
+			managedGuilds = append(managedGuilds, g.ID)
 		}
 	}
 
