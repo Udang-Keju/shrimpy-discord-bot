@@ -125,8 +125,8 @@
    TYPOGRAPHY
    ───────────────────────────────────────────── */
 :root {
-  --font-display: var(--font-display);
-  --font-body:    var(--font-body);
+  --font-display: var(--font-ggsans), "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body:    var(--font-ggsans), "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono:    var(--font-mono);
 
   --text-xs:   0.75rem;
