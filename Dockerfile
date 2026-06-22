@@ -10,8 +10,9 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the Go application
+# Build the Go applications
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /shrimpy ./cmd/shrimpy
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /shrimpy-db ./cmd/db
 
 # --- Run Stage ---
 FROM alpine:3.19
@@ -21,8 +22,9 @@ RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy the binary from builder
+# Copy the binaries from builder
 COPY --from=builder /shrimpy .
+COPY --from=builder /shrimpy-db .
 
 # Copy migration files if needed
 COPY migrations/ ./migrations/
