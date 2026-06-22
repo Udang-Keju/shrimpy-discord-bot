@@ -1,0 +1,274 @@
+/* ============================================
+   Shrimpy DESIGN SYSTEM — globals.css
+   ============================================ */
+
+/* ─────────────────────────────────────────────
+   DARK THEME (default)
+   ───────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-base:             #1A1830;
+  --bg-surface:          #242140;
+  --bg-surface-elevated: #2E2B52;
+  --bg-surface-hover:    #383562;
+
+  /* Borders */
+  --border-subtle:  #3D3960;
+  --border-default: #5451A0;
+  --border-focus:   #FF7B6B;
+
+  /* Brand */
+  --primary:         #FF7B6B;
+  --primary-hover:   #FF9485;
+  --primary-muted:   rgba(255, 123, 107, 0.15);
+  --primary-fg:      #FFFFFF;
+  --accent:          #4ECDC4;
+  --accent-hover:    #6ED9D2;
+  --accent-muted:    rgba(78, 205, 196, 0.15);
+
+  /* Status */
+  --success: #52D99B;
+  --warning: #FFB347;
+  --danger:  #FF5757;
+  --info:    #5BA4FF;
+
+  /* Text */
+  --text-primary:   #F5F0FF;
+  --text-secondary: #BDB8E0;
+  --text-muted:     #9B93C0;
+  --text-disabled:  #5C5880;
+  --text-on-primary: #FFFFFF;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-primary: 0 4px 20px rgba(255, 123, 107, 0.3);
+  --shadow-accent:  0 4px 20px rgba(78, 205, 196, 0.25);
+
+  /* Semantic aliases */
+  --color-background:   var(--bg-base);
+  --color-surface:      var(--bg-surface);
+  --color-surface-raised: var(--bg-surface-elevated);
+  --color-border:       var(--border-subtle);
+  --color-primary:      var(--primary);
+  --color-primary-fg:   var(--primary-fg);
+  --color-accent:       var(--accent);
+  --color-text:         var(--text-primary);
+  --color-text-muted:   var(--text-muted);
+  --color-success:      var(--success);
+  --color-warning:      var(--warning);
+  --color-danger:       var(--danger);
+}
+
+/* ─────────────────────────────────────────────
+   LIGHT THEME
+   ───────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-base:             #FFF8F2;
+  --bg-surface:          #FFFFFF;
+  --bg-surface-elevated: #FFF0E8;
+  --bg-surface-hover:    #FFE8DC;
+
+  /* Borders */
+  --border-subtle:  #F0D5C8;
+  --border-default: #D4A898;
+  --border-focus:   #E8503A;
+
+  /* Brand */
+  --primary:         #E8503A;
+  --primary-hover:   #C93F2B;
+  --primary-muted:   rgba(232, 80, 58, 0.1);
+  --primary-fg:      #FFFFFF;
+  --accent:          #2A9D8F;
+  --accent-hover:    #1E7A6F;
+  --accent-muted:    rgba(42, 157, 143, 0.1);
+
+  /* Status */
+  --success: #27AE60;
+  --warning: #E67E22;
+  --danger:  #E74C3C;
+  --info:    #2980B9;
+
+  /* Text */
+  --text-primary:   #1A0F1F;
+  --text-secondary: #4A3558;
+  --text-muted:     #7A5C6E;
+  --text-disabled:  #B09AAA;
+  --text-on-primary: #FFFFFF;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 3px rgba(100, 60, 40, 0.08);
+  --shadow-md:      0 4px 16px rgba(100, 60, 40, 0.12);
+  --shadow-lg:      0 8px 32px rgba(100, 60, 40, 0.15);
+  --shadow-primary: 0 4px 20px rgba(232, 80, 58, 0.25);
+  --shadow-accent:  0 4px 20px rgba(42, 157, 143, 0.2);
+
+  /* Semantic aliases (inherit structure from dark) */
+  --color-background:   var(--bg-base);
+  --color-surface:      var(--bg-surface);
+  --color-surface-raised: var(--bg-surface-elevated);
+  --color-border:       var(--border-subtle);
+  --color-primary:      var(--primary);
+  --color-primary-fg:   var(--primary-fg);
+  --color-accent:       var(--accent);
+  --color-text:         var(--text-primary);
+  --color-text-muted:   var(--text-muted);
+  --color-success:      var(--success);
+  --color-warning:      var(--warning);
+  --color-danger:       var(--danger);
+}
+
+/* ─────────────────────────────────────────────
+   TYPOGRAPHY
+   ───────────────────────────────────────────── */
+:root {
+  --font-display: var(--font-display);
+  --font-body:    var(--font-body);
+  --font-mono:    var(--font-mono);
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+}
+
+/* ─────────────────────────────────────────────
+   SPACING
+   ───────────────────────────────────────────── */
+:root {
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+}
+
+/* ─────────────────────────────────────────────
+   BORDER RADIUS
+   ───────────────────────────────────────────── */
+:root {
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-full: 9999px;
+}
+
+/* ─────────────────────────────────────────────
+   TRANSITIONS
+   ───────────────────────────────────────────── */
+:root {
+  --transition-fast:   100ms ease;
+  --transition-base:   200ms ease;
+  --transition-slow:   350ms ease;
+  --transition-theme:  300ms ease; /* for theme switching */
+}
+
+/* ─────────────────────────────────────────────
+   BASE STYLES & INTERACTION DEFAULTS
+   ───────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-body);
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  scroll-behavior: smooth;
+  transition: background-color var(--transition-theme), color var(--transition-theme);
+}
+
+body {
+  min-height: 100%;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--primary-hover);
+}
+
+code, pre, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-surface-elevated);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ─────────────────────────────────────────────
+   PREMIUM CUSTOM UTILITY CLASSES
+   ───────────────────────────────────────────── */
+.glass-effect {
+  background: rgba(26, 24, 48, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+[data-theme="light"] .glass-effect {
+  background: rgba(255, 248, 242, 0.8);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hero-gradient {
+  background: radial-gradient(circle at 10% 20%, rgba(255, 123, 107, 0.08) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(78, 205, 196, 0.08) 0%, transparent 40%);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
