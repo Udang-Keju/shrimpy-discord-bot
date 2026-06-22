@@ -86,6 +86,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 		// Public Auth Callbacks
 		r.Get("/auth/login", s.authHandler.Login)
 		r.Get("/auth/callback", s.authHandler.Callback)
+		r.Get("/config", s.authHandler.GetConfig)
 
 		// Authenticated Routes
 		r.Group(func(r chi.Router) {

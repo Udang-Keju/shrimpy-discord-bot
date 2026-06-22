@@ -277,6 +277,30 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
 }
 
+// GetConfig returns public client configurations (like Discord Client ID and Redirect URI).
+func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	apps, err := h.settings.List(r.Context())
+	if err != nil || len(apps) == 0 {
+		apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{
+			"client_id":    "",
+			"redirect_uri": "",
+		})
+		return
+	}
+
+	_, clientID, _, redirectURI, err := h.settings.GetDecryptedCredentials(r.Context(), apps[0].ID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to retrieve app config: "+err.Error())
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{
+		"client_id":    clientID,
+		"redirect_uri": redirectURI,
+	})
+}
+
+
 func (h *AuthHandler) exchangeCodeForToken(ctx context.Context, clientID, clientSecret, redirectURI, code string) (*tokenResponse, error) {
 	data := url.Values{}
 	data.Set("client_id", clientID)

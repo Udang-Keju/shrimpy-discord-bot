@@ -10,6 +10,12 @@ export interface Guild {
   logChannelId?: string;
   autoRoles: string[];
   staffRoles: string[];
+  bot_joined?: boolean;
+}
+
+export interface PublicConfig {
+  client_id: string;
+  redirect_uri: string;
 }
 
 export interface Ticket {
@@ -246,6 +252,13 @@ export const ShrimpyAPI = {
       username: 'shrimp_commander',
       globalName: 'Shrimp Commander',
       avatar: 'https://images.unsplash.com/photo-1553753861-267865544b20?w=150'
+    });
+  },
+
+  getPublicConfig: async (): Promise<PublicConfig> => {
+    return safeFetch<PublicConfig>('/api/v1/config', {}, {
+      client_id: '123456789012345678',
+      redirect_uri: 'http://localhost:8080/api/v1/auth/callback'
     });
   },
 
