@@ -152,10 +152,13 @@ export default function Home() {
               >
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              <button className={`${styles.btn} ${styles.discordBtn}`}>
+              <a 
+                href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/v1/auth/login`}
+                className={`${styles.btn} ${styles.discordBtn}`}
+              >
                 <Sparkles size={16} />
                 <span>Login with Discord</span>
-              </button>
+              </a>
             </div>
           </nav>
         </div>

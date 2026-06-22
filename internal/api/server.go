@@ -84,7 +84,8 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 	// V1 API Group
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// Public Auth Callbacks
-		r.Post("/auth/callback", s.authHandler.Callback)
+		r.Get("/auth/login", s.authHandler.Login)
+		r.Get("/auth/callback", s.authHandler.Callback)
 
 		// Authenticated Routes
 		r.Group(func(r chi.Router) {

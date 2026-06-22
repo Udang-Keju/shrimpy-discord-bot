@@ -26,6 +26,7 @@ type Config struct {
 	// API
 	APIPort            string
 	CORSAllowedOrigins string
+	DashboardURL       string
 
 	// Bot
 	BotPrefix   string
@@ -63,6 +64,7 @@ func Load() (*Config, error) {
 
 		APIPort:            getEnvFallback("PORT", "API_PORT", "8080"),
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		DashboardURL:       getEnv("DASHBOARD_URL", "http://localhost:3000"),
 
 		BotPrefix:   getEnv("BOT_PREFIX", "!"),
 		Environment: getEnv("ENVIRONMENT", "development"),

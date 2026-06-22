@@ -820,7 +820,7 @@ stateDiagram-v2
 
 ## 7. Authentication — Discord OAuth2
 
-The web dashboard uses **Discord OAuth2 Authorization Code Flow**, implemented via **[Auth.js](https://authjs.dev/)** (formerly NextAuth.js) on the Next.js frontend with a custom JWT validation layer on the Go REST API backend.
+The web dashboard uses **Discord OAuth2 Authorization Code Flow**, implemented directly on the Go REST API backend to ensure maximum security, support multi-bot settings dynamically, and eliminate duplicate environment credentials on Vercel.
 
 ### 7.1 OAuth2 Scopes
 
@@ -838,28 +838,24 @@ The web dashboard uses **Discord OAuth2 Authorization Code Flow**, implemented v
 ```mermaid
 sequenceDiagram
     participant Browser
-    participant NextJS as "Next.js (Auth.js)"
+    participant NextJS as "Next.js Frontend"
     participant GoAPI as "Go REST API"
     participant Discord as "Discord OAuth2 / API"
     participant DB as "PostgreSQL (Supabase)"
 
-    Browser->>NextJS: GET /login
-    NextJS->>Browser: Redirect to discord.com/oauth2/authorize<br/>(scopes: identify guilds guilds.members.read)
+    Browser->>NextJS: Click "Login with Discord"
+    NextJS->>Browser: Redirect to Go API (/api/v1/auth/login)
+    GoAPI->>Browser: Redirect to Discord Authorize Page<br/>(scopes: identify guilds guilds.members.read)
     Browser->>Discord: User reviews & authorizes
-    Discord->>NextJS: Redirect to /api/auth/callback/discord?code=...
-    NextJS->>Discord: Exchange code for access_token + refresh_token
-    Discord->>NextJS: access_token, refresh_token, expires_in
-    NextJS->>Discord: GET /users/@me (fetch user profile)
-    NextJS->>Discord: GET /users/@me/guilds (fetch user guild list)
-    NextJS->>GoAPI: POST /api/v1/auth/callback { discord_user, guilds, access_token }
+    Discord->>GoAPI: Redirect to Go API Callback (/api/v1/auth/callback?code=...&state=...)
+    GoAPI->>Discord: Exchange code for access_token + refresh_token
+    Discord->>GoAPI: access_token, refresh_token, expires_in
+    GoAPI->>Discord: GET /users/@me (fetch user profile)
+    GoAPI->>Discord: GET /users/@me/guilds (fetch user guild list)
     GoAPI->>DB: Upsert user record (user_id, username, avatar, tokens encrypted)
     GoAPI->>GoAPI: Sign JWT { sub, managed_guilds[], exp, jti }
-    GoAPI->>NextJS: Set-Cookie: session=JWT (HttpOnly; Secure; SameSite=Lax)
-    NextJS->>Browser: Redirect to /dashboard (server picker)
-
-    Note over NextJS,GoAPI: All subsequent API calls attach the HttpOnly session cookie automatically
-
-    Browser->>NextJS: Select guild -> /dashboard/:guildId
+    GoAPI->>Browser: Set-Cookie: session=JWT (HttpOnly; Secure; SameSite=Lax)<br/>and Redirect to Next.js /dashboard
+    Browser->>NextJS: Render /dashboard (requests data)
     NextJS->>GoAPI: GET /api/v1/guilds/:guildId (with session cookie)
     GoAPI->>GoAPI: Validate JWT signature + expiry
     GoAPI->>Discord: GET /guilds/:guildId/members/:userId (re-validate permissions)
@@ -904,43 +900,10 @@ To avoid hitting Discord's rate limits (globally 50 req/s), permission checks ar
 > [!TIP]
 > When a staff/dashboard role is added or removed (via `/staff` commands or the dashboard API), the relevant cache keys are **immediately invalidated** so access changes take effect instantly — no waiting for TTL expiry.
 
-### 7.5 Auth.js Configuration (Next.js)
+### 7.5 Session Verification (Next.js)
 
-Auth.js is configured with the `DiscordProvider` in `dashboard/lib/auth.ts`:
+The Next.js frontend communicates with the Go REST API passing the browser's HttpOnly session cookie automatically. The frontend checks if the user is authenticated by making a request to `/api/v1/auth/me`. If it returns `401 Unauthorized`, the frontend prompts the user to log in.
 
-```typescript
-import NextAuth from "next-auth";
-import DiscordProvider from "next-auth/providers/discord";
-
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
-    DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID!,
-      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: "identify guilds guilds.members.read",
-        },
-      },
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, account }) {
-      // Persist Discord access token into JWT for Go API forwarding
-      if (account) {
-        token.discordAccessToken = account.access_token;
-        token.discordRefreshToken = account.refresh_token;
-        token.expiresAt = account.expires_at;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      session.discordAccessToken = token.discordAccessToken as string;
-      return session;
-    },
-  },
-});
-```
 
 ### 7.6 JWT Design (Go Backend)
 
@@ -1151,6 +1114,7 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `TRANSCRIPT_WORKER_COUNT` | ❌ | `4` | Number of goroutines for transcript generation |
 | `AUTO_CLOSE_CHECK_INTERVAL` | ❌ | `15m` | How often the scheduler checks for tickets to auto-close |
 | `CORS_ALLOWED_ORIGINS` | ❌ | `http://localhost:3000` | Comma-separated allowed origins for the API |
+| `DASHBOARD_URL` | ❌ | `http://localhost:3000` | Redirection target URL after OAuth login callback |
 
 > [!IMPORTANT]
 > **First-boot seeding**: On startup, if the `discord_apps` table is empty, the app reads all four `DISCORD_*` env vars and seeds the table with a default app named "First Boot App". This happens exactly once. After the first successful boot, those env vars can be safely **removed from Railway** — the credentials are now stored encrypted in PostgreSQL and managed via the dashboard (`GET/POST/PUT/DELETE /api/v1/admin/apps`).
@@ -1162,14 +1126,10 @@ All configuration is loaded from environment variables (12-factor app style). A 
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DISCORD_CLIENT_ID` | ✅ | Application client ID — needed by Auth.js `DiscordProvider` to initiate OAuth2 |
-| `DISCORD_CLIENT_SECRET` | ✅ | OAuth2 client secret — needed by Auth.js to exchange the authorization code |
-| `NEXTAUTH_SECRET` | ✅ | Random string for Auth.js session encryption (`openssl rand -hex 32`) |
-| `NEXTAUTH_URL` | ✅ | Public URL of the frontend (`https://<your-vercel-domain>`) |
 | `NEXT_PUBLIC_API_URL` | ✅ | URL of the Go REST API (`https://<your-railway-domain>`) |
 
 > [!NOTE]
-> The frontend always needs `DISCORD_CLIENT_ID` and `DISCORD_CLIENT_SECRET` as Vercel env vars — Auth.js (`DiscordProvider`) performs the OAuth2 code exchange server-side and requires them at runtime. These are **separate** from the values stored in the Go backend's `discord_apps` table.
+> The frontend does not require any Discord client credentials or secrets. The session is managed securely via the HttpOnly cookie set by the Go backend.
 
 ---
 
