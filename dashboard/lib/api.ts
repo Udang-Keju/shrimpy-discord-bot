@@ -242,6 +242,7 @@ function exitDemoMode(): void {
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options?.headers || {}),
@@ -281,7 +282,7 @@ export const ShrimpyAPI = {
   },
 
   logout: async (): Promise<void> => {
-    await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'DELETE', credentials: 'include' });
   },
 
   // Guilds
@@ -375,7 +376,7 @@ export const ShrimpyAPI = {
       mockPanels = mockPanels.filter(p => p.id !== panelId);
       return;
     }
-    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}`, { method: 'DELETE', credentials: 'include' });
   },
 
   listCategories: async (guildId: string, panelId: string): Promise<TicketCategory[]> => {
@@ -407,7 +408,7 @@ export const ShrimpyAPI = {
       }
       return;
     }
-    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE', credentials: 'include' });
   },
 
   // Tickets management
@@ -492,6 +493,6 @@ export const ShrimpyAPI = {
       mockReactionRoles = mockReactionRoles.filter(r => r.id !== msgId);
       return;
     }
-    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/reaction-roles/${msgId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/reaction-roles/${msgId}`, { method: 'DELETE', credentials: 'include' });
   }
 };
