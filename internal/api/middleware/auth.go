@@ -13,9 +13,9 @@ import (
 // Claims defines the custom claims stored inside the JWT session token.
 type Claims struct {
 	jwt.RegisteredClaims
-	Username      string   `json:"username"`
-	Avatar        string   `json:"avatar"`
-	ManagedGuilds []string `json:"managed_guilds"`
+	Username      string          `json:"username"`
+	Avatar        string          `json:"avatar"`
+	ManagedGuilds []apiutil.Guild `json:"managed_guilds"`
 }
 
 // AuthMiddleware creates a middleware that validates signed JWTs.

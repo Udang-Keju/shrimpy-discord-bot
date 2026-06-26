@@ -28,51 +28,37 @@ func NewHandler(guildSvc *service.GuildService, provider discordutil.DiscordSess
 }
 
 // List returns a list of guilds managed by the user, annotating whether Shrimpy has joined them.
+// Name/icon come from the OAuth2 guild list cached at login (so unjoined guilds still display
+// correctly); when the bot has joined we prefer the live Discord session data since it's fresher.
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	managedGuildIDs := apiutil.GetManagedGuilds(r.Context())
-	if len(managedGuildIDs) == 0 {
+	managedGuilds := apiutil.GetManagedGuilds(r.Context())
+	if len(managedGuilds) == 0 {
 		apiutil.WriteJSON(w, http.StatusOK, []interface{}{})
 		return
 	}
 
-	type guildResponse struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Icon      string `json:"icon"`
-		BotJoined bool   `json:"bot_joined"`
-	}
+	list := make([]apiutil.Guild, 0, len(managedGuilds))
+	for _, g := range managedGuilds {
+		g.BotJoined = h.provider.IsBotInGuild(g.ID)
 
-	var list []guildResponse
-	for _, idStr := range managedGuildIDs {
-		botJoined := h.provider.IsBotInGuild(idStr)
-		var gName, gIcon string
-
-		if botJoined {
-			gID, err := strconv.ParseInt(idStr, 10, 64)
-			if err == nil {
+		if g.BotJoined {
+			if gID, err := strconv.ParseInt(g.ID, 10, 64); err == nil {
 				if dg, sErr := h.provider.GetSessionForGuild(r.Context(), gID); sErr == nil {
-					guild, err := dg.State.Guild(idStr)
+					guild, err := dg.State.Guild(g.ID)
 					if err != nil {
-						guild, err = dg.Guild(idStr)
+						guild, err = dg.Guild(g.ID)
 					}
 					if err == nil && guild != nil {
-						gName = guild.Name
-						gIcon = guild.Icon
+						g.Name = guild.Name
+						if guild.Icon != "" {
+							g.Icon = discordutil.GuildIconURL(g.ID, guild.Icon)
+						}
 					}
 				}
 			}
 		}
 
-		if gName == "" {
-			gName = "Server " + idStr
-		}
-
-		list = append(list, guildResponse{
-			ID:        idStr,
-			Name:      gName,
-			Icon:      gIcon,
-			BotJoined: botJoined,
-		})
+		list = append(list, g)
 	}
 
 	apiutil.WriteJSON(w, http.StatusOK, list)

@@ -48,7 +48,7 @@ func GuildPermissionMiddleware(guildSvc *service.GuildService, provider discordu
 			managedGuilds := apiutil.GetManagedGuilds(r.Context())
 			isManaged := false
 			for _, g := range managedGuilds {
-				if g == guildIDStr {
+				if g.ID == guildIDStr {
 					isManaged = true
 					break
 				}

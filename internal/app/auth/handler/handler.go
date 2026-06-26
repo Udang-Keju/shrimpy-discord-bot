@@ -16,6 +16,7 @@ import (
 	settings_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/crypto"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -83,6 +84,7 @@ func (jp *JSONPermissions) UnmarshalJSON(data []byte) error {
 type discordGuild struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
+	Icon        *string         `json:"icon"`
 	Permissions JSONPermissions `json:"permissions"`
 	Owner       bool            `json:"owner"`
 }
@@ -161,13 +163,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var managedGuilds []string
-	for _, g := range discGuilds {
-		perms := int64(g.Permissions)
-		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
-			managedGuilds = append(managedGuilds, g.ID)
-		}
-	}
+	managedGuilds := buildManagedGuilds(discGuilds)
 
 	encAccess, err := crypto.Encrypt([]byte(tokenData.AccessToken), h.tokenEncKey)
 	if err != nil {
@@ -258,7 +254,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{
 		"id":             userID,
 		"username":       u.Username,
-		"avatar":         u.AvatarHash,
+		"avatar":         discordutil.UserAvatarURL(userID, getStringValue(u.AvatarHash)),
 		"managed_guilds": managedGuilds,
 	})
 }
@@ -301,13 +297,7 @@ func (h *AuthHandler) RefreshSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var managedGuilds []string
-	for _, g := range discGuilds {
-		perms := int64(g.Permissions)
-		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
-			managedGuilds = append(managedGuilds, g.ID)
-		}
-	}
+	managedGuilds := buildManagedGuilds(discGuilds)
 
 	claims := &middleware.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -468,4 +458,23 @@ func getStringValue(s *string) string {
 		return *s
 	}
 	return ""
+}
+
+// buildManagedGuilds filters the user's Discord guilds down to the ones they
+// can administer (Owner, ADMINISTRATOR, or MANAGE_GUILD), carrying over the
+// display name/icon Discord returned so the dashboard doesn't need bot
+// membership in the guild to render them.
+func buildManagedGuilds(discGuilds []discordGuild) []apiutil.Guild {
+	var managed []apiutil.Guild
+	for _, g := range discGuilds {
+		perms := int64(g.Permissions)
+		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
+			managed = append(managed, apiutil.Guild{
+				ID:   g.ID,
+				Name: g.Name,
+				Icon: discordutil.GuildIconURL(g.ID, getStringValue(g.Icon)),
+			})
+		}
+	}
+	return managed
 }

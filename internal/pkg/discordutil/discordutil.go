@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"gorm.io/datatypes"
 )
@@ -20,6 +21,32 @@ func ParseID(s string) (int64, error) {
 // FormatID converts an int64 snowflake back to its string representation.
 func FormatID(n int64) string {
 	return strconv.FormatInt(n, 10)
+}
+
+// GuildIconURL builds the CDN URL for a guild icon hash, as returned by
+// Discord's REST/OAuth2 APIs. Returns "" if hash is empty.
+func GuildIconURL(guildID, hash string) string {
+	if hash == "" {
+		return ""
+	}
+	ext := "png"
+	if strings.HasPrefix(hash, "a_") {
+		ext = "gif"
+	}
+	return fmt.Sprintf("https://cdn.discordapp.com/icons/%s/%s.%s", guildID, hash, ext)
+}
+
+// UserAvatarURL builds the CDN URL for a user avatar hash, as returned by
+// Discord's REST/OAuth2 APIs. Returns "" if hash is empty.
+func UserAvatarURL(userID, hash string) string {
+	if hash == "" {
+		return ""
+	}
+	ext := "png"
+	if strings.HasPrefix(hash, "a_") {
+		ext = "gif"
+	}
+	return fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.%s", userID, hash, ext)
 }
 
 // EmbedMedia holds optional visual fields for Discord embeds, stored as JSONB.
