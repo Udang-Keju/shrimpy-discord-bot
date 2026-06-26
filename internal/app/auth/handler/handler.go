@@ -235,7 +235,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	if dashboardURL == "" {
 		dashboardURL = "http://localhost:3000"
 	}
-	http.Redirect(w, r, dashboardURL+"/dashboard", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, dashboardURL+"/servers", http.StatusTemporaryRedirect)
 }
 
 // Me returns the active user session data decoded from JWT.
