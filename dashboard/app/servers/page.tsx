@@ -22,20 +22,27 @@ export default function ServersPage() {
 
   useEffect(() => {
     async function loadData() {
-      try {
-        const [userData, guildList, publicConfig] = await Promise.all([
-          ShrimpyAPI.getCurrentUser(),
-          ShrimpyAPI.listGuilds(),
-          ShrimpyAPI.getPublicConfig()
-        ]);
-        setUser(userData);
-        setGuilds(guildList);
-        setConfig(publicConfig);
-      } catch (err) {
-        console.error("Failed to load server list", err);
-      } finally {
-        setLoading(false);
+      const [userResult, guildResult, configResult] = await Promise.allSettled([
+        ShrimpyAPI.getCurrentUser(),
+        ShrimpyAPI.listGuilds(),
+        ShrimpyAPI.getPublicConfig()
+      ]);
+      if (userResult.status === "fulfilled") {
+        setUser(userResult.value);
+      } else {
+        console.error("Failed to load current user", userResult.reason);
       }
+      if (guildResult.status === "fulfilled") {
+        setGuilds(guildResult.value);
+      } else {
+        console.error("Failed to load guild list", guildResult.reason);
+      }
+      if (configResult.status === "fulfilled") {
+        setConfig(configResult.value);
+      } else {
+        console.error("Failed to load public config", configResult.reason);
+      }
+      setLoading(false);
     }
     loadData();
   }, []);
@@ -45,9 +52,11 @@ export default function ServersPage() {
     router.push("/login");
   };
 
+  // No fallback here: an invite link built from a fake client_id silently
+  // sends users to Discord's "Unknown Application" error after redirect.
   const getInviteUrl = (guildId?: string) => {
-    const clientId = config?.client_id || "123456789012345678";
-    let url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands`;
+    if (!config?.client_id) return null;
+    let url = `https://discord.com/api/oauth2/authorize?client_id=${config.client_id}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands`;
     if (guildId) {
       url += `&guild_id=${guildId}`;
     }
@@ -130,18 +139,22 @@ export default function ServersPage() {
             </div>
             <h3 style={{ fontSize: "20px", fontWeight: 700, marginBottom: "8px" }}>No Servers Found</h3>
             <p style={{ color: "#94a3b8", fontSize: "14px", marginBottom: "28px", lineHeight: "1.5" }}>We couldn&apos;t detect any servers where you possess Administrator permissions. Make sure you are logged into the correct Discord account.</p>
-            <a
-              href={getInviteUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 24px", borderRadius: "10px", backgroundColor: "#4f46e5", color: "#fff", textDecoration: "none", fontSize: "14px", fontWeight: 600, transition: "background-color 0.2s" }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#4338ca"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#4f46e5"}
-            >
-              <Bot size={18} />
-              <span>Invite Bot to a Server</span>
-              <ExternalLink size={14} />
-            </a>
+            {getInviteUrl() ? (
+              <a
+                href={getInviteUrl()!}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 24px", borderRadius: "10px", backgroundColor: "#4f46e5", color: "#fff", textDecoration: "none", fontSize: "14px", fontWeight: 600, transition: "background-color 0.2s" }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#4338ca"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#4f46e5"}
+              >
+                <Bot size={18} />
+                <span>Invite Bot to a Server</span>
+                <ExternalLink size={14} />
+              </a>
+            ) : (
+              <p style={{ color: "#ef4444", fontSize: "13px" }}>Invite link unavailable — couldn&apos;t load app configuration. Try refreshing the page.</p>
+            )}
           </div>
         ) : (
           /* GUILD LIST GRID */
@@ -224,9 +237,9 @@ export default function ServersPage() {
                         <span>Configure Dashboard</span>
                         <ArrowRight size={16} />
                       </button>
-                    ) : (
+                    ) : getInviteUrl(g.id) ? (
                       <a
-                        href={getInviteUrl(g.id)}
+                        href={getInviteUrl(g.id)!}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -262,6 +275,24 @@ export default function ServersPage() {
                         <span>Setup Shrimpy</span>
                         <ExternalLink size={14} />
                       </a>
+                    ) : (
+                      <div
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                          padding: "10px",
+                          borderRadius: "10px",
+                          border: "1px solid rgba(255, 255, 255, 0.05)",
+                          color: "#64748b",
+                          fontSize: "13px",
+                          boxSizing: "border-box"
+                        }}
+                      >
+                        <span>Config unavailable</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -269,35 +300,54 @@ export default function ServersPage() {
             })}
 
             {/* Permanent "Invite Bot to New Server" Card */}
-            <a
-              href={getInviteUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "24px",
-                borderRadius: "16px",
-                border: hoveredInvite ? "1px dashed rgba(99, 102, 241, 0.6)" : "1px dashed rgba(255, 255, 255, 0.15)",
-                backgroundColor: hoveredInvite ? "rgba(79, 70, 229, 0.03)" : "transparent",
-                color: hoveredInvite ? "#818cf8" : "#94a3b8",
-                textDecoration: "none",
-                cursor: "pointer",
-                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                minHeight: "155px",
-                boxSizing: "border-box"
-              }}
-              onMouseEnter={() => setHoveredInvite(true)}
-              onMouseLeave={() => setHoveredInvite(false)}
-            >
-              <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: hoveredInvite ? "rgba(79, 70, 229, 0.1)" : "rgba(255, 255, 255, 0.03)", display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "12px", transition: "all 0.2s" }}>
-                <Plus size={20} />
+            {getInviteUrl() ? (
+              <a
+                href={getInviteUrl()!}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "24px",
+                  borderRadius: "16px",
+                  border: hoveredInvite ? "1px dashed rgba(99, 102, 241, 0.6)" : "1px dashed rgba(255, 255, 255, 0.15)",
+                  backgroundColor: hoveredInvite ? "rgba(79, 70, 229, 0.03)" : "transparent",
+                  color: hoveredInvite ? "#818cf8" : "#94a3b8",
+                  textDecoration: "none",
+                  cursor: "pointer",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  minHeight: "155px",
+                  boxSizing: "border-box"
+                }}
+                onMouseEnter={() => setHoveredInvite(true)}
+                onMouseLeave={() => setHoveredInvite(false)}
+              >
+                <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: hoveredInvite ? "rgba(79, 70, 229, 0.1)" : "rgba(255, 255, 255, 0.03)", display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "12px", transition: "all 0.2s" }}>
+                  <Plus size={20} />
+                </div>
+                <span style={{ fontSize: "15px", fontWeight: 700 }}>Invite to New Server</span>
+                <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", textAlign: "center" }}>Add Shrimpy to another community</span>
+              </a>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "24px",
+                  borderRadius: "16px",
+                  border: "1px dashed rgba(255, 255, 255, 0.08)",
+                  color: "#64748b",
+                  minHeight: "155px",
+                  boxSizing: "border-box"
+                }}
+              >
+                <span style={{ fontSize: "13px" }}>Invite unavailable — refresh to retry</span>
               </div>
-              <span style={{ fontSize: "15px", fontWeight: 700 }}>Invite to New Server</span>
-              <span style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", textAlign: "center" }}>Add Shrimpy to another community</span>
-            </a>
+            )}
           </div>
         )}
       </main>
