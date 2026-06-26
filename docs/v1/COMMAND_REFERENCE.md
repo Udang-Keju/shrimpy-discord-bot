@@ -933,6 +933,17 @@ You are our **{membercount}th** member.
 Head to #rules to get started, and feel free to open a ticket if you need help!
 ```
 
+### 9.1 Ticket-context variables
+
+Ticket **opening messages** and **name templates** (the embed/text the bot posts when a member clicks a panel button or picks a select option — dashboard editor: USER_JOURNEY §A.6) support all of the member/server variables above **plus** the following ticket-context tokens:
+
+| Variable | Replaced With | Example Output |
+|----------|--------------|----------------|
+| `{category}` | The category the ticket was opened under | `Billing` |
+| `{number}` | The ticket's sequential number within the guild | `42` |
+
+**Example opening message:** `A billing specialist will be with you shortly, {mention}. Tell us your order number.` → resolves the mention against the member who opened the ticket, with `{category}`/`{number}` available for the title, body, and name template.
+
 ---
 
 ## Quick Reference Summary

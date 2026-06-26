@@ -522,6 +522,11 @@ GET    /api/v1/guilds/:guildId/discord/roles     # List guild roles
 GET    /api/v1/guilds/:guildId/discord/emojis    # List custom emojis available in the guild
 ```
 
+> [!NOTE]
+> **Response fields the dashboard journey depends on:**
+> - **`GET /api/v1/guilds`** (the `/servers` picker — USER_JOURNEY §A.1) must return, per guild: `id`, `name`, `icon`, `member_count`, `bot_joined` (bool — splits "Your servers" vs "Add Shrimpy"), and `access_level` (`"admin"` = Level 1 / `"staff"` = Level 2 — drives the card badge and which nav groups render, §A.4).
+> - **`GET /api/v1/guilds/:guildId`** (config summary) should expose a computed **`setup`** object so the Overview can render the first-run checklist (§A.2) without four extra round-trips: `{ "staff_roles": true, "panels": false, "welcome": false, "reaction_roles": false, "complete": false }`. Each flag is derivable from the feature tables (`staff_roles`, `ticket_panels`, `welcome_config.enabled`, `reaction_role_messages`); surfacing it here keeps the checklist cheap.
+
 **PATCH /nickname body example:**
 ```json
 // Set custom nickname
@@ -606,13 +611,23 @@ DELETE /api/v1/guilds/:guildId/reaction-roles/:msgId      # Delete message and r
 
 ```
 GET    /api/v1/guilds/:guildId/tickets                       # List tickets (filter: status, priority, category)
-GET    /api/v1/guilds/:guildId/tickets/:ticketId             # Get ticket detail + messages
+GET    /api/v1/guilds/:guildId/tickets/:ticketId             # Get ticket detail + messages (incl. internal notes)
 PATCH  /api/v1/guilds/:guildId/tickets/:ticketId             # Update ticket (status, priority, claim)
-POST   /api/v1/guilds/:guildId/tickets/:ticketId/close       # Close ticket with reason
+POST   /api/v1/guilds/:guildId/tickets/:ticketId/close       # Close ticket with resolution reason (S-03)
 POST   /api/v1/guilds/:guildId/tickets/:ticketId/reopen      # Reopen a closed ticket
 POST   /api/v1/guilds/:guildId/tickets/:ticketId/archive     # Archive a ticket
 GET    /api/v1/guilds/:guildId/tickets/:ticketId/transcript  # Download transcript (JSON or HTML)
+
+# Ticket conversation & collaboration (dashboard ticket-detail screen — USER_JOURNEY §A.3)
+POST   /api/v1/guilds/:guildId/tickets/:ticketId/notes       # Add an internal staff note (S-04; stored is_staff_note=TRUE)
+DELETE /api/v1/guilds/:guildId/tickets/:ticketId/notes/:noteId           # Delete an internal note
 ```
+
+> [!NOTE]
+> **Internal notes (S-04)** are not a separate table — they are rows in `ticket_messages` with `is_staff_note = TRUE`. The detail response (`GET .../tickets/:ticketId`) returns both member-visible messages and staff notes; the dashboard renders notes in a visually fenced "internal" lane (USER_JOURNEY §A.3) and never relays them to the member. `POST .../notes` is a convenience write that inserts a staff-note message.
+> **Priority (S-02)** and **claim (S-08)** are plain `PATCH` updates of `tickets.priority` / `tickets.claimed_by`; **close-with-reason (S-03)** is the `/close` body's `reason` → `tickets.close_reason`. No extra endpoints needed for those three.
+> **v1 decision (USER_JOURNEY §14.7):** dashboard ticket-detail is **read-only** for the member conversation — staff reply in the live Discord thread, not from the dashboard. No `POST .../messages` endpoint in v1; revisit if dashboard-first support is requested.
+> **v1 decision (USER_JOURNEY §14.8):** participants (`S-05`) are **deferred** — per-category support roles ([§3.2](#32-postgresql-ddl) `ticket_categories`, multi-role) already grant every role-holder access to a ticket's thread automatically, covering the real-world need without a new table.
 
 **Query parameters for listing tickets:**
 
@@ -628,11 +643,14 @@ GET    /api/v1/guilds/:guildId/tickets/:ticketId/transcript  # Download transcri
 ### 4.5 Welcome Configuration
 
 ```
-GET    /api/v1/guilds/:guildId/welcome     # Get welcome config
-PUT    /api/v1/guilds/:guildId/welcome     # Create or replace welcome config
-PATCH  /api/v1/guilds/:guildId/welcome     # Partially update welcome config
-DELETE /api/v1/guilds/:guildId/welcome     # Disable welcome messages
+GET    /api/v1/guilds/:guildId/welcome      # Get welcome config
+PUT    /api/v1/guilds/:guildId/welcome      # Create or replace welcome config
+PATCH  /api/v1/guilds/:guildId/welcome      # Partially update welcome config
+DELETE /api/v1/guilds/:guildId/welcome      # Disable welcome messages
+POST   /api/v1/guilds/:guildId/welcome/test # Render the card with live guild data + DM it to the requesting admin (A-03 "send test")
 ```
+
+> The `/welcome/test` route resolves template variables (`{user}`, `{server}`, `{membercount}`, `{user.tag}`) against the requesting user + current guild and DMs them the rendered card, so the admin previews the exact member experience before going live (USER_JOURNEY §A.5).
 
 ### 4.6 Auto-Roles
 
@@ -650,11 +668,28 @@ POST   /api/v1/guilds/:guildId/staff-roles             # Add a staff role
 DELETE /api/v1/guilds/:guildId/staff-roles/:roleId     # Remove a staff role
 ```
 
-### 4.8 Statistics
+### 4.8 Statistics & Health
 
 ```
-GET /api/v1/guilds/:guildId/stats    # Ticket counts by status, avg resolution time, member count
+GET /api/v1/guilds/:guildId/stats     # Ticket counts by status, avg resolution time, member count, 14-day sparkline series
+GET /api/v1/guilds/:guildId/health    # Bot connection + permission/role-position diagnostics
 ```
+
+The **`/health`** endpoint backs the Overview health strip and the inline checks reused on Welcome and Reaction Roles (USER_JOURNEY §7.5, §A.2, §A.5, §A.7). It computes, from the live Discord session for this guild's bot:
+
+```json
+{
+  "connected": true,
+  "bot_user": "Shrimpy#4023",
+  "missing_permissions": ["MANAGE_THREADS"],
+  "role_position_issues": [
+    { "role_id": "9988...", "role_name": "Member", "reason": "bot_role_below_target" }
+  ]
+}
+```
+
+- `missing_permissions` — guild-wide permissions the bot lacks but features need (Manage Channels/Roles/Threads, Send Messages, Embed Links, Read History).
+- `role_position_issues` — target roles (auto-roles, reaction-role targets) positioned **above** the bot's highest role, which would make assignment fail. Drives the plain-language "Move Shrimpy's role above these" check with a one-click `[Fix]` (replaces the raw "gateway constraint" copy — USER_JOURNEY §12.4).
 
 ### 4.9 Admin — Discord Bot Applications
 

@@ -24,8 +24,9 @@
 11. [Improvement Ideas (Prioritized Backlog)](#11-improvement-ideas-prioritized-backlog)
 12. [Visual & Interaction Consistency Standards](#12-visual--interaction-consistency-standards)
 13. [Phased Implementation Roadmap](#13-phased-implementation-roadmap)
-14. [Open Questions & Decisions Needed](#14-open-questions--decisions-needed)
+14. [Decisions Log](#14-decisions-log)
 - [Appendix A — Annotated Wireframes](#appendix-a--annotated-wireframes)
+- [Appendix B — Data Contract & Endpoint Coverage](#appendix-b--data-contract--endpoint-coverage)
 
 ---
 
@@ -127,10 +128,10 @@ AUTHENTICATED — per-server dashboard  (/dashboard/[guildId])
  │
  │  OPERATE  (Admin + Staff)
  ├─ /tickets                       Tickets inbox (filter, search, priority, bulk)
- ├─ /tickets/[ticketId]            ★ Ticket detail   ← NEW: messages, claim, priority, internal notes, participants
+ ├─ /tickets/[ticketId]            ★ Ticket detail   ← NEW: claim, priority, internal notes (read-only conversation, v1)
  ├─ /transcripts                   ★ Transcripts archive   ← NEW: search + view + export
  │
- │  CONFIGURE  (Admin only)
+ │  SERVER MANAGEMENT  (Admin only)
  ├─ /panels                        Ticket panels & categories (multi-button / select menu)
  ├─ /welcome                       Welcome & auto-roles on join
  ├─ /roles                         Reaction roles
@@ -156,12 +157,12 @@ OWNER ONLY
 │ ▸ Tickets         (3)   │   ← live open-count badge   (Admin + Staff)
 │ ▸ Transcripts           │
 │                         │
-│ CONFIGURE               │   (Admin only — hidden for Staff)
+│ SERVER MANAGEMENT       │   (Admin only — fully hidden for Staff, §14.4)
 │ ▸ Ticket Panels         │
 │ ▸ Welcome               │
 │ ▸ Reaction Roles        │
 │                         │
-│ SETTINGS                │   (Admin only)
+│ SETTINGS                │   (Admin only — fully hidden for Staff, §14.4)
 │ ▸ General               │
 │ ▸ Staff & Access        │
 ├─────────────────────────┤
@@ -169,7 +170,9 @@ OWNER ONLY
 └─────────────────────────┘
 ```
 
-> Group labels ("OPERATE" / "CONFIGURE" / "SETTINGS") turn a flat 5-item list into a mental model: *things I do daily* vs *things I set up once* vs *plumbing*.
+> Group labels ("OPERATE" / "SERVER MANAGEMENT" / "SETTINGS") turn a flat 5-item list into a mental model: *things I do daily* (feature configuration) vs *things I set up once* (bot/server-level plumbing). Staff (Level 2) see only OPERATE — both other groups are absent from their sidebar, not just visually muted (§14.4 decided: fully hidden, not read-only).
+>
+> Bot-wide status/error logs across all servers it's in (distinct from per-guild health, §7.5) is **out of scope for now** — noted as a future idea, not specced.
 
 ---
 
@@ -219,7 +222,7 @@ The admin journey has **7 stages**. For each: the *goal*, the *screen*, the *sta
 - **Built today:** [login/page.tsx](../../dashboard/app/(auth)/login/page.tsx) — on-brand coral card. ✅ But:
   - **The "Enter Sandbox Demo Preview" button links to a hardcoded guild id** (`/dashboard/123456789012345678/tickets`). Combined with the API's mock fallback (§10), a logged-out user lands in a fake-but-real-looking dashboard with no "you're in demo mode" signal.
 - **Refinements:**
-  - Add a persistent **"Demo mode" banner** across all screens when the session is unauthenticated/mock-backed.
+  - **Decided (§14.1):** gate the mock-data fallback behind an explicit **`/demo`** route. Remove the mock-fallback from [lib/api.ts](../../dashboard/lib/api.ts) for real sessions — a real, authenticated user must never silently render mock data because an API call failed; they hit the error state (§12.5/A.13) instead. `/demo` renders the same screens against static mock data with a persistent **"Demo mode" banner**, no login required.
   - On successful auth, redirect to the dedicated **`/servers`** selection page, **not** straight to a guild or to `/dashboard`.
   - Handle the `401` path from `/api/v1/auth/me` ([Spec §7.5](./TECHNICAL_SPEC.md#75-session-verification-nextjs)) → bounce to `/login` with a friendly "session expired" message.
 
@@ -257,7 +260,7 @@ This is its **own page, separate from the dashboard.** `/dashboard` (bare) redir
 - **Goal:** Get Shrimpy into the chosen server with the right permissions.
 - **Built today:** invite links use `permissions=8` (Administrator) — works but is a red flag for cautious admins.
 - **Refinements:**
-  - Use a **scoped permission integer** (Manage Channels, Manage Roles, Manage Threads, Send Messages, Embed Links, Read History — per [PRD §8 assumptions](./PRD.md#8-assumptions--constraints)) instead of blanket Admin.
+  - **Decided (§14.6):** use a **scoped permission integer** instead of blanket Admin (`permissions=8`) — View Channels, Manage Channels, Manage Roles, Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions, Use External Emojis, Manage Messages (per [PRD §8 assumptions](./PRD.md#8-assumptions--constraints) plus what `/roles` reaction-handling needs).
   - After invite, return the user to a **post-invite interstitial** that confirms the bot joined and links straight to **Setup** (§7.5), closing the loop instead of leaving them on a stale card.
 
 ### 7.5 ★ Guided setup — Server Overview / first-run (`/dashboard/[guildId]`) — **NEW**
@@ -288,20 +291,21 @@ Each step deep-links to the relevant config screen and returns to the checklist 
 ┌───────────── Tickets ─────────────┐  ┌──── Server health ────┐
 │  Open 3 · Claimed 2 · Closed 41   │  │ Bot: ✅ connected     │
 │  Avg. resolution: 4h 12m          │  │ Perms: ⚠ missing      │
-│  [ ▁▂▅▇▅▃▁ last 14 days ]          │  │       Manage Threads  │
-└───────────────────────────────────┘  └───────────────────────┘
-┌──────── Recent activity ──────────┐  ┌──── Quick actions ────┐
-│  • #ticket-0042 opened (Billing)  │  │ + New panel           │
-│  • OceanMan claimed #0041         │  │ ✎ Edit welcome        │
-│  • CoralReef closed #0039         │  │ ⤓ Export transcripts  │
-└───────────────────────────────────┘  └───────────────────────┘
+└───────────────────────────────────┘  │       Manage Threads  │
+┌──────── Recent activity ──────────┐  └───────────────────────┘
+│  • #ticket-0042 opened (Billing)  │  ┌──── Quick actions ────┐
+│  • OceanMan claimed #0041         │  │ + New panel           │
+│  • CoralReef closed #0039         │  │ ✎ Edit welcome        │
+└───────────────────────────────────┘  │ ⤓ Export transcripts  │
+                                        └───────────────────────┘
 ```
+- **Decided (§14.5):** counts only for v1 (open/claimed/closed, avg. resolution) — no chart/sparkline. Defer any trend visualization to "Dashboard v2" per [PRD §9](./PRD.md#9-out-of-scope-items); avoids pulling in a charting dependency before the core journey ships.
 - **Data source:** `GET /api/v1/guilds/:guildId/stats` ([Spec §4.8](./TECHNICAL_SPEC.md#48-statistics)) — already specced, not yet surfaced. Satisfies PRD `A-09`.
 - **Health check** is a high-value add: detect whether the bot's role is above target roles / has needed permissions (the reaction-roles page already warns about this manually — [roles/page.tsx:285-294](../../dashboard/app/dashboard/[guildId]/roles/page.tsx#L285-L294)).
 
 ### 7.6 Configure features (Admin only)
 
-The config screens largely exist; the journey work is **ordering, previewing, and depth**. Recommended in-product order mirrors the checklist.
+The config screens largely exist; the journey work is **ordering, previewing, and depth**. Recommended in-product order mirrors the checklist. (b)–(d) below are the **Server Management** sidebar group (§5.3); (a) and (e) are **Settings**.
 
 **(a) Staff & Access — `/settings/access`** (split out of today's Settings)
 - Satisfies `A-05`. Two distinct concepts that today's copy conflates:
@@ -349,15 +353,16 @@ Staff (Level 2) are **operators, not configurers**. Their journey is narrow and 
 Login ─ Pick server ─ Tickets inbox ─ Open a ticket ─ Claim ─ Set priority ─ Reply / internal note ─ Close ─ (Transcript saved)
 ```
 
-- **Access:** CONFIGURE and SETTINGS groups are **hidden**; the sidebar shows only Overview, Tickets, Transcripts. Enforced server-side per [Spec §7.3](./TECHNICAL_SPEC.md#73-two-level-access-control) and mirrored in the UI.
+- **Access:** SERVER MANAGEMENT and SETTINGS groups are **fully hidden** (§14.4 decided — not read-only); the sidebar shows only Overview, Tickets, Transcripts. Enforced server-side per [Spec §7.3](./TECHNICAL_SPEC.md#73-two-level-access-control) and mirrored in the UI.
 - **Built today:** [tickets/page.tsx](../../dashboard/app/dashboard/[guildId]/tickets/page.tsx) is a flat table with claim/close/reopen/archive/transcript actions. It satisfies `S-01`, `S-08`, `S-09` at a basic level.
 - **Gaps against Staff stories:**
   - `S-02` **Priority** (Low/Med/High/Urgent) — not in the UI at all, though the [Design System §8](./DESIGN_SYSTEM.md#8-component-tokens) already defines priority badge colors.
   - `S-03` **Close with resolution note** — close is a bare action; no note captured.
   - `S-04` **Internal staff notes** — absent.
-  - `S-05` **Add/remove participants** — absent.
   - `S-07` **Generate/view transcript** — only an `alert()` stub ([tickets/page.tsx:81-83](../../dashboard/app/dashboard/[guildId]/tickets/page.tsx#L81-L83)).
   - There is **no ticket detail view** — staff can't read the conversation in the dashboard, only act on a row.
+
+> `S-05` (add/remove participants) is **deferred** (§14.8 decided) — per-category support roles already auto-grant every role-holder access to a ticket's thread, covering the real workflow without a per-ticket participants table.
 
 ### 8.1 ★ Proposed: Ticket detail (`/tickets/[ticketId]`)
 
@@ -365,18 +370,18 @@ Login ─ Pick server ─ Tickets inbox ─ Open a ticket ─ Claim ─ Set prio
 ┌─ #ticket-0042 · Billing ──────────────────────  [Open ▾] [Priority: High ▾] ┐
 │ Creator: ShrimpLover42      Claimed by: —        Opened: 2h ago             │
 ├──────────────────────────────────────────────────────────────────────────┤
-│  conversation (read-only mirror of the Discord thread)                     │
+│  conversation (read-only mirror of the Discord thread — §14.7 decided)     │
 │   🦐 Shrimpy: Welcome to your support thread…                              │
 │   ShrimpLover42: my invoice double-charged                                 │
 │                                                                            │
 │  ── internal notes (staff-only, never shown to member) ──                  │
 │   OceanMan: refunded via Stripe, awaiting confirmation                     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ [ Claim ]  [ + Add participant ]  [ Internal note ]  [ Close w/ note ▾ ]   │
+│ [ Claim ]  [ Internal note ]  [ Close w/ note ▾ ]                          │
 │ [ ⤓ Export transcript ]                                                    │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
-This single screen lights up `S-02`, `S-03`, `S-04`, `S-05`, `S-07` and gives the inbox table a destination to click into.
+This single screen lights up `S-02`, `S-03`, `S-04`, `S-07` and gives the inbox table a destination to click into. Reply happens in the Discord thread, not here (v1).
 
 ### 8.2 Inbox refinements
 
@@ -426,7 +431,7 @@ Mapped to the four problem areas you identified, plus the design issue.
 ### 10.3 Thin / placeholder screens
 | Screen | Missing vs PRD/Spec |
 |--------|---------------------|
-| Tickets | Detail view, priority (`S-02`), internal notes (`S-04`), participants (`S-05`), real transcript (`S-07`) |
+| Tickets | Detail view, priority (`S-02`), internal notes (`S-04`), real transcript (`S-07`) — `S-05` participants deferred (§14.8) |
 | Panels | Multi-button/select-menu, per-category embed, thread-vs-channel (`A-06`), multiple support roles |
 | Welcome | Template-variable picker (`A-03`), test-send |
 | Settings | Auto-close duration (`A-08`), language |
@@ -518,6 +523,20 @@ The rule: **every screen renders from [Design System](./DESIGN_SYSTEM.md) tokens
 ### 12.6 Heads-up: this is a customized Next.js
 `dashboard/AGENTS.md` warns that the project's Next.js has **breaking changes vs upstream** — *"Read the relevant guide in `node_modules/next/dist/docs/` before writing any code."* Any implementation work from this spec must consult those in-repo docs first (routing, server/client components, metadata APIs may differ from defaults).
 
+### 12.7 Responsive behavior
+The PRD treats responsive as in-scope; the wireframes above are drawn desktop-first, so define how each pattern degrades. Use the [Design System](./DESIGN_SYSTEM.md) breakpoints; the rules below are the contract every screen follows.
+
+| Breakpoint | Layout rule |
+|------------|-------------|
+| **≥ 1024px (desktop)** | As drawn: 260px sidebar pinned; two-column form + preview; full data tables. |
+| **640–1023px (tablet)** | Sidebar collapses to an icon rail or a hamburger drawer; form + preview **stack** (form first, preview below); tables keep key columns, overflow scrolls horizontally. |
+| **< 640px (mobile)** | Sidebar becomes an off-canvas drawer (hamburger in the top bar); `<ServerSwitcher/>` moves into the drawer; **tables become stacked cards** (`#`, creator, two badges per card); the sticky `<SaveBar/>` spans full width at the bottom. |
+
+- **Live previews** (`<DiscordPreview/>`, A.5–A.7) drop below the form on stack; never hide them — the "show the outcome" principle still holds on mobile.
+- **Ticket detail (A.3)** keeps the conversation full-width; the action bar becomes a sticky bottom toolbar.
+- **The `/servers` grid (A.1)** is already card-based — it reflows from 3-up → 2-up → 1-up.
+- Touch targets ≥ 44px; the command palette (A.13) is desktop/keyboard-only and may be hidden on touch.
+
 ---
 
 ## 13. Phased Implementation Roadmap
@@ -531,12 +550,12 @@ Sequenced so each phase ships a coherent, testable improvement.
 
 ### Phase 1 — Fix the journey skeleton
 - Build **Server Overview** at `/dashboard/[guildId]` with first-run **Setup checklist** + configured-state cards.
-- Regroup the **sidebar** (Operate / Configure / Settings) and make it **role-aware** (hide config for Staff).
+- Regroup the **sidebar** (Operate / Server Management / Settings) and make it **role-aware** (fully hide Server Management + Settings for Staff, §14.4).
 - Redirect login → `/servers`; add **demo-mode banner**.
 - Invite **join-detection** + post-invite return loop.
 
 ### Phase 2 — Operations depth (Staff value)
-- **Ticket detail view** (`/tickets/[id]`): conversation mirror, claim, **priority**, **internal notes**, **close-with-note**, participants.
+- **Ticket detail view** (`/tickets/[id]`): read-only conversation mirror (§14.7), claim, **priority**, **internal notes**, **close-with-note**.
 - Inbox: priority column/filter, search, pagination.
 - **Transcripts archive** page + export (replace the stub).
 
@@ -552,20 +571,42 @@ Sequenced so each phase ships a coherent, testable improvement.
 
 ---
 
-## 14. Open Questions & Decisions Needed
+## 14. Decisions Log
 
-1. **Demo/sandbox strategy:** keep the mock-fallback in [lib/api.ts](../../dashboard/lib/api.ts) for offline dev, or gate demo behind an explicit `/demo` route so real sessions never silently fall back to mocks?
-2. **Ticket detail: route vs drawer** — full page (`/tickets/[id]`, shareable/deep-linkable) or a side drawer over the inbox (faster triage)? Recommendation: route, with the inbox preserved behind it.
-3. **Auto-roles home** — confirm moving auto-roles-on-join from Settings into Welcome (recommended: yes, it's a "join" behavior).
-4. **Staff dashboard scope** — should Level-2 staff see read-only Settings/Panels for context, or have them fully hidden? (Spec implies hidden.)
-5. **Statistics depth for v1** — the Overview counts + a sparkline, or defer charts to "Dashboard v2" per [PRD §9](./PRD.md#9-out-of-scope-items)?
-6. **Invite permissions** — confirm the scoped permission set to request instead of `permissions=8` (Administrator).
+All eight items below were open questions; each is now **Decided** and reflected throughout this doc, [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md), and [CHANGELOG.md](./CHANGELOG.md).
+
+1. **Demo/sandbox strategy — Decided: gate behind `/demo`.** The mock-fallback in [lib/api.ts](../../dashboard/lib/api.ts) is removed for real sessions; `/demo` is an explicit, unauthenticated route rendering the same screens against static mock data with a persistent "Demo mode" banner. A real session never silently falls back to mocks on API failure — it hits the error state (§12.5/A.13) instead. See §7.2.
+2. **Ticket detail: route vs drawer — Decided: full route.** `/tickets/[id]`, shareable/deep-linkable, inbox preserved behind it. Staff share ticket links, need back/forward and refresh-survival mid-triage — a drawer loses all of that. See §8.1.
+3. **Auto-roles home — Decided: yes, inside `/welcome`,** and the sidebar group that contains Panels/Welcome/Roles is renamed **CONFIGURE → "Server Management."** Settings (General, Staff & Access) remains a separate group — it's bot/server-level plumbing, not feature configuration. Bot-wide status/error-logs across every server it's in was raised but is **out of scope for now** (a future `/admin/apps` extension, not specced here). See §5.2, §5.3.
+4. **Staff dashboard scope — Decided: fully hidden, not read-only.** Staff (Level 2) is an operational role — their job is the ticket queue. A read-only Settings/Panels view adds sidebar clutter and a permission surface (visible-vs-editable) for no workflow gain; category-routing context belongs on the ticket itself (category badge), not a parallel Settings page. See §8.
+5. **Statistics depth for v1 — Decided: counts only, no chart.** Overview ships open/claimed/closed counts + avg. resolution; sparkline/trend charts deferred to "Dashboard v2" per [PRD §9](./PRD.md#9-out-of-scope-items) — avoids a charting dependency before the core journey ships. See §7.5.
+6. **Invite permissions — Decided: scoped, not Administrator.** Request View Channels, Manage Channels, Manage Roles, Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions, Use External Emojis, Manage Messages — not `permissions=8`. See §7.4.
+7. **Dashboard→thread reply scope — Decided: read-only in v1.** No composer, no `POST …/tickets/:id/messages` endpoint. Staff already live in the Discord thread to reply; ticket-detail shows claim/priority/notes/transcript only. Revisit if dashboard-first support is requested. See §8.1, [TECHNICAL_SPEC §4.4](./TECHNICAL_SPEC.md#44-tickets).
+8. **Participants (`S-05`) — Decided: defer, no `ticket_participants` table.** Per-category **support roles** ([§A.6](#a6--panels-ticket-panels--categories), `ticket_categories`, multi-role) already auto-grant every role-holder access to a ticket's thread the moment it opens — the real workflow (route to the right team) is already covered. Participants would only add value for one-off individual escalation outside the support-role list, which isn't needed now. Revisit only if that specific case is requested. See §8, [TECHNICAL_SPEC §3.2](./TECHNICAL_SPEC.md#32-postgresql-ddl).
 
 ---
 
 ## Appendix A — Annotated Wireframes
 
-Low-fidelity, **token-annotated** wireframes for the screens that carry the most journey weight. They are the visual companion to the screen specs above: §A.1 ↔ [§7.3](#73-select-a-server--dedicated-page-servers), §A.2 ↔ [§7.5](#75--guided-setup--server-overview--first-run-dashboardguildid--new), §A.3 ↔ [§8.1](#81--proposed-ticket-detail-ticketsticketid), §A.4 ↔ [§3](#3-personas--surface-matrix)/[§8](#8-support-staff-journey).
+Low-fidelity, **token-annotated** wireframes for **every primary screen and cross-cutting state** in the journey. They are the visual companion to the screen specs above:
+
+| Wireframe | Screen | Spec section |
+|-----------|--------|--------------|
+| A.1 | `/servers` selection | [§7.3](#73-select-a-server--dedicated-page-servers) |
+| A.2 | `/dashboard/[guildId]` Overview + Setup | [§7.5](#75--guided-setup--server-overview--first-run-dashboardguildid--new) |
+| A.3 | `/tickets/[ticketId]` detail | [§8.1](#81--proposed-ticket-detail-ticketsticketid) |
+| A.4 | Staff (Level 2) sidebar | [§3](#3-personas--surface-matrix) / [§8](#8-support-staff-journey) |
+| A.5 | `/welcome` | [§7.6c](#76-configure-features-admin-only) |
+| A.6 | `/panels` | [§7.6b](#76-configure-features-admin-only) |
+| A.7 | `/roles` | [§7.6d](#76-configure-features-admin-only) |
+| A.8 | `/settings` + `/settings/access` | [§7.6a](#76-configure-features-admin-only) / [§7.6e](#76-configure-features-admin-only) |
+| A.9 | Shared component patterns | [§12.3](#123-shared-components-to-extract) |
+| A.10 | `/tickets` inbox | [§8.2](#82-inbox-refinements) |
+| A.11 | `/transcripts` archive | [§5.2](#52-proposed-sitemap) (A-11/S-07) |
+| A.12 | `/admin/apps` owner UI | [§5.2](#52-proposed-sitemap) (owner) |
+| A.13 | Cross-cutting states & flows | [§7.4](#74-invite-the-bot) / [§12.5](#125-interaction-defaults) |
+
+**[Appendix B](#appendix-b--data-contract--endpoint-coverage)** then maps every one of these screens to its backing [Technical Spec §4](./TECHNICAL_SPEC.md#4-rest-api-design) endpoint(s), so nothing in the journey is left without a data source.
 
 > These are **layout + behaviour intent, not pixel specs.** Every label in the right margin names the [Design System](./DESIGN_SYSTEM.md) token an implementer must use — no hardcoded hex (§12.1). The customized-Next.js caveat in §12.6 still applies before writing any code.
 
@@ -657,7 +698,7 @@ The missing keystone. Shown inside the full app shell (grouped, role-aware sideb
 ║  ▸ Tickets       (3)   ║                                                       ║  count badge: --accent-muted / --accent
 ║  ▸ Transcripts         ║                                                       ║
 ║                        ║                                                       ║
-║  CONFIGURE             ║                                                       ║  ┄ CONFIGURE + SETTINGS groups
+║  SERVER MANAGEMENT     ║                                                       ║  ┄ SERVER MGMT + SETTINGS groups
 ║  ▸ Ticket Panels       ║                                                       ║    HIDDEN for Level-2 Staff (§A.4)
 ║  ▸ Welcome             ║                                                       ║
 ║  ▸ Reaction Roles      ║                                                       ║
@@ -710,8 +751,8 @@ Overview                                                          --text-3xl
 │  Open     Claimed   Closed      │ │    Shrimpy#4023          │   label --text-muted --text-sm
 │                                 │ │                          │   Open→--success, Claimed→--accent,
 │  Avg. resolution  4h 12m        │ │  ⚠ Missing: Manage       │   Closed→--text-muted
-│  ▁▂▃▅▇▆▅▃▂▁▂▄▆▇  last 14 days   │ │     Threads      [ Fix → ]│   sparkline: --accent stroke
-└─────────────────────────────────┘ └──────────────────────────┘   on --accent-muted fill
+│                                 │ │     Threads      [ Fix → ]│
+└─────────────────────────────────┘ └──────────────────────────┘
 ┌─ Recent activity ──────────────┐ ┌─ Quick actions ─────────┐
 │  • #0042 opened · Billing  2m   │ │  ＋ New ticket panel     │   activity: --text-sm,
 │  • OceanMan claimed #0041  18m  │ │  ✎ Edit welcome message  │   timestamps --text-muted
@@ -723,11 +764,11 @@ Overview                                                          --text-3xl
 
 - **Data:** `GET /api/v1/guilds/:guildId/stats` (Spec §4.8). Satisfies PRD `A-09`.
 - **State switch:** render Setup vs Overview on `setup_complete`; a dismissible "resume setup" pill may persist on the configured view until 100%.
-- **Sparkline** is the only chart in v1 (Open Question §14.5).
+- **No chart in v1** (§14.5 decided) — counts + avg. resolution only; trend visualization deferred to "Dashboard v2."
 
 ### A.3 — `/tickets/[ticketId]` (Ticket Detail)
 
-The destination the inbox table clicks into — the single screen that lights up `S-02`, `S-03`, `S-04`, `S-05`, `S-07`. Shown in the app shell; visible to **Admin + Staff**. Recommended as a full route (Open Question §14.2), with the inbox preserved behind it.
+The destination the inbox table clicks into — the single screen that lights up `S-02`, `S-03`, `S-04`, `S-07`. Shown in the app shell; visible to **Admin + Staff**. Full route (§14.2 decided), with the inbox preserved behind it.
 
 ```
 ‹ Back to Tickets                                                                  --text-muted link → /tickets
@@ -735,7 +776,7 @@ The destination the inbox table clicks into — the single screen that lights up
 │  Creator  ShrimpLover42      Claimed by  —          Opened  2h ago              │  status pill --color (status badge §8),
 │  ↑avatar+name                ↑--text-muted          ↑--text-muted               │  priority pill ⚑ --warning (High)
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│  CONVERSATION                                          (read-only Discord mirror) │  group label --text-muted --text-xs
+│  CONVERSATION                              (read-only Discord mirror — §14.7)     │  group label --text-muted --text-xs
 │                                                                                   │
 │   ╭──╮ Shrimpy  · bot                                                    2h ago   │  message rows; avatar --radius-full
 │   ╰──╯ Welcome to your support thread. A staff member will be with you shortly.   │  body --text-base, ts --text-muted
@@ -748,21 +789,19 @@ The destination the inbox table clicks into — the single screen that lights up
 │   ╰──╯ Refunded via Stripe, awaiting confirmation. Don't close yet.               │  to read as "off the record"
 │                                                                                   │
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│  [ + Add participant ]   [ ✎ Internal note ]   [ ⤓ Export transcript ]            │  secondary/ghost btns
-│  ┌─────────────────────────────────────────────────────────┐  [ Close w/ note ▾ ]│  composer: --bg-surface,
-│  │ Reply to the member…                                     │   ↑--danger (destructive,│  border --border-default;
-│  └─────────────────────────────────────────────────────────┘    confirms first)  │  Close = --danger, opens
+│  [ ✎ Internal note ]   [ ⤓ Export transcript ]              [ Close w/ note ▾ ]   │  secondary/ghost btns;
+│  Reply in the Discord thread — this view is read-only (§14.7)                     │  Close = --danger, opens
 └─────────────────────────────────────────────────────────────────────────────────┘    note-capture popover
 ```
 
-- **Data:** ticket detail + messages endpoint (Spec §4 tickets); priority/claim/close/participants are mutations. Conversation is a **read-only mirror** of the Discord thread (we don't re-implement chat).
+- **Data:** ticket detail (messages + notes) endpoint (Spec §4 tickets); priority/claim/close are mutations. Conversation is a **read-only mirror** of the Discord thread (we don't re-implement chat, and there is no reply-from-dashboard composer in v1 — §14.7).
 - **Internal notes (`S-04`)** are visually fenced (tinted divider + elevated surface) so staff never confuse them with member-visible replies. **Close-with-note (`S-03`)** captures a resolution note in a popover before the destructive close (confirm per §12.5).
 - **Priority (`S-02`)** dropdown uses the [Design System §8](./DESIGN_SYSTEM.md#8-component-tokens) priority badge tokens (Low→--success, Med→--accent, High→--warning, Urgent→--danger).
 - **Inbox link-through:** rows in `/tickets` navigate here; add a priority column + filter and search to the inbox (§8.2).
 
 ### A.4 — Role-aware sidebar: Staff (Level 2) variant
 
-Same shell as §A.2, but the **CONFIGURE and SETTINGS groups are absent** — not greyed out, *not rendered* (and enforced server-side per Spec §7.3, not just hidden in the UI). Staff land on Overview and live in Tickets/Transcripts.
+Same shell as §A.2, but the **SERVER MANAGEMENT and SETTINGS groups are absent** — not greyed out, *not rendered* (§14.4 decided: fully hidden, enforced server-side per Spec §7.3, not just hidden in the UI). Staff land on Overview and live in Tickets/Transcripts.
 
 ```
 ╔════════════════════════╗
@@ -777,7 +816,7 @@ Same shell as §A.2, but the **CONFIGURE and SETTINGS groups are absent** — no
 ║  ▸ Tickets       (3)   ║
 ║  ▸ Transcripts         ║
 ║                        ║
-║   ┄ no CONFIGURE       ║   ← these groups simply don't exist for Level 2
+║   ┄ no SERVER MGMT     ║   ← these groups simply don't exist for Level 2
 ║   ┄ no SETTINGS        ║
 ║ ────────────────────── ║
 ║  👤 Maya (Staff)  ☾    ║   role surfaced next to the user so it's obvious why
@@ -818,39 +857,57 @@ Welcome                                                            --text-3xl
 
 - **Template variables (`A-03`):** chips insert `{user}` `{server}` `{membercount}` `{user.tag}` at the cursor; the preview resolves them against the live guild so the admin never guesses.
 - **Test-send:** posts the rendered card to the admin's DM — confidence before going live.
-- **Auto-roles folded in (§7.6c, Open Question §14.3):** "assign on join" lives here, not in Settings, and shares the **role-height health check** from the Overview (§7.5). Confirms the bot *can* assign each role.
+- **Auto-roles folded in (§7.6c, §14.3 decided):** "assign on join" lives here, not in Settings, and shares the **role-height health check** from the Overview (§7.5). Confirms the bot *can* assign each role.
 - **Reuse:** same `<DiscordPreview/>` + `<SaveBar/>` as Panels — see §A.9.
 
 ### A.6 — `/panels` (Ticket Panels & Categories)
 
-Admin-only. The screen that already has the best form+preview pattern today — the work is **depth** (`A-02`, `A-06`): up to 3 buttons *or* a 25-option select menu (not one button), per-category opening embed, thread-vs-channel choice, and **multiple** support roles per category.
+Admin-only. The screen that already has the best form+preview pattern today — the work is **depth** (`A-02`, `A-06`): up to 3 buttons *or* a 25-option select menu (not one button), thread-vs-channel choice, **multiple** support roles per category, and — most importantly — a **fully configurable opening message** (the embed the bot posts into the ticket the instant a member clicks a button / picks a select option), each with its own live preview.
+
+There are **two** things to preview here, so the screen has **two** editors: the **public panel** (what members click) and, behind each ⚙, the **category editor** including the **opening message** (what the bot posts when the ticket opens).
 
 ```
 Ticket Panels                                            [ + New panel ]   --text-3xl
-┌─ Panel: "Get Support" ─────────────────┐ ┌─ Live preview ──────────────────────┐
+
+PANEL — the public message members click
+┌─ Panel: "Get Support" ─────────────────┐ ┌─ Preview · public panel ────────────┐
 │  Embed title  [ Need a hand?         ]  │ │ ┌──────────────────────────────────┐ │  <DiscordPreview/>
 │  Description  [ Pick a topic below…  ]  │ │ │  Need a hand?                    │ │
 │  Accent color [ ▦ #FF7B6B ]             │ │ │  Pick a topic below to open a    │ │  embed accent bar uses the
-│                                         │ │ │  private ticket.                 │ │  chosen color (dynamic inline
-│  Open style   (•) Buttons  ( ) Select   │ │ │                                  │ │  style is OK here, §12.2)
-│   ┌─ up to 3 buttons ──────────────┐    │ │ │  [ 💳 Billing ] [ 🐛 Bug ]        │ │  buttons mirror category list
-│   │ 💳 Billing      ⚙   ✕          │    │ │ │  [ ❓ Other ]                     │ │
-│   │ 🐛 Bug report   ⚙   ✕          │    │ │ └──────────────────────────────────┘ │
-│   │ ❓ Other        ⚙   ✕          │    │ │                                      │
-│   │ [ + add button ] (3/3)         │    │ │  ⤷ selecting ⚙ on a category opens:  │  per-category drawer ↓
-│   └────────────────────────────────┘    │ │ ┌─ Category: Billing ──────────────┐ │
-│                                         │ │ │ Opening message [ A staff member…]│ │  per-category embed (A-06)
-│  ( ) Select menu  → up to 25 options    │ │ │ Opens as   (•) Private thread     │ │  thread-vs-channel choice (A-06)
-│                                         │ │ │            ( ) New channel        │ │
-│                                         │ │ │ Who can see  @Support @Billing    │ │  MULTIPLE support roles
-│  [ Post panel to ▾ #support ]           │ │ │              [ + role ]           │ │  (today: only one)
-└─────────────────────────────────────────┘ │ └──────────────────────────────────┘ │
-▒ Unsaved changes                            └──────────────────────────────────────┘
-                                                          [ Discard ]  [ Save & post ]
+│  Open style   (•) Buttons  ( ) Select   │ │ │  private ticket.                 │ │  chosen color (dynamic inline
+│   ┌─ up to 3 buttons ──────────────┐    │ │ │                                  │ │  style is OK here, §12.2)
+│   │ 💳 Billing      ⚙   ✕          │    │ │ │  [ 💳 Billing ] [ 🐛 Bug ]        │ │  buttons mirror category list
+│   │ 🐛 Bug report   ⚙   ✕          │    │ │ │  [ ❓ Other ]                     │ │
+│   │ ❓ Other        ⚙   ✕          │    │ │ └──────────────────────────────────┘ │
+│   │ [ + add button ] (3/3)         │    │ │                                      │
+│   └────────────────────────────────┘    │ │  ⚙ on a category → opens the         │  per-category editor ↓ (next block)
+│  ( ) Select menu  → up to 25 options    │ │     Category editor below            │
+│  [ Post panel to ▾ #support ]           │ └──────────────────────────────────────┘
+└─────────────────────────────────────────┘
+
+CATEGORY — the ⚙ editor; the OPENING MESSAGE is what the bot posts when the ticket opens
+┌─ Category: Billing ─────────────────────┐ ┌─ Preview · opening message ─────────┐
+│  Button label  [ 💳 Billing          ]  │ │ first message the member sees inside │  <DiscordPreview/>
+│  Opens as   (•) Private thread          │ │ their brand-new ticket               │
+│             ( ) New channel             │ │ ┌──────────────────────────────────┐ │
+│  Who can see  @Support @Billing [+role] │ │ │ 🦐 Shrimpy                       │ │  MULTIPLE support roles
+│  ── Opening message (embed, A-06) ───── │ │ │ Thanks for reaching out, @alice! │ │  ← a FULL embed, not plain text
+│  Title  [ Thanks for reaching out!   ]  │ │ │ ────────────────────────────     │ │
+│  Body                                   │ │ │ A billing specialist will be     │ │  title + body + accent + media,
+│  ┌───────────────────────────────────┐  │ │ │ with you shortly, @alice. Tell   │ │  configurable per category
+│  │ A billing specialist will be with │  │ │ │ us your order number.            │ │
+│  │ you shortly, {mention}. Tell us   │  │ │ │                                  │ │  body resolves {mention} /
+│  │ your order number.                │  │ │ │ [ 🖼 thumbnail ]                 │ │  {category} / {number} live, like A.5
+│  └───────────────────────────────────┘  │ │ └──────────────────────────────────┘ │
+│  chips [{mention}][{category}][{number}] │ └──────────────────────────────────────┘  reuses A.5 variable picker
+│  Accent [ ▦ #FF7B6B ]   Media [ + image ]│
+└──────────────────────────────────────────┘
+▒ Unsaved changes                                              [ Discard ]  [ Save & post ]
 ```
 
-- **Multi-button / select-menu (`A-02`):** toggle between ≤3 buttons and a ≤25-option select menu; the preview re-renders the component type live.
-- **Per-category depth (`A-06`):** each category gets its own opening embed, a **thread vs channel** choice, and a **list** of support roles (the current `supportRoles: [oneRole]` becomes a real multi-select).
+- **Multi-button / select-menu (`A-02`):** toggle between ≤3 buttons and a ≤25-option select menu; the panel preview re-renders the component type live.
+- **Opening message is a configurable embed (`A-06`):** the message the bot posts into the freshly-opened ticket is a **full embed** — its own **title, body, accent color, and optional media** — edited per category with a **dedicated live preview** of exactly what the member sees on open (not the public panel). The body supports template variables — member tokens shared with Welcome (`{mention}`, `{user}`) plus the **ticket-context** tokens `{category}` and `{number}` ([Command Reference §9](COMMAND_REFERENCE.md#9-template-variables-reference)) — resolved against the live guild (P3 "show the outcome"). **Already backed by schema** — `ticket_categories.ticket_open_{title,message,color,media}` ([Technical Spec §3.2](TECHNICAL_SPEC.md#32-postgresql-ddl)) — so this is frontend + the panels API exposing those fields, **no migration**.
+- **Per-category depth (`A-06`):** beyond the opening message, each category gets a **thread vs channel** choice and a **list** of support roles (the current `supportRoles: [oneRole]` becomes a real multi-select).
 - **Destructive guards:** removing a button/category or re-posting a panel confirms first (§12.5); "Save & post" updates the live Discord message.
 
 ### A.7 — `/roles` (Reaction Roles)
@@ -957,6 +1014,225 @@ The cross-cutting primitives every screen above composes from. Building these fi
 
 - **One source per primitive.** These map 1:1 to the §12.3 extraction table; every feature screen consumes them rather than re-implementing (e.g. `alert()` → `useToast()` everywhere; `return null` loading → `<PageLoader/>`).
 - **`<DiscordPreview/>`** (used in A.5/A.6/A.7) is the only component allowed literal Discord colors (`#5865F2`, `#36393f`) — isolate them there so they never leak into the token system (§12.1).
+
+### A.10 — `/tickets` (Tickets Inbox)
+
+The daily operating surface for **Admin + Staff** and the list that A.3 clicks into. Shown in the app shell. Closes the §8.2 gaps: a priority column + filter, search, pagination, and a real active style on row actions. Backed by `GET …/tickets` with its existing query params (`status`, `priority`, `categoryId`, `openedBy`, `page`, `limit`).
+
+```
+Tickets                                                                         --text-3xl
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ [ All ][ Open 3 ][ Claimed 2 ][ Closed ][ Archived ]    ⚑ Priority ▾  🏷 Category ▾  🔎 │  status tabs → ?status=
+│  ↑ active tab: --primary underline; counts from /stats                          search │  search → ?openedBy / id / text
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│  #      Opened by         Category    Priority    Status      Claimed    Age      ⋯     │  header: --text-muted --text-xs
+│ ────────────────────────────────────────────────────────────────────────────────────  │
+│  0042   ShrimpLover42      Billing     ⚑ High      ● Open      —          2h    [ Claim ]│  whole row → /tickets/0042 (A.3)
+│  0041   GuppyFan           Bug         ⚑ Med       ● Claimed   OceanMan    5h    [ Open ]│  ⚑ = <PriorityBadge/>, ● = <StatusBadge/>
+│  0039   CoralReef          Other       ⚑ Low       ● Closed    OceanMan    1d    [ View ]│  (§8 tokens); row hover --bg-surface-hover
+│  0038   ReefRanger         Billing     ⚑ Urgent    ● Open      —          3d    [ Claim ]│  Urgent priority pill --danger
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                    ‹  1  2  3  …  ›                    25 / page ▾       │  pagination → ?page= &limit=
+└──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+```
+  Empty (no tickets yet)                           Empty (filter returns nothing)
+  ┌──────────────────────────────────┐             ┌──────────────────────────────────┐
+  │            🦐                     │             │   No tickets match these filters.  │
+  │   No tickets yet.                 │             │   [ Clear filters ]                │
+  │   They'll appear here when members │             └──────────────────────────────────┘
+  │   open one from your panel.        │             <EmptyState/>, secondary CTA
+  │   [ Set up a panel → ]             │
+  └──────────────────────────────────┘             keep the filter bar visible above the
+  <EmptyState/> → /panels (A.6)                     empty body so the user can adjust.
+```
+
+- **Row → detail:** clicking any row opens `/tickets/[ticketId]` (§A.3); the inline `[ Claim ]` is a quick `PATCH …/tickets/:id` without leaving the list.
+- **Filters are URL state** (`?status=&priority=&categoryId=&page=`) so a filtered inbox is shareable/bookmarkable and survives refresh.
+- **Priority column (`S-02`)** and the priority filter are the headline addition; the badge tokens come straight from [Design System §8](./DESIGN_SYSTEM.md#8-component-tokens) via `<PriorityBadge/>` (§A.9).
+- **Staff vs Admin:** identical screen for both roles — it's an OPERATE surface (§A.4); only the surrounding nav differs.
+
+### A.11 — `/transcripts` (Transcripts Archive)
+
+Search, view, and export of closed/archived ticket conversations — for **Admin + Staff**. Replaces the `alert()` stub on the current inbox ([tickets/page.tsx:81-83](../../dashboard/app/dashboard/[guildId]/tickets/page.tsx#L81-L83)). **No new list endpoint required:** it is the tickets list filtered to terminal states (`GET …/tickets?status=closed,archived`) with each row linking to the existing per-ticket transcript (`GET …/tickets/:id/transcript`, JSON or HTML). Satisfies `A-11` / `S-07` / `M-05`.
+
+```
+Transcripts                                                                     --text-3xl
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ 🔎 Search creator, ticket #, or keyword           📅 Date range ▾   🏷 Category ▾        │  --bg-surface filter bar
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│  #0039   Other      CoralReef     closed 1d ago     [ View ]   [ ⤓ HTML ]   [ ⤓ JSON ]  │  View → read-only viewer (below)
+│  #0037   Billing    GuppyFan      closed 3d ago     [ View ]   [ ⤓ HTML ]   [ ⤓ JSON ]  │  ⤓ = direct transcript download
+│  #0031   Bug        ReefRanger    archived 1w ago   [ View ]   [ ⤓ HTML ]   [ ⤓ JSON ]  │  age/state → --text-muted
+└──────────────────────────────────────────────────────────────────────────────────────┘
+
+  Viewer (route or drawer) — read-only, reuses the §A.3 CONVERSATION block WITHOUT the action bar:
+  ┌─ Transcript · #0039 · Other ──────────────────────────────  closed by OceanMan · 1d ago ┐
+  │  🦐 Shrimpy   Welcome to your support thread…                                    2d ago  │  identical message rendering
+  │  CoralReef    how do I change my username?                                       2d ago  │  to A.3 (one shared component)
+  │  OceanMan     here's how… (resolved)                                             1d ago  │  internal notes INCLUDED for staff,
+  │  ── resolution note ── Refunded + explained. ──                                          │  fenced --warning-muted as in A.3
+  │                                                       [ ⤓ Export HTML ]  [ ⤓ Export JSON ]│
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Reuses, doesn't rebuild:** the viewer is the same read-only conversation component as §A.3 minus the composer/action bar — build once, render in both places.
+- **Export** maps directly to the `?format=html|json` variants of the transcript endpoint.
+- **Internal notes** appear in the staff-facing viewer (fenced) but are stripped from any member-facing/`M-05` delivery — the backend, not the UI, enforces that boundary.
+
+### A.12 — `/admin/apps` (Owner — Multi-Bot Application Manager)
+
+**OWNER-ONLY**, and the only screen that lives **outside** `/dashboard/[guildId]` — it manages bot *applications*, not a single server. New UI over endpoints that already exist ([Spec §4.9](./TECHNICAL_SPEC.md#49-admin--discord-bot-applications)); gated by `AdminMiddleware` / `OWNER_DISCORD_ID`. This is the most sensitive screen in the product, so secrets are **always masked** and every mutation confirms.
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🦐 Shrimpy · Admin                          ‹ Back to servers   👤 Salman ▾   ║  separate top bar (no per-guild sidebar)
+╠══════════════════════════════════════════════════════════════════════════════╣
+║   Discord Applications                                        [ + Add app ]    ║  --text-3xl; owner-only badge near title
+║                                                                                ║
+║   ┌────────────────────────────────────────────────────────────────────────┐ ║
+║   │  ● Connected   Production Bot                          Shrimpy#4023      │ ║  ● --success / ○ --danger (disconnected)
+║   │    Client ID  123456789012345678                                        │ ║  client id shown (public);
+║   │    Token      ••••••••••••••••••••  [ Reveal once ]    [ ⟳ Reconnect ]   │ ║  token/secret masked → •••• (--text-muted)
+║   │    Redirect   https://…/api/v1/auth/callback           [ Edit ] [ 🗑 ]   │ ║  🗑 = destructive: confirm + stops session
+║   └────────────────────────────────────────────────────────────────────────┘ ║
+║   ┌────────────────────────────────────────────────────────────────────────┐ ║
+║   │  ○ Disconnected   Dev Bot                              last seen 2d ago  │ ║  disconnected card: --danger dot,
+║   │    …                                          [ ⟳ Reconnect ] [ Edit ]   │ ║  --warning "last seen" line
+║   └────────────────────────────────────────────────────────────────────────┘ ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+  Add / Edit app  (modal — <Toast/> on success, inline field errors on 4xx)
+  ┌─────────────────────────────────────────────────────────┐
+  │  Name              [ Production Bot                 ]    │  --bg-surface-elevated modal
+  │  Bot token         [ ••••• paste to replace        ]    │  edit leaves blank = keep current
+  │  Client ID         [ 123456789012345678            ]    │  (PUT fields all optional, §4.9)
+  │  Client secret     [ ••••• paste to replace        ]    │
+  │  OAuth redirect URI[ https://…/api/v1/auth/callback ]   │
+  │                                  [ Cancel ]  [ Save app ]│  Save = --primary; POST/PUT → live
+  └─────────────────────────────────────────────────────────┘  start/reconnect of the gateway session
+```
+
+- **Access:** non-owners never see this in the nav; a direct hit returns 403 → the access-denied screen (§A.13). Surfaced from the user menu / a footer "Admin" link, not the per-server sidebar.
+- **Mask by default:** GET returns `"***"` for token + secret ([Spec §4.9](./TECHNICAL_SPEC.md#49-admin--discord-bot-applications)); the form treats an unchanged masked field as "keep existing" so a save never overwrites a secret with dots.
+- **Live effect:** `POST`/`PUT` (token) starts or reconnects the session in the background; `DELETE` stops it — reflect the resulting state with the connection dot after the action resolves (poll/refresh).
+- **Reconnect** maps to `POST …/apps/:id/reconnect`; show a transient "reconnecting…" state on the card.
+
+### A.13 — Cross-cutting states & flows
+
+The states that don't belong to one screen but make the product feel finished — they realize Principles 5 ("feedback is immediate and human") and 7 ("real ≠ demo") and the §12.5 interaction defaults.
+
+**Post-invite interstitial (closes the §7.4 loop)** — where the OAuth bot-invite returns to, instead of a stale `/servers` card.
+
+```
+┌───────────────────────────────────────────────┐
+│              🦐  ✅                             │  centered, --bg-surface card on --bg-base
+│   Shrimpy is now in  Ocean Crew!                │  --text-2xl --font-display
+│   Let's get it set up — about 5 minutes.        │  --text-muted
+│        [ Start setup → ]   [ Not now ]          │  primary → /dashboard/[id] (Setup, §A.2);
+└───────────────────────────────────────────────┘  ghost "Not now" → /servers
+   Reached after the invite returns + a /guilds re-check confirms bot_joined flipped (§A.1 join-detection).
+   If the re-check hasn't landed yet: show a brief "Finishing up…" <Skeleton/> then resolve.
+```
+
+**Demo-mode banner (Principle 7; §7.2, Backlog #14)** — persistent while the session is unauthenticated / mock-backed (the `lib/api.ts` fallback). Never shown in a real session.
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ 👁  Demo mode — sample data, changes won't be saved.   [ Log in with Discord ↗ ]║  full-width, --warning-muted bg,
+╚══════════════════════════════════════════════════════════════════════════════╝  --warning text/border; sits ABOVE top bar
+   Pinned across every screen in demo; the only signal that separates a sandbox tour from a real console.
+```
+
+**Access denied (403) — Level-2 deep-link or non-owner /admin hit (§A.4, §A.12)**
+
+```
+┌──────────────────────────────────┐
+│            🔒                     │  <EmptyState/> variant, --bg-surface
+│   You don't have access to this.  │  --text-primary
+│   This area is for server admins.  │  --text-muted; plain language, no codes
+│   [ Back to Tickets ]  [ Servers ]│  primary → a surface they CAN reach
+└──────────────────────────────────┘
+   Shown when the API returns 403 (server-side enforcement per Spec §7.3) — the UI hides nav, but never relies on hiding alone.
+```
+
+**Generic error + retry (§10.4 "user sees nothing" → fix)** — every data screen's error state.
+
+```
+┌──────────────────────────────────┐
+│            ⚠                      │  --danger icon
+│   Couldn't load this.             │  --text-primary
+│   [ Try again ]                   │  primary; re-fires the request
+└──────────────────────────────────┘
+   Error boundary per data region (not a white screen); transient save errors use a <Toast/> with "Retry" instead (§A.9).
+```
+
+**Session expired (§7.2)** — `GET /auth/me` → 401 mid-session.
+
+```
+ <Toast/>:  ⚠ Your session expired — [ Log in again ]      → /login?reason=expired
+   Bounce to /login with a friendly reason param, not a silent redirect or a broken page.
+```
+
+**Command palette (⌘K / Ctrl-K — Backlog #15, "Could")** — power-user jump across servers / screens / tickets.
+
+```
+┌─────────────────────────────────────────────┐
+│ 🔎 Type a command or search…                 │  --bg-surface-elevated, --shadow-lg, centered overlay
+├─────────────────────────────────────────────┤
+│  Go to · Overview                            │  grouped results; ↑↓ to move, ↵ to run
+│  Go to · Tickets                             │  --primary highlight on active row
+│  Switch server · Gamer Guild                 │
+│  Ticket · #0042 Billing                      │
+└─────────────────────────────────────────────┘
+   Optional v1; if shipped, it composes the SAME nav + <ServerSwitcher/> + ticket data already loaded — no new endpoints.
+```
+
+---
+
+## Appendix B — Data Contract & Endpoint Coverage
+
+Every screen in this journey, mapped to the [Technical Spec §4](./TECHNICAL_SPEC.md#4-rest-api-design) endpoint(s) that feed it — so implementation is never blocked guessing what to call, and any backend work the journey *adds* is explicit. **All endpoints below now exist in the spec** (the ticket sub-resources, `welcome/test`, and `health` were added alongside this appendix); the right-hand column flags anything that is new or computed. Per §14.7–§14.8, `messages` (staff-reply relay) and `participants` are **not** part of v1 scope — see B.2.
+
+### B.1 Screen → endpoint matrix
+
+| Screen (§) | Reads | Writes / actions | Notes |
+|------------|-------|------------------|-------|
+| `/servers` (A.1) | `GET /guilds` | — | Needs `bot_joined`, `access_level`, `member_count`, `icon` per guild (Spec §4.2 note) |
+| Overview (A.2) | `GET /guilds/:id` (`setup` object), `GET …/stats`, `GET …/health` | deep-links to config screens | `setup` + `health` are the new computed reads; counts only, no chart (§14.5) |
+| Ticket detail (A.3) | `GET …/tickets/:id` (messages + notes, read-only conversation) | `PATCH` (priority/claim), `…/close`, `…/reopen`, `…/notes` | read-only in v1 (§14.7) — no `messages`/`participants` write endpoints |
+| Welcome (A.5) | `GET …/welcome`, `…/discord/channels`, `…/discord/roles`, `…/auto-roles` | `PUT/PATCH …/welcome`, `POST …/welcome/test`, `POST/DELETE …/auto-roles` | `welcome/test` **new** |
+| Panels (A.6) | `GET …/panels` (+ categories), `…/discord/channels`, `…/discord/roles` | panel + category CRUD (Spec §4.3) | multi-button/select, multi-role, **and the configurable opening-message embed** (`ticketOpen*` fields) are payload depth, not new routes |
+| Reaction Roles (A.7) | `GET …/reaction-roles`, `…/discord/emojis`, `…/discord/roles`, `…/health` | reaction-role CRUD (Spec §4.4) | full emoji picker uses existing `…/discord/emojis` |
+| Settings (A.8) | `GET /guilds/:id` | `PATCH /guilds/:id` (prefix/language/log/auto-close) | language + auto-close are existing columns (`guilds.language`, `ticket_categories.auto_close_hours`) |
+| Staff & Access (A.8) | `GET …/staff-roles`, `…/discord/roles` | `POST/DELETE …/staff-roles` | — |
+| Tickets inbox (A.10) | `GET …/tickets?status&priority&categoryId&page` | `PATCH …/tickets/:id` (quick claim) | all existing |
+| Transcripts (A.11) | `GET …/tickets?status=closed,archived`, `…/tickets/:id/transcript` | — | reuses tickets list; **no new list endpoint** |
+| Admin apps (A.12) | `GET /admin/apps` | `POST/PUT/DELETE /admin/apps`, `…/reconnect` | owner-gated (Spec §4.9) |
+| Post-invite (A.13) | `GET /guilds` (re-check) | — | join-detection poll |
+| Demo banner / 403 / error / session (A.13) | `GET /auth/me` (401→expired) | — | client-side state from auth + HTTP status; demo data lives behind `/demo` (§14.1), never a silent fallback |
+
+### B.2 Endpoints added for this journey (now in Spec §4)
+
+| Endpoint | Powers | PRD story |
+|----------|--------|-----------|
+| `POST …/tickets/:id/notes`, `DELETE …/notes/:noteId` | Internal staff notes (A.3) — rows in `ticket_messages` with `is_staff_note=TRUE` | S-04 |
+| `POST …/welcome/test` | "Send test to me" DM (A.5) | A-03 |
+| `GET …/guilds/:id/health` | Bot health strip + role-height check (A.2, A.5, A.7) | A-09 / A-04 |
+| `setup` object on `GET /guilds/:id` | First-run Setup checklist completion (A.2) | A-09 |
+
+**Deferred/dropped per §14 decisions** — not built in v1: `POST …/tickets/:id/messages` (§14.7, read-only conversation) and `GET/POST/DELETE …/tickets/:id/participants` + the `ticket_participants` table (§14.8, covered by existing per-category support roles).
+
+### B.3 Already-covered (no change needed — common misconception)
+
+- **Priority (`S-02`)** → `tickets.priority` via `PATCH …/tickets/:id`.
+- **Close with resolution note (`S-03`)** → `close_reason` via `POST …/tickets/:id/close`.
+- **Claim (`S-08`)** → `tickets.claimed_by` via `PATCH …/tickets/:id`.
+- **Internal-note storage** → already modeled (`ticket_messages.is_staff_note`); only the *write* endpoint was missing.
+- **Per-category support roles, thread-vs-channel, panel style** → already columns on `ticket_categories` (`panel_style`, `ticket_destination`, …); Panels depth (A.6) is richer payloads, not new routes. These same support roles are also why participants (`S-05`) is deferred — §14.8.
+
+> **Implementation takeaway:** the journey is overwhelmingly buildable on the existing API. The only genuinely new backend surface is **4 endpoints + 0 new tables** (B.2) — `messages`/`participants`/`ticket_participants` were scoped out by the §14 decisions, not deferred for lack of clarity.
 
 ---
 
