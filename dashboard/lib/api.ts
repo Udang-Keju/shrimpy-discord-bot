@@ -222,98 +222,108 @@ const mockRoles: DiscordRole[] = [
   { id: 'admin-role-id', name: 'Administrator', color: '#f04747' }
 ];
 
-// Helper to perform safe fetch, falling back to mocks on error or offline
-async function safeFetch<T>(url: string, options?: RequestInit, fallbackData?: T): Promise<T> {
-  try {
-    const res = await fetch(`${API_BASE}${url}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
-    });
-    if (!res.ok) {
-      if (fallbackData !== undefined) return fallbackData;
-      throw new Error(`API Error: ${res.status} ${res.statusText}`);
-    }
-    return await res.json() as T;
-  } catch (e) {
-    console.warn(`Fetch to ${url} failed. Using mock data.`, e);
-    if (fallbackData !== undefined) return fallbackData;
-    throw e;
+// Demo mode (USER_JOURNEY §14.1): explicit /demo route only — never a silent
+// fallback for authenticated sessions. Real requests below throw on failure.
+const DEMO_FLAG_KEY = 'shrimpy_demo';
+
+export function isDemoMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.sessionStorage.getItem(DEMO_FLAG_KEY) === '1';
+}
+
+function enterDemoMode(): void {
+  window.sessionStorage.setItem(DEMO_FLAG_KEY, '1');
+}
+
+function exitDemoMode(): void {
+  window.sessionStorage.removeItem(DEMO_FLAG_KEY);
+}
+
+async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`API Error: ${res.status} ${res.statusText}`);
   }
+  return await res.json() as T;
 }
 
 export const ShrimpyAPI = {
+  enterDemoMode,
+  exitDemoMode,
+
   // Auth
   getCurrentUser: async (): Promise<DiscordUser> => {
-    return safeFetch<DiscordUser>('/api/v1/auth/me', {}, {
-      id: 'discord-user-123456',
-      username: 'shrimp_commander',
-      globalName: 'Shrimp Commander',
-      avatar: 'https://images.unsplash.com/photo-1553753861-267865544b20?w=150'
-    });
+    if (isDemoMode()) {
+      return {
+        id: 'discord-user-123456',
+        username: 'shrimp_commander',
+        globalName: 'Shrimp Commander',
+        avatar: 'https://images.unsplash.com/photo-1553753861-267865544b20?w=150'
+      };
+    }
+    return fetchJSON<DiscordUser>('/api/v1/auth/me');
   },
 
   getPublicConfig: async (): Promise<PublicConfig> => {
-    return safeFetch<PublicConfig>('/api/v1/config', {}, {
-      client_id: '123456789012345678',
-      redirect_uri: 'http://localhost:8080/api/v1/auth/callback'
-    });
+    if (isDemoMode()) {
+      return {
+        client_id: '123456789012345678',
+        redirect_uri: 'http://localhost:8080/api/v1/auth/callback'
+      };
+    }
+    return fetchJSON<PublicConfig>('/api/v1/config');
   },
 
   logout: async (): Promise<void> => {
-    try {
-      await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'DELETE' });
-    } catch {
-      console.warn('Logout request failed (offline)');
-    }
+    await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'DELETE' });
   },
 
   // Guilds
   listGuilds: async (): Promise<Guild[]> => {
-    return safeFetch<Guild[]>('/api/v1/guilds', {}, mockGuilds);
+    if (isDemoMode()) return mockGuilds;
+    return fetchJSON<Guild[]>('/api/v1/guilds');
   },
 
   getGuildConfig: async (guildId: string): Promise<Guild> => {
-    return safeFetch<Guild>(
-      `/api/v1/guilds/${guildId}`,
-      {},
-      mockGuilds.find(g => g.id === guildId) || mockGuilds[0]
-    );
+    if (isDemoMode()) {
+      return mockGuilds.find(g => g.id === guildId) || mockGuilds[0];
+    }
+    return fetchJSON<Guild>(`/api/v1/guilds/${guildId}`);
   },
 
   updateGuildConfig: async (guildId: string, updates: Partial<Guild>): Promise<Guild> => {
-    try {
-      return await safeFetch<Guild>(`/api/v1/guilds/${guildId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      });
-    } catch {
-      const g = mockGuilds.find(x => x.id === guildId);
-      if (g) {
-        Object.assign(g, updates);
-        return g;
-      }
-      return mockGuilds[0];
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      Object.assign(g, updates);
+      return g;
     }
+    return fetchJSON<Guild>(`/api/v1/guilds/${guildId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
   },
 
-  // Discord Discord API proxies (for dropdown selects)
+  // Discord API proxies (for dropdown selects)
   getDiscordChannels: async (guildId: string): Promise<DiscordChannel[]> => {
-    return safeFetch<DiscordChannel[]>(`/api/v1/guilds/${guildId}/discord/channels`, {}, mockChannels);
+    if (isDemoMode()) return mockChannels;
+    return fetchJSON<DiscordChannel[]>(`/api/v1/guilds/${guildId}/discord/channels`);
   },
 
   getDiscordRoles: async (guildId: string): Promise<DiscordRole[]> => {
-    return safeFetch<DiscordRole[]>(`/api/v1/guilds/${guildId}/discord/roles`, {}, mockRoles);
+    if (isDemoMode()) return mockRoles;
+    return fetchJSON<DiscordRole[]>(`/api/v1/guilds/${guildId}/discord/roles`);
   },
 
   // Welcome Config
   getWelcomeConfig: async (guildId: string): Promise<WelcomeConfig> => {
-    return safeFetch<WelcomeConfig>(
-      `/api/v1/guilds/${guildId}/welcome`,
-      {},
-      mockWelcomeConfigs[guildId] || {
+    if (isDemoMode()) {
+      return mockWelcomeConfigs[guildId] || {
         guildId,
         sendDm: false,
         dmText: '',
@@ -322,34 +332,30 @@ export const ShrimpyAPI = {
         welcomeText: 'Welcome!',
         cardStyle: 'dark',
         avatarEmoji: '🦐'
-      }
-    );
+      };
+    }
+    return fetchJSON<WelcomeConfig>(`/api/v1/guilds/${guildId}/welcome`);
   },
 
   saveWelcomeConfig: async (guildId: string, config: WelcomeConfig): Promise<WelcomeConfig> => {
-    try {
-      return await safeFetch<WelcomeConfig>(`/api/v1/guilds/${guildId}/welcome`, {
-        method: 'PUT',
-        body: JSON.stringify(config)
-      });
-    } catch {
+    if (isDemoMode()) {
       mockWelcomeConfigs[guildId] = config;
       return config;
     }
+    return fetchJSON<WelcomeConfig>(`/api/v1/guilds/${guildId}/welcome`, {
+      method: 'PUT',
+      body: JSON.stringify(config)
+    });
   },
 
   // Ticket Panels
   listPanels: async (guildId: string): Promise<TicketPanel[]> => {
-    return safeFetch<TicketPanel[]>(`/api/v1/guilds/${guildId}/panels`, {}, mockPanels.filter(p => p.guildId === guildId));
+    if (isDemoMode()) return mockPanels.filter(p => p.guildId === guildId);
+    return fetchJSON<TicketPanel[]>(`/api/v1/guilds/${guildId}/panels`);
   },
 
   createPanel: async (guildId: string, panel: Omit<TicketPanel, 'id' | 'guildId'>): Promise<TicketPanel> => {
-    try {
-      return await safeFetch<TicketPanel>(`/api/v1/guilds/${guildId}/panels`, {
-        method: 'POST',
-        body: JSON.stringify(panel)
-      });
-    } catch {
+    if (isDemoMode()) {
       const newPanel: TicketPanel = {
         ...panel,
         id: `panel-${Math.floor(Math.random() * 1000)}`,
@@ -358,27 +364,27 @@ export const ShrimpyAPI = {
       mockPanels.push(newPanel);
       return newPanel;
     }
+    return fetchJSON<TicketPanel>(`/api/v1/guilds/${guildId}/panels`, {
+      method: 'POST',
+      body: JSON.stringify(panel)
+    });
   },
 
   deletePanel: async (guildId: string, panelId: string): Promise<void> => {
-    try {
-      await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}`, { method: 'DELETE' });
-    } catch {
+    if (isDemoMode()) {
       mockPanels = mockPanels.filter(p => p.id !== panelId);
+      return;
     }
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}`, { method: 'DELETE' });
   },
 
   listCategories: async (guildId: string, panelId: string): Promise<TicketCategory[]> => {
-    return safeFetch<TicketCategory[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`, {}, mockCategories[panelId] || []);
+    if (isDemoMode()) return mockCategories[panelId] || [];
+    return fetchJSON<TicketCategory[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`);
   },
 
   createCategory: async (guildId: string, panelId: string, cat: Omit<TicketCategory, 'id' | 'panelId'>): Promise<TicketCategory> => {
-    try {
-      return await safeFetch<TicketCategory>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`, {
-        method: 'POST',
-        body: JSON.stringify(cat)
-      });
-    } catch {
+    if (isDemoMode()) {
       const newCat: TicketCategory = {
         ...cat,
         id: `cat-${Math.floor(Math.random() * 1000)}`,
@@ -388,107 +394,85 @@ export const ShrimpyAPI = {
       mockCategories[panelId].push(newCat);
       return newCat;
     }
+    return fetchJSON<TicketCategory>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`, {
+      method: 'POST',
+      body: JSON.stringify(cat)
+    });
   },
 
   deleteCategory: async (guildId: string, panelId: string, catId: string): Promise<void> => {
-    try {
-      await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE' });
-    } catch {
+    if (isDemoMode()) {
       if (mockCategories[panelId]) {
         mockCategories[panelId] = mockCategories[panelId].filter(c => c.id !== catId);
       }
+      return;
     }
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE' });
   },
 
   // Tickets management
   listTickets: async (guildId: string): Promise<Ticket[]> => {
-    return safeFetch<Ticket[]>(`/api/v1/guilds/${guildId}/tickets`, {}, mockTickets.filter(t => t.guildId === guildId));
+    if (isDemoMode()) return mockTickets.filter(t => t.guildId === guildId);
+    return fetchJSON<Ticket[]>(`/api/v1/guilds/${guildId}/tickets`);
   },
 
   updateTicket: async (guildId: string, ticketId: string, updates: Partial<Ticket>): Promise<Ticket> => {
-    try {
-      return await safeFetch<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      });
-    } catch (e) {
+    if (isDemoMode()) {
       const t = mockTickets.find(x => x.id === ticketId);
-      if (t) {
-        Object.assign(t, updates);
-        return t;
-      }
-      throw e;
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      Object.assign(t, updates);
+      return t;
     }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
   },
 
   claimTicket: async (guildId: string, ticketId: string, username: string): Promise<Ticket> => {
-    try {
-      // The endpoint is PATCH /tickets/{id} with status claimed or similar
-      return await ShrimpyAPI.updateTicket(guildId, ticketId, { status: 'claimed', assignedTo: username });
-    } catch (e) {
-      const t = mockTickets.find(x => x.id === ticketId);
-      if (t) {
-        t.status = 'claimed';
-        t.assignedTo = username;
-        return t;
-      }
-      throw e;
-    }
+    return ShrimpyAPI.updateTicket(guildId, ticketId, { status: 'claimed', assignedTo: username });
   },
 
   closeTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {
-    try {
-      return await safeFetch<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/close`, { method: 'POST' });
-    } catch (e) {
+    if (isDemoMode()) {
       const t = mockTickets.find(x => x.id === ticketId);
-      if (t) {
-        t.status = 'closed';
-        t.closedAt = new Date().toISOString();
-        return t;
-      }
-      throw e;
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      t.status = 'closed';
+      t.closedAt = new Date().toISOString();
+      return t;
     }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/close`, { method: 'POST' });
   },
 
   reopenTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {
-    try {
-      return await safeFetch<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/reopen`, { method: 'POST' });
-    } catch (e) {
+    if (isDemoMode()) {
       const t = mockTickets.find(x => x.id === ticketId);
-      if (t) {
-        t.status = 'open';
-        t.closedAt = undefined;
-        return t;
-      }
-      throw e;
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      t.status = 'open';
+      t.closedAt = undefined;
+      return t;
     }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/reopen`, { method: 'POST' });
   },
 
   archiveTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {
-    try {
-      return await safeFetch<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/archive`, { method: 'POST' });
-    } catch (e) {
+    if (isDemoMode()) {
       const t = mockTickets.find(x => x.id === ticketId);
-      if (t) {
-        t.status = 'archived';
-        return t;
-      }
-      throw e;
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      t.status = 'archived';
+      return t;
     }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/archive`, { method: 'POST' });
   },
 
   // Reaction Roles
   listReactionRoles: async (guildId: string): Promise<ReactionRole[]> => {
-    return safeFetch<ReactionRole[]>(`/api/v1/guilds/${guildId}/reaction-roles`, {}, mockReactionRoles.filter(r => r.guildId === guildId));
+    if (isDemoMode()) return mockReactionRoles.filter(r => r.guildId === guildId);
+    return fetchJSON<ReactionRole[]>(`/api/v1/guilds/${guildId}/reaction-roles`);
   },
 
   createReactionRole: async (guildId: string, rr: Omit<ReactionRole, 'id' | 'guildId'>): Promise<ReactionRole> => {
-    try {
-      return await safeFetch<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles`, {
-        method: 'POST',
-        body: JSON.stringify(rr)
-      });
-    } catch {
+    if (isDemoMode()) {
       const newRr: ReactionRole = {
         ...rr,
         id: `msg-${Math.floor(Math.random() * 10000)}`,
@@ -497,13 +481,17 @@ export const ShrimpyAPI = {
       mockReactionRoles.push(newRr);
       return newRr;
     }
+    return fetchJSON<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles`, {
+      method: 'POST',
+      body: JSON.stringify(rr)
+    });
   },
 
   deleteReactionRole: async (guildId: string, msgId: string): Promise<void> => {
-    try {
-      await fetch(`${API_BASE}/api/v1/guilds/${guildId}/reaction-roles/${msgId}`, { method: 'DELETE' });
-    } catch {
+    if (isDemoMode()) {
       mockReactionRoles = mockReactionRoles.filter(r => r.id !== msgId);
+      return;
     }
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/reaction-roles/${msgId}`, { method: 'DELETE' });
   }
 };
