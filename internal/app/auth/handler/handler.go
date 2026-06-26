@@ -228,7 +228,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	dashboardURL := os.Getenv("DASHBOARD_URL")
@@ -335,7 +335,7 @@ func (h *AuthHandler) RefreshSession(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"managed_guilds": managedGuilds})
@@ -350,7 +350,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	})
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
 }
