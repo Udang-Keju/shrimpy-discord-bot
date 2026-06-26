@@ -93,6 +93,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 			r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
 
 			r.Get("/auth/me", s.authHandler.Me)
+			r.Post("/auth/refresh", s.authHandler.RefreshSession)
 			r.Delete("/auth/logout", s.authHandler.Logout)
 
 			r.Get("/guilds", s.guildHandler.List)

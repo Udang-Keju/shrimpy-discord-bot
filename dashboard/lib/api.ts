@@ -285,6 +285,13 @@ export const ShrimpyAPI = {
     await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'DELETE', credentials: 'include' });
   },
 
+  // Re-fetches the user's current Discord guilds/permissions and re-issues the session
+  // cookie, so newly joined guilds or newly granted permissions show up without a re-login.
+  refreshSession: async (): Promise<void> => {
+    if (isDemoMode()) return;
+    await fetch(`${API_BASE}/api/v1/auth/refresh`, { method: 'POST', credentials: 'include' });
+  },
+
   // Guilds
   listGuilds: async (): Promise<Guild[]> => {
     if (isDemoMode()) return mockGuilds;

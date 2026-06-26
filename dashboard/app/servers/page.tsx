@@ -1,10 +1,10 @@
 // dashboard/app/servers/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShrimpyAPI, Guild, DiscordUser, PublicConfig } from "@/lib/api";
-import { LogOut, Plus, Server, Bot, ArrowRight, ExternalLink } from "lucide-react";
+import { LogOut, Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
 
 // Scoped invite permissions (USER_JOURNEY §14.6): View/Manage Channels, Manage Roles,
 // Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions,
@@ -17,35 +17,50 @@ export default function ServersPage() {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [hoveredInvite, setHoveredInvite] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      const [userResult, guildResult, configResult] = await Promise.allSettled([
-        ShrimpyAPI.getCurrentUser(),
-        ShrimpyAPI.listGuilds(),
-        ShrimpyAPI.getPublicConfig()
-      ]);
-      if (userResult.status === "fulfilled") {
-        setUser(userResult.value);
-      } else {
-        console.error("Failed to load current user", userResult.reason);
-      }
-      if (guildResult.status === "fulfilled") {
-        setGuilds(guildResult.value);
-      } else {
-        console.error("Failed to load guild list", guildResult.reason);
-      }
-      if (configResult.status === "fulfilled") {
-        setConfig(configResult.value);
-      } else {
-        console.error("Failed to load public config", configResult.reason);
-      }
-      setLoading(false);
+  const loadData = useCallback(async (opts?: { syncSession?: boolean }) => {
+    if (opts?.syncSession) {
+      // Best-effort: re-fetch current Discord guilds/permissions before listing, so a
+      // guild the bot just joined (or new admin perms) shows up without a re-login.
+      await ShrimpyAPI.refreshSession().catch((err) => {
+        console.error("Failed to refresh session guild list", err);
+      });
     }
-    loadData();
+
+    const [userResult, guildResult, configResult] = await Promise.allSettled([
+      ShrimpyAPI.getCurrentUser(),
+      ShrimpyAPI.listGuilds(),
+      ShrimpyAPI.getPublicConfig()
+    ]);
+    if (userResult.status === "fulfilled") {
+      setUser(userResult.value);
+    } else {
+      console.error("Failed to load current user", userResult.reason);
+    }
+    if (guildResult.status === "fulfilled") {
+      setGuilds(guildResult.value);
+    } else {
+      console.error("Failed to load guild list", guildResult.reason);
+    }
+    if (configResult.status === "fulfilled") {
+      setConfig(configResult.value);
+    } else {
+      console.error("Failed to load public config", configResult.reason);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData({ syncSession: true }).then(() => setLoading(false));
+  }, [loadData]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData({ syncSession: true });
+    setRefreshing(false);
+  };
 
   const handleLogout = async () => {
     await ShrimpyAPI.logout();
@@ -112,6 +127,17 @@ export default function ServersPage() {
               <span style={{ fontSize: "14px", fontWeight: 600 }}>{user.globalName || user.username}</span>
             </div>
           )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Re-sync servers from Discord"
+            style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-muted)", cursor: refreshing ? "default" : "pointer", fontSize: "14px", fontWeight: 500, transition: "color 0.2s" }}
+            onMouseEnter={(e) => { if (!refreshing) e.currentTarget.style.color = "var(--color-primary)"; }}
+            onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+          >
+            <RefreshCw size={16} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
+            <span>Refresh</span>
+          </button>
           <button
             onClick={handleLogout}
             style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", fontSize: "14px", fontWeight: 500, transition: "color 0.2s" }}
@@ -351,6 +377,12 @@ export default function ServersPage() {
           </div>
         )}
       </main>
+      <style jsx global>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

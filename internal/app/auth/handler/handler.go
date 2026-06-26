@@ -263,6 +263,84 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// RefreshSession re-fetches the user's current Discord guilds and re-issues the session JWT,
+// so newly granted permissions or newly joined guilds show up without forcing a re-login.
+func (h *AuthHandler) RefreshSession(w http.ResponseWriter, r *http.Request) {
+	userIDStr := apiutil.GetUserID(r.Context())
+	if userIDStr == "" {
+		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Active session not found")
+		return
+	}
+
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid user ID")
+		return
+	}
+
+	u, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "User not found")
+		return
+	}
+
+	if u.TokenExpiresAt == nil || time.Now().After(*u.TokenExpiresAt) {
+		apiutil.WriteError(w, http.StatusUnauthorized, "TOKEN_EXPIRED", "Discord access token expired; please log in again")
+		return
+	}
+
+	accessToken, err := crypto.Decrypt(u.DiscordAccessTokenEnc, h.tokenEncKey)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to decrypt access token")
+		return
+	}
+
+	discGuilds, err := h.fetchDiscordGuilds(r.Context(), string(accessToken))
+	if err != nil {
+		apiutil.WriteError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Failed to fetch guilds from Discord: "+err.Error())
+		return
+	}
+
+	var managedGuilds []string
+	for _, g := range discGuilds {
+		perms := int64(g.Permissions)
+		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
+			managedGuilds = append(managedGuilds, g.ID)
+		}
+	}
+
+	claims := &middleware.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userIDStr,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        uuid.NewString(),
+		},
+		Username:      u.Username,
+		Avatar:        getStringValue(u.AvatarHash),
+		ManagedGuilds: managedGuilds,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(h.jwtSecret)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to sign session token")
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    tokenString,
+		Path:     "/",
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"managed_guilds": managedGuilds})
+}
+
 // Logout invalidates the HttpOnly session cookie.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
