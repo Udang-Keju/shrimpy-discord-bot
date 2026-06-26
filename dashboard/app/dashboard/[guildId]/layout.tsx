@@ -1,4 +1,4 @@
-// dashboard/app/dashboard/layout.tsx
+// dashboard/app/dashboard/[guildId]/layout.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,8 +19,9 @@ import {
   Moon
 } from "lucide-react";
 import styles from "./dashboard.module.css";
-import { ShrimpyAPI, Guild, DiscordUser } from "@/lib/api";
+import { ShrimpyAPI, Guild, DiscordUser, isDemoMode } from "@/lib/api";
 import { getSavedTheme, applyTheme, Theme } from "@/lib/theme";
+import DemoBanner from "@/components/DemoBanner";
 
 export default function DashboardLayout({
   children,
@@ -78,6 +79,11 @@ export default function DashboardLayout({
   };
 
   const handleLogout = async () => {
+    if (isDemoMode()) {
+      ShrimpyAPI.exitDemoMode();
+      router.push("/login");
+      return;
+    }
     await ShrimpyAPI.logout();
     router.push("/login");
   };
@@ -86,13 +92,29 @@ export default function DashboardLayout({
     return null;
   }
 
-  const navigationItems = [
-    { name: "Support Tickets", href: `/dashboard/${guildId}/tickets`, icon: Ticket },
-    { name: "Ticket Panels", href: `/dashboard/${guildId}/panels`, icon: Layers },
-    { name: "Welcome Greetings", href: `/dashboard/${guildId}/welcome`, icon: UserPlus },
-    { name: "Reaction Roles", href: `/dashboard/${guildId}/roles`, icon: Tags },
-    { name: "General Settings", href: `/dashboard/${guildId}/settings`, icon: Settings },
+  const navigationGroups = [
+    {
+      label: "Operate",
+      items: [
+        { name: "Support Tickets", href: `/dashboard/${guildId}/tickets`, icon: Ticket },
+      ],
+    },
+    {
+      label: "Server Management",
+      items: [
+        { name: "Ticket Panels", href: `/dashboard/${guildId}/panels`, icon: Layers },
+        { name: "Welcome Greetings", href: `/dashboard/${guildId}/welcome`, icon: UserPlus },
+        { name: "Reaction Roles", href: `/dashboard/${guildId}/roles`, icon: Tags },
+      ],
+    },
+    {
+      label: "Settings",
+      items: [
+        { name: "General Settings", href: `/dashboard/${guildId}/settings`, icon: Settings },
+      ],
+    },
   ];
+  const navigationItems = navigationGroups.flatMap(g => g.items);
 
   const getPageTitle = () => {
     const current = navigationItems.find(item => pathname.startsWith(item.href));
@@ -124,20 +146,25 @@ export default function DashboardLayout({
         </div>
 
         <nav className={styles.sidebarNav}>
-          {navigationItems.map(item => {
-            const Icon = item.icon;
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <Link 
-                key={item.href} 
-                href={item.href}
-                className={`${styles.navItem} ${isActive ? styles.navItemActive : ""}`}
-              >
-                <Icon size={18} />
-                <span>{item.name}</span>
-              </Link>
-            );
-          })}
+          {navigationGroups.map(group => (
+            <div key={group.label} className={styles.navGroup}>
+              <div className={styles.navGroupLabel}>{group.label}</div>
+              {group.items.map(item => {
+                const Icon = item.icon;
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`${styles.navItem} ${isActive ? styles.navItemActive : ""}`}
+                  >
+                    <Icon size={18} />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className={styles.sidebarFooter}>
@@ -150,6 +177,8 @@ export default function DashboardLayout({
 
       {/* MAIN VIEW AREA */}
       <div className={styles.mainContent}>
+        {isDemoMode() && <DemoBanner />}
+
         {/* TOPBAR NAVBAR */}
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>

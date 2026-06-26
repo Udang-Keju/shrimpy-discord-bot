@@ -9,7 +9,7 @@ import {
   Trash2,
   ShieldCheck
 } from "lucide-react";
-import styles from "@/app/dashboard/dashboard.module.css";
+import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Guild, DiscordChannel, DiscordRole } from "@/lib/api";
 
 export default function SettingsPage() {

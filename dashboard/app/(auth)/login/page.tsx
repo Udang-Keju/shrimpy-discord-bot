@@ -37,9 +37,9 @@ export default function LoginPage() {
             <span>Login with Discord</span>
           </a>
 
-          <Link 
-            href="/dashboard/123456789012345678/tickets"
-            className={`${styles.btn} ${styles.btnSecondary}`} 
+          <Link
+            href="/demo"
+            className={`${styles.btn} ${styles.btnSecondary}`}
             style={{ width: '100%', justifyContent: 'center', padding: '12px' }}
           >
             <span>Enter Sandbox Demo Preview</span>
