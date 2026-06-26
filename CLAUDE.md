@@ -6,6 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Shrimpy** is a multi-bot Discord server management and help desk system written in Go with a Next.js web dashboard. A single Go binary serves as both the Discord bot runtime and REST API server. The system supports managing multiple Discord bot applications from a single backend, with credentials stored encrypted in PostgreSQL.
 
+## Specification & Design Docs
+
+Authoritative specs live in `docs/`. **Consult the relevant doc before implementing** — they are the source of truth for product scope, schema, API, visual design, and frontend UX:
+
+| Doc | Covers |
+|-----|--------|
+| [docs/v1/PRD.md](docs/v1/PRD.md) | Product requirements: personas, user stories, MVP scope, feature prioritization |
+| [docs/v1/TECHNICAL_SPEC.md](docs/v1/TECHNICAL_SPEC.md) | Architecture, DB schema (DDL), REST API design, OAuth2 flow, directory structure, deployment |
+| [docs/v1/USER_JOURNEY.md](docs/v1/USER_JOURNEY.md) | Frontend UX: information architecture, per-persona journeys, screen specs, routing, UI consistency standards |
+| [docs/v1/DESIGN_SYSTEM.md](docs/v1/DESIGN_SYSTEM.md) | Visual identity: color tokens (dark/light), typography, spacing, component tokens, theming |
+| [docs/v1/COMMAND_REFERENCE.md](docs/v1/COMMAND_REFERENCE.md) | Discord slash/prefix command parameters and permission levels |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Running log of spec/architecture changes |
+
+> Dashboard/frontend work is primarily governed by **USER_JOURNEY.md** + **DESIGN_SYSTEM.md**. Backend work is primarily governed by **TECHNICAL_SPEC.md** + **PRD.md**.
+
 ## Development Commands
 
 ### Go Backend
@@ -189,7 +204,10 @@ PostgreSQL
 3. Discord redirects to `/api/v1/auth/callback?code=...` with authorization code
 4. Backend exchanges code for access token, fetches user + guilds from Discord API
 5. Backend signs a JWT with claims: `{sub, managed_guilds[], exp, jti}` and sets HttpOnly cookie
-6. Dashboard requests are authenticated via JWT cookie
+6. Backend redirects the browser to the dashboard's **`/servers`** page (the dedicated server-selection screen) — **not** `/dashboard`
+7. Dashboard requests are authenticated via JWT cookie
+
+> **Dashboard frontend — source of truth: [docs/v1/USER_JOURNEY.md](docs/v1/USER_JOURNEY.md).** Information architecture, per-persona user journeys, screen specs, and routing for the Next.js UI live there — consult it before building or changing dashboard pages. Route split: **`/servers`** = select a server; **`/dashboard/[guildId]/…`** = manage one server; bare **`/dashboard`** redirects to `/servers`. Per `dashboard/AGENTS.md`, this Next.js has breaking changes vs upstream — read `node_modules/next/dist/docs/` before writing dashboard code.
 
 ### Permission Checks
 

@@ -827,7 +827,7 @@ The web dashboard uses **Discord OAuth2 Authorization Code Flow**, implemented d
 | Scope | Purpose |
 |-------|---------|
 | `identify` | Retrieve the user's Discord ID, username, global name, and avatar |
-| `guilds` | List all Discord servers the user belongs to — used to populate the server picker |
+| `guilds` | List all Discord servers the user belongs to — used to populate the dedicated `/servers` selection page |
 | `guilds.members.read` | Read the user's roles within a specific guild — required for role-based dashboard access |
 
 > [!IMPORTANT]
@@ -854,8 +854,10 @@ sequenceDiagram
     GoAPI->>Discord: GET /users/@me/guilds (fetch user guild list)
     GoAPI->>DB: Upsert user record (user_id, username, avatar, tokens encrypted)
     GoAPI->>GoAPI: Sign JWT { sub, managed_guilds[], exp, jti }
-    GoAPI->>Browser: Set-Cookie: session=JWT (HttpOnly; Secure; SameSite=Lax)<br/>and Redirect to Next.js /dashboard
-    Browser->>NextJS: Render /dashboard (requests data)
+    GoAPI->>Browser: Set-Cookie: session=JWT (HttpOnly; Secure; SameSite=Lax)<br/>and Redirect to Next.js /servers
+    Browser->>NextJS: Render /servers (dedicated server-selection page)
+    NextJS->>GoAPI: GET /api/v1/guilds (list user's guilds for the picker)
+    Note over Browser,NextJS: User selects a server → navigates to /dashboard/:guildId
     NextJS->>GoAPI: GET /api/v1/guilds/:guildId (with session cookie)
     GoAPI->>GoAPI: Validate JWT signature + expiry
     GoAPI->>Discord: GET /guilds/:guildId/members/:userId (re-validate permissions)
@@ -1062,19 +1064,24 @@ shrimpy-discord-bot/
 │   ├── 002_bot_settings.up.sql
 │   └── 002_bot_settings.down.sql
 │
-├── dashboard/                         # Next.js frontend
-│   ├── app/
-│   │   ├── (auth)/login/page.tsx
+├── dashboard/                         # Next.js frontend — full IA in docs/v1/USER_JOURNEY.md
+│   ├── app/                           #   (★ = new per USER_JOURNEY; target structure)
+│   │   ├── (auth)/login/page.tsx       # Login (Discord OAuth + demo entry)
+│   │   ├── servers/page.tsx            # ★ Server selection — DEDICATED page (post-login landing)
 │   │   ├── dashboard/
-│   │   │   ├── [guildId]/
-│   │   │   │   ├── tickets/page.tsx
-│   │   │   │   ├── panels/page.tsx
-│   │   │   │   ├── welcome/page.tsx
-│   │   │   │   ├── roles/page.tsx
-│   │   │   │   └── settings/page.tsx
-│   │   │   └── layout.tsx
-│   │   └── layout.tsx
-│   ├── components/
+│   │   │   ├── page.tsx                # ★ bare /dashboard → redirects to /servers
+│   │   │   ├── layout.tsx              #   sidebar shell (wraps per-guild pages only)
+│   │   │   └── [guildId]/
+│   │   │       ├── page.tsx            # ★ Overview / home (setup checklist + stats)
+│   │   │       ├── tickets/page.tsx
+│   │   │       ├── tickets/[ticketId]/page.tsx   # ★ Ticket detail
+│   │   │       ├── transcripts/page.tsx          # ★ Transcript archive
+│   │   │       ├── panels/page.tsx
+│   │   │       ├── welcome/page.tsx
+│   │   │       ├── roles/page.tsx
+│   │   │       └── settings/page.tsx
+│   │   └── layout.tsx                  # root layout (theme, fonts, FOUC guard)
+│   ├── components/                     # shared UI (DiscordPreview, Toast, EmptyState, …)
 │   ├── lib/
 │   │   └── api.ts                    # Typed API client (fetch wrapper)
 │   └── package.json
@@ -1114,7 +1121,7 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `TRANSCRIPT_WORKER_COUNT` | ❌ | `4` | Number of goroutines for transcript generation |
 | `AUTO_CLOSE_CHECK_INTERVAL` | ❌ | `15m` | How often the scheduler checks for tickets to auto-close |
 | `CORS_ALLOWED_ORIGINS` | ❌ | `http://localhost:3000` | Comma-separated allowed origins for the API |
-| `DASHBOARD_URL` | ❌ | `http://localhost:3000` | Redirection target URL after OAuth login callback |
+| `DASHBOARD_URL` | ❌ | `http://localhost:3000` | Dashboard origin; after OAuth login the backend redirects here to **`/servers`** (server selection) |
 
 > [!IMPORTANT]
 > **First-boot seeding**: On startup, if the `discord_apps` table is empty, the app reads all four `DISCORD_*` env vars and seeds the table with a default app named "First Boot App". This happens exactly once. After the first successful boot, those env vars can be safely **removed from Railway** — the credentials are now stored encrypted in PostgreSQL and managed via the dashboard (`GET/POST/PUT/DELETE /api/v1/admin/apps`).

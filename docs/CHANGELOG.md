@@ -8,11 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 ### Added
+- **User Journey & UX Flow Specification ([USER_JOURNEY.md](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/USER_JOURNEY.md))**: Defines the end-to-end frontend journey (login → server select → bot invite → guided setup → configure → operate) for all three personas, a proposed information architecture, a gap analysis of the current dashboard, a prioritized improvement backlog, visual/interaction consistency standards, and a phased implementation roadmap.
+- **Annotated wireframes (USER_JOURNEY.md Appendix A)**: Token-annotated low-fidelity layouts for every primary screen — A.1 `/servers` selection (populated/empty/loading), A.2 `/dashboard/[guildId]` Overview (app shell + first-run Setup Checklist + configured dashboard), A.3 `/tickets/[ticketId]` Ticket Detail, A.4 role-aware Staff (Level 2) sidebar, A.5 `/welcome` (template-variable picker, test-send, live card preview, folded-in auto-roles), A.6 `/panels` (multi-button/select-menu, per-category embed, thread-vs-channel, multiple support roles), A.7 `/roles` (full emoji picker, live preview, automated role-height health check), A.8 `/settings` + `/settings/access` split (adds language + auto-close, plain-language access copy), and A.9 shared component patterns (Toast, SaveBar, EmptyState, Status/Priority badges, PageLoader, ServerSwitcher, DiscordPreview). Every element is mapped to a [Design System](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/DESIGN_SYSTEM.md) token to keep implementation on-brand.
 - **Multi-Bot Support Design**: Drafted database and runtime architecture specs for supporting multiple Discord Applications simultaneously, mapped to Guilds (Option 1).
 - **`discord_apps` schema migration**: Planned SQL migration to replace `bot_settings` singleton table with a multi-tenant `discord_apps` table and link `guilds` via `discord_app_id` foreign key.
 - **REST API Endpoints for Apps**: Designed CRUD routes at `/api/v1/admin/apps` replacing single-bot `/api/v1/admin/settings`.
 
 ### Changed
+- **Dashboard information architecture — dedicated server selection**: Server selection is now its own **`/servers`** page, separate from the per-server dashboard (`/dashboard/[guildId]/…`); bare `/dashboard` redirects to `/servers`. The `/servers` page splits guilds into "Your servers" (bot active) vs "Add Shrimpy to a server" (invitable). Propagated to [TECHNICAL_SPEC.md](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/TECHNICAL_SPEC.md) (OAuth post-login redirect target, auth flow diagram, Next.js directory structure, `DASHBOARD_URL` description) and the root [CLAUDE.md](file:///d:/Pesronal/Projects/Discord%20Bot/CLAUDE.md) (frontend-IA pointer). Defined in [USER_JOURNEY.md](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/USER_JOURNEY.md) §5 & §7.3.
 - Renamed bot display name from **Shrimp** to **Shrimpy** across all documentation.
 
 ---
