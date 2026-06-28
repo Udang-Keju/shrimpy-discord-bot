@@ -22,8 +22,7 @@ export default function SettingsPage() {
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Local states for adding roles
-  const [selectedAutoRole, setSelectedAutoRole] = useState("");
+  // Local state for adding roles
   const [selectedStaffRole, setSelectedStaffRole] = useState("");
 
   useEffect(() => {
@@ -39,7 +38,6 @@ export default function SettingsPage() {
         setRoles(rolesData);
         
         if (rolesData.length > 0) {
-          setSelectedAutoRole(rolesData[0].id);
           setSelectedStaffRole(rolesData[0].id);
         }
       } catch (err) {
@@ -66,30 +64,6 @@ export default function SettingsPage() {
       console.error(err);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleAddAutoRole = async () => {
-    if (!config || !selectedAutoRole) return;
-    if (config.autoRoles.includes(selectedAutoRole)) {
-      alert("Role is already in Auto-Roles list!");
-      return;
-    }
-    try {
-      await ShrimpyAPI.addAutoRole(guildId, selectedAutoRole);
-      setConfig(prev => prev ? ({ ...prev, autoRoles: [...prev.autoRoles, selectedAutoRole] }) : null);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleRemoveAutoRole = async (roleId: string) => {
-    if (!config) return;
-    try {
-      await ShrimpyAPI.removeAutoRole(guildId, roleId);
-      setConfig(prev => prev ? ({ ...prev, autoRoles: prev.autoRoles.filter(r => r !== roleId) }) : null);
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -203,7 +177,7 @@ export default function SettingsPage() {
               <h3 className={styles.cardTitle}>Dashboard Access Roles</h3>
             </div>
             <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-              Users holding these roles can manage support tickets and access configurations in this console (Level 2 credentials).
+              Users holding these roles can access and manage configurations in this console (Level 2 credentials). This does not affect who is invited to handle individual tickets — configure that per ticket panel.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
@@ -236,49 +210,6 @@ export default function SettingsPage() {
                 style={{ flex: 1 }}
               />
               <button onClick={handleAddStaffRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
-                <Plus size={14} />
-                <span>Add</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Join Auto-Roles list */}
-          <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Auto-Roles on Join</h3>
-            <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-              Roles automatically granted to new members immediately upon entering the server.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
-              {config.autoRoles.length === 0 ? (
-                <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No automatic roles configured yet.</div>
-              ) : (
-                config.autoRoles.map(rid => {
-                  const matched = roles.find(r => r.id === rid);
-                  return (
-                    <div key={rid} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
-                      <span style={{ fontWeight: 'bold' }}>{matched?.name || rid}</span>
-                      <button 
-                        type="button" 
-                        onClick={() => handleRemoveAutoRole(rid)} 
-                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-              <Dropdown
-                value={selectedAutoRole}
-                onChange={setSelectedAutoRole}
-                options={roles.map(r => ({ value: r.id, label: r.name }))}
-                style={{ flex: 1 }}
-              />
-              <button onClick={handleAddAutoRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
                 <Plus size={14} />
                 <span>Add</span>
               </button>

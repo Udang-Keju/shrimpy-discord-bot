@@ -47,7 +47,22 @@ export interface TicketCategory {
   name: string;
   channelId: string;
   logChannelId?: string;
-  supportRoles: string[];
+}
+
+// Roles invited into the Discord channel/thread created for a ticket, so they
+// can handle it. Distinct from Guild.staffRoles, which gate dashboard access.
+export interface PanelHandlerRole {
+  id: string;
+  panelId: string;
+  roleId: string;
+}
+
+// Same concept as PanelHandlerRole, but scoped to one category — additive to
+// the panel's handler roles when a ticket is opened from that category.
+export interface CategoryHandlerRole {
+  id: string;
+  categoryId: string;
+  roleId: string;
 }
 
 export interface WelcomeConfig {
@@ -201,8 +216,23 @@ let mockPanels: TicketPanel[] = [
 
 const mockCategories: Record<string, TicketCategory[]> = {
   'panel-001': [
-    { id: 'cat-001', panelId: 'panel-001', name: 'General Help', channelId: 'tickets-gen', supportRoles: ['mod-role-id'] },
-    { id: 'cat-002', panelId: 'panel-001', name: 'Billing', channelId: 'tickets-bill', supportRoles: ['admin-role-id'] }
+    { id: 'cat-001', panelId: 'panel-001', name: 'General Help', channelId: 'tickets-gen' },
+    { id: 'cat-002', panelId: 'panel-001', name: 'Billing', channelId: 'tickets-bill' }
+  ]
+};
+
+const mockPanelHandlerRoles: Record<string, PanelHandlerRole[]> = {
+  'panel-001': [
+    { id: 'phr-001', panelId: 'panel-001', roleId: 'mod-role-id' }
+  ]
+};
+
+const mockCategoryHandlerRoles: Record<string, CategoryHandlerRole[]> = {
+  'cat-001': [
+    { id: 'chr-001', categoryId: 'cat-001', roleId: 'mod-role-id' }
+  ],
+  'cat-002': [
+    { id: 'chr-002', categoryId: 'cat-002', roleId: 'admin-role-id' }
   ]
 };
 
@@ -470,6 +500,62 @@ export const ShrimpyAPI = {
       return;
     }
     await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE', credentials: 'include' });
+  },
+
+  // Per-panel ticket handler roles (who gets invited into the created ticket channel/thread)
+  listPanelHandlerRoles: async (guildId: string, panelId: string): Promise<PanelHandlerRole[]> => {
+    if (isDemoMode()) return mockPanelHandlerRoles[panelId] || [];
+    return fetchJSON<PanelHandlerRole[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles`);
+  },
+
+  addPanelHandlerRole: async (guildId: string, panelId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      if (!mockPanelHandlerRoles[panelId]) mockPanelHandlerRoles[panelId] = [];
+      mockPanelHandlerRoles[panelId].push({ id: `phr-${Math.floor(Math.random() * 1000)}`, panelId, roleId });
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles`, {
+      method: 'POST',
+      body: JSON.stringify({ role_id: roleId })
+    });
+  },
+
+  removePanelHandlerRole: async (guildId: string, panelId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      if (mockPanelHandlerRoles[panelId]) {
+        mockPanelHandlerRoles[panelId] = mockPanelHandlerRoles[panelId].filter(r => r.roleId !== roleId);
+      }
+      return;
+    }
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles/${roleId}`, { method: 'DELETE', credentials: 'include' });
+  },
+
+  // Per-category ticket handler roles (additive to the panel's handler roles)
+  listCategoryHandlerRoles: async (guildId: string, panelId: string, catId: string): Promise<CategoryHandlerRole[]> => {
+    if (isDemoMode()) return mockCategoryHandlerRoles[catId] || [];
+    return fetchJSON<CategoryHandlerRole[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles`);
+  },
+
+  addCategoryHandlerRole: async (guildId: string, panelId: string, catId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      if (!mockCategoryHandlerRoles[catId]) mockCategoryHandlerRoles[catId] = [];
+      mockCategoryHandlerRoles[catId].push({ id: `chr-${Math.floor(Math.random() * 1000)}`, categoryId: catId, roleId });
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles`, {
+      method: 'POST',
+      body: JSON.stringify({ role_id: roleId })
+    });
+  },
+
+  removeCategoryHandlerRole: async (guildId: string, panelId: string, catId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      if (mockCategoryHandlerRoles[catId]) {
+        mockCategoryHandlerRoles[catId] = mockCategoryHandlerRoles[catId].filter(r => r.roleId !== roleId);
+      }
+      return;
+    }
+    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles/${roleId}`, { method: 'DELETE', credentials: 'include' });
   },
 
   // Tickets management

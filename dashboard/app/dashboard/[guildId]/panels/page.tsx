@@ -8,10 +8,11 @@ import {
   Plus,
   Trash2,
   Eye,
-  Ticket
+  Ticket,
+  Users
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
+import { ShrimpyAPI, TicketPanel, TicketCategory, PanelHandlerRole, CategoryHandlerRole, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 
 export default function PanelsPage() {
@@ -23,6 +24,11 @@ export default function PanelsPage() {
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<TicketPanel | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [handlerRoles, setHandlerRoles] = useState<PanelHandlerRole[]>([]);
+  const [selectedHandlerRole, setSelectedHandlerRole] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<TicketCategory | null>(null);
+  const [categoryHandlerRoles, setCategoryHandlerRoles] = useState<CategoryHandlerRole[]>([]);
+  const [selectedCategoryHandlerRole, setSelectedCategoryHandlerRole] = useState("");
 
   // Form states for new panel
   const [newTitle, setNewTitle] = useState("Contact Support Services");
@@ -34,7 +40,6 @@ export default function PanelsPage() {
   // Form states for new category
   const [newCatName, setNewCatName] = useState("");
   const [newCatChanId, setNewCatChanId] = useState("");
-  const [newCatRoleId, setNewCatRoleId] = useState("");
 
   useEffect(() => {
     async function loadData() {
@@ -53,7 +58,8 @@ export default function PanelsPage() {
           setNewCatChanId(chansData[0].id);
         }
         if (rolesData.length > 0) {
-          setNewCatRoleId(rolesData[0].id);
+          setSelectedHandlerRole(rolesData[0].id);
+          setSelectedCategoryHandlerRole(rolesData[0].id);
         }
 
         if (panelsData.length > 0) {
@@ -69,13 +75,27 @@ export default function PanelsPage() {
   useEffect(() => {
     if (selectedPanel) {
       ShrimpyAPI.listCategories(guildId, selectedPanel.id).then(setCategories);
+      ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id).then(setHandlerRoles);
     } else {
       const timer = setTimeout(() => {
         setCategories([]);
+        setHandlerRoles([]);
       }, 0);
       return () => clearTimeout(timer);
     }
+    setSelectedCategory(null);
   }, [selectedPanel, guildId]);
+
+  useEffect(() => {
+    if (selectedPanel && selectedCategory) {
+      ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id).then(setCategoryHandlerRoles);
+    } else {
+      const timer = setTimeout(() => {
+        setCategoryHandlerRoles([]);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedPanel, selectedCategory, guildId]);
 
   const handleCreatePanel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,8 +132,7 @@ export default function PanelsPage() {
     try {
       const c = await ShrimpyAPI.createCategory(guildId, selectedPanel.id, {
         name: newCatName,
-        channelId: newCatChanId,
-        supportRoles: [newCatRoleId]
+        channelId: newCatChanId
       });
       setCategories(prev => [...prev, c]);
       setNewCatName("");
@@ -127,6 +146,59 @@ export default function PanelsPage() {
     try {
       await ShrimpyAPI.deleteCategory(guildId, selectedPanel.id, catId);
       setCategories(prev => prev.filter(c => c.id !== catId));
+      if (selectedCategory?.id === catId) {
+        setSelectedCategory(null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddCategoryHandlerRole = async () => {
+    if (!selectedPanel || !selectedCategory || !selectedCategoryHandlerRole) return;
+    if (categoryHandlerRoles.some(r => r.roleId === selectedCategoryHandlerRole)) {
+      alert("Role is already a ticket handler for this category!");
+      return;
+    }
+    try {
+      await ShrimpyAPI.addCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, selectedCategoryHandlerRole);
+      const refreshed = await ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id);
+      setCategoryHandlerRoles(refreshed);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveCategoryHandlerRole = async (roleId: string) => {
+    if (!selectedPanel || !selectedCategory) return;
+    try {
+      await ShrimpyAPI.removeCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, roleId);
+      setCategoryHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddHandlerRole = async () => {
+    if (!selectedPanel || !selectedHandlerRole) return;
+    if (handlerRoles.some(r => r.roleId === selectedHandlerRole)) {
+      alert("Role is already a ticket handler for this panel!");
+      return;
+    }
+    try {
+      await ShrimpyAPI.addPanelHandlerRole(guildId, selectedPanel.id, selectedHandlerRole);
+      const refreshed = await ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id);
+      setHandlerRoles(refreshed);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveHandlerRole = async (roleId: string) => {
+    if (!selectedPanel) return;
+    try {
+      await ShrimpyAPI.removePanelHandlerRole(guildId, selectedPanel.id, roleId);
+      setHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
     } catch (err) {
       console.error(err);
     }
@@ -276,20 +348,29 @@ export default function PanelsPage() {
             <div className={styles.card}>
               <h3 className={styles.cardTitle}>Support Categories</h3>
               <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-                Route tickets to different channels and helper roles based on user issue selections.
+                Route tickets to different channels based on user issue selections. Click a category to manage its ticket handler roles.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
                 {categories.map(c => (
-                  <div key={c.id} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
+                  <div
+                    key={c.id}
+                    className={styles.actionBtn}
+                    style={{
+                      justifyContent: 'space-between',
+                      borderColor: selectedCategory?.id === c.id ? 'var(--color-primary)' : '',
+                      background: selectedCategory?.id === c.id ? 'var(--primary-muted)' : '',
+                    }}
+                    onClick={() => setSelectedCategory(c)}
+                  >
                     <div>
                       <span style={{ fontWeight: 'bold' }}>{c.name}</span>
                       <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
                         routes to #{channels.find(ch => ch.id === c.channelId)?.name || c.channelId}
                       </span>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteCategory(c.id)}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }}
                       style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
                     >
                       <Trash2 size={12} />
@@ -301,34 +382,23 @@ export default function PanelsPage() {
               <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Category Name</label>
-                  <input 
-                    className={styles.input} 
-                    type="text" 
-                    placeholder="e.g. Billing Assistance" 
-                    value={newCatName} 
-                    onChange={e => setNewCatName(e.target.value)} 
-                    required 
+                  <input
+                    className={styles.input}
+                    type="text"
+                    placeholder="e.g. Billing Assistance"
+                    value={newCatName}
+                    onChange={e => setNewCatName(e.target.value)}
+                    required
                   />
                 </div>
 
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Spawn Thread Channel</label>
-                    <Dropdown
-                      value={newCatChanId}
-                      onChange={setNewCatChanId}
-                      options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
-                    />
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Assigned Staff Role</label>
-                    <Dropdown
-                      value={newCatRoleId}
-                      onChange={setNewCatRoleId}
-                      options={roles.map(r => ({ value: r.id, label: r.name }))}
-                    />
-                  </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Spawn Thread Channel</label>
+                  <Dropdown
+                    value={newCatChanId}
+                    onChange={setNewCatChanId}
+                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                  />
                 </div>
 
                 <button type="submit" className={styles.submitBtn} style={{ padding: '10px' }}>
@@ -336,6 +406,102 @@ export default function PanelsPage() {
                   <span>Add Category Routing</span>
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* Ticket Handler Roles for Selected Category */}
+          {selectedPanel && selectedCategory && (
+            <div className={styles.card}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Users size={18} style={{ color: 'var(--color-primary)' }} />
+                <h3 className={styles.cardTitle}>"{selectedCategory.name}" Handler Roles</h3>
+              </div>
+              <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
+                Roles invited into tickets opened from this category specifically, in addition to the panel&apos;s handler roles above. This does not grant dashboard access.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
+                {categoryHandlerRoles.length === 0 ? (
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No category-specific handler roles. Only the panel&apos;s handler roles will be invited.</div>
+                ) : (
+                  categoryHandlerRoles.map(hr => {
+                    const matched = roles.find(r => r.id === hr.roleId);
+                    return (
+                      <div key={hr.id} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
+                        <span style={{ fontWeight: 'bold' }}>{matched?.name || hr.roleId}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCategoryHandlerRole(hr.roleId)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+                <Dropdown
+                  value={selectedCategoryHandlerRole}
+                  onChange={setSelectedCategoryHandlerRole}
+                  options={roles.map(r => ({ value: r.id, label: r.name }))}
+                  style={{ flex: 1 }}
+                />
+                <button onClick={handleAddCategoryHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                  <Plus size={14} />
+                  <span>Add</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Ticket Handler Roles for Selected Panel */}
+          {selectedPanel && (
+            <div className={styles.card}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Users size={18} style={{ color: 'var(--color-primary)' }} />
+                <h3 className={styles.cardTitle}>Ticket Handler Roles</h3>
+              </div>
+              <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
+                Roles invited into the Discord channel or thread created for a ticket opened from this panel, so they can handle it. This does not grant dashboard access.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
+                {handlerRoles.length === 0 ? (
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No handler roles added. Only the ticket opener and the bot will see the channel.</div>
+                ) : (
+                  handlerRoles.map(hr => {
+                    const matched = roles.find(r => r.id === hr.roleId);
+                    return (
+                      <div key={hr.id} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
+                        <span style={{ fontWeight: 'bold' }}>{matched?.name || hr.roleId}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveHandlerRole(hr.roleId)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+                <Dropdown
+                  value={selectedHandlerRole}
+                  onChange={setSelectedHandlerRole}
+                  options={roles.map(r => ({ value: r.id, label: r.name }))}
+                  style={{ flex: 1 }}
+                />
+                <button onClick={handleAddHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                  <Plus size={14} />
+                  <span>Add</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
