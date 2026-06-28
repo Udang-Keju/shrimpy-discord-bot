@@ -173,6 +173,8 @@ OWNER ONLY
 > Group labels ("OPERATE" / "SERVER MANAGEMENT" / "SETTINGS") turn a flat 5-item list into a mental model: *things I do daily* (feature configuration) vs *things I set up once* (bot/server-level plumbing). Staff (Level 2) see only OPERATE — both other groups are absent from their sidebar, not just visually muted (§14.4 decided: fully hidden, not read-only).
 >
 > Bot-wide status/error logs across all servers it's in (distinct from per-guild health, §7.5) is **out of scope for now** — noted as a future idea, not specced.
+>
+> **Shipped v1 order deviates from the diagram above:** the implemented sidebar order is **Settings → Server Management → Tickets** (Settings first), per explicit decision. The diagram's OPERATE-first ordering is left here as the original rationale but is not what's currently live.
 
 ---
 
@@ -302,6 +304,7 @@ Each step deep-links to the relevant config screen and returns to the checklist 
 - **Decided (§14.5):** counts only for v1 (open/claimed/closed, avg. resolution) — no chart/sparkline. Defer any trend visualization to "Dashboard v2" per [PRD §9](./PRD.md#9-out-of-scope-items); avoids pulling in a charting dependency before the core journey ships.
 - **Data source:** `GET /api/v1/guilds/:guildId/stats` ([Spec §4.8](./TECHNICAL_SPEC.md#48-statistics)) — already specced, not yet surfaced. Satisfies PRD `A-09`.
 - **Health check** is a high-value add: detect whether the bot's role is above target roles / has needed permissions (the reaction-roles page already warns about this manually — [roles/page.tsx:285-294](../../dashboard/app/dashboard/[guildId]/roles/page.tsx#L285-L294)).
+- **Shipped v1 scope:** only a static feature grid ships for now — tiles (icon, name, short description) grouped exactly like the sidebar (Settings excluded), linking to each screen. No live stats, bot health, recent activity, or setup checklist yet; those stay specced above but are deferred to a follow-up.
 
 ### 7.6 Configure features (Admin only)
 

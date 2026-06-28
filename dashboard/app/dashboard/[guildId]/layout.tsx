@@ -9,16 +9,12 @@ import {
 } from "next/navigation";
 import Link from "next/link";
 import {
-  Ticket,
-  UserPlus,
-  Tags,
-  Settings,
-  Layers,
   LogOut,
   Sun,
   Moon
 } from "lucide-react";
 import styles from "./dashboard.module.css";
+import { getNavigationGroups } from "./navConfig";
 import { ShrimpyAPI, Guild, DiscordUser, isDemoMode } from "@/lib/api";
 import { getSavedTheme, applyTheme, Theme } from "@/lib/theme";
 import DemoBanner from "@/components/DemoBanner";
@@ -74,6 +70,10 @@ export default function DashboardLayout({
   };
 
   const handleGuildChange = (selectedId: string) => {
+    if (pathname === `/dashboard/${guildId}`) {
+      router.push(`/dashboard/${selectedId}`);
+      return;
+    }
     const currentTab = pathname.split("/").pop() || "tickets";
     router.push(`/dashboard/${selectedId}/${currentTab}`);
   };
@@ -94,31 +94,11 @@ export default function DashboardLayout({
     return null;
   }
 
-  const navigationGroups = [
-    {
-      label: "Tickets",
-      items: [
-        { name: "Support Tickets", href: `/dashboard/${guildId}/tickets`, icon: Ticket },
-        { name: "Ticket Panels", href: `/dashboard/${guildId}/panels`, icon: Layers },
-      ],
-    },
-    {
-      label: "Server Management",
-      items: [
-        { name: "Welcome Greetings", href: `/dashboard/${guildId}/welcome`, icon: UserPlus },
-        { name: "Reaction Roles", href: `/dashboard/${guildId}/roles`, icon: Tags },
-      ],
-    },
-    {
-      label: "Settings",
-      items: [
-        { name: "General Settings", href: `/dashboard/${guildId}/settings`, icon: Settings },
-      ],
-    },
-  ];
+  const navigationGroups = getNavigationGroups(guildId);
   const navigationItems = navigationGroups.flatMap(g => g.items);
 
   const getPageTitle = () => {
+    if (pathname === `/dashboard/${guildId}`) return "Overview";
     const current = navigationItems.find(item => pathname.startsWith(item.href));
     return current ? current.name : "Dashboard";
   };
