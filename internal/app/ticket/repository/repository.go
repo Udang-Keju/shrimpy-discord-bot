@@ -268,6 +268,7 @@ func (r *CategoryRepo) UpdatePanel(ctx context.Context, p *model.TicketPanel) (*
 			"name":              p.Name,
 			"channel_id":        p.ChannelID,
 			"panel_style":       p.PanelStyle,
+			"content":           p.Content,
 			"embed_title":       p.EmbedTitle,
 			"embed_description": p.EmbedDescription,
 			"embed_color":       p.EmbedColor,
@@ -285,6 +286,15 @@ func (r *CategoryRepo) SetPanelMessage(ctx context.Context, panelID string, mess
 		Model(&model.TicketPanel{}).
 		Where("id = ?", panelID).
 		Update("message_id", messageID).Error
+}
+
+// ClearPanelMessage nulls out the stored Discord message ID, e.g. after the panel's
+// destination channel changes and the old message no longer applies.
+func (r *CategoryRepo) ClearPanelMessage(ctx context.Context, panelID string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.TicketPanel{}).
+		Where("id = ?", panelID).
+		Update("message_id", nil).Error
 }
 
 // DeletePanel removes a panel and its categories (CASCADE in DB).
@@ -336,6 +346,7 @@ func (r *CategoryRepo) UpdateCategory(ctx context.Context, c *model.TicketCatego
 			"ticket_open_message":   c.TicketOpenMessage,
 			"ticket_open_color":     c.TicketOpenColor,
 			"ticket_open_media":     c.TicketOpenMedia,
+			"ticket_open_content":   c.TicketOpenContent,
 			"max_tickets_per_user":  c.MaxTicketsPerUser,
 			"auto_close_hours":      c.AutoCloseHours,
 			"transcript_channel_id": c.TranscriptChannelID,

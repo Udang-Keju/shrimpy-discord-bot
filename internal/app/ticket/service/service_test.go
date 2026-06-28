@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -149,6 +150,10 @@ type MockTicketCategoryRepository struct {
 	GetCategoryFunc              func(ctx context.Context, categoryID string) (*model.TicketCategory, error)
 	ListPanelHandlerRolesFunc    func(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error)
 	ListCategoryHandlerRolesFunc func(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error)
+	GetPanelFunc                 func(ctx context.Context, panelID string) (*model.TicketPanel, error)
+	ListCategoriesByPanelFunc    func(ctx context.Context, panelID string) ([]model.TicketCategory, error)
+	SetPanelMessageFunc          func(ctx context.Context, panelID string, messageID int64) error
+	ClearPanelMessageFunc        func(ctx context.Context, panelID string) error
 }
 
 func (m *MockTicketCategoryRepository) GetCategory(ctx context.Context, categoryID string) (*model.TicketCategory, error) {
@@ -170,6 +175,34 @@ func (m *MockTicketCategoryRepository) ListCategoryHandlerRoles(ctx context.Cont
 		return m.ListCategoryHandlerRolesFunc(ctx, categoryID)
 	}
 	return nil, nil
+}
+
+func (m *MockTicketCategoryRepository) GetPanel(ctx context.Context, panelID string) (*model.TicketPanel, error) {
+	if m.GetPanelFunc != nil {
+		return m.GetPanelFunc(ctx, panelID)
+	}
+	return nil, nil
+}
+
+func (m *MockTicketCategoryRepository) ListCategoriesByPanel(ctx context.Context, panelID string) ([]model.TicketCategory, error) {
+	if m.ListCategoriesByPanelFunc != nil {
+		return m.ListCategoriesByPanelFunc(ctx, panelID)
+	}
+	return nil, nil
+}
+
+func (m *MockTicketCategoryRepository) SetPanelMessage(ctx context.Context, panelID string, messageID int64) error {
+	if m.SetPanelMessageFunc != nil {
+		return m.SetPanelMessageFunc(ctx, panelID, messageID)
+	}
+	return nil
+}
+
+func (m *MockTicketCategoryRepository) ClearPanelMessage(ctx context.Context, panelID string) error {
+	if m.ClearPanelMessageFunc != nil {
+		return m.ClearPanelMessageFunc(ctx, panelID)
+	}
+	return nil
 }
 
 // MockTicketGuildRepository mocks TicketGuildRepository
@@ -444,6 +477,124 @@ func TestTicketService_Open(t *testing.T) {
 				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 			},
 		},
+		{
+			name: "Success - plain text and embed both set",
+			ticketSetup: func(repo *MockTicketRepository) {
+				repo.CountOpenByUserFunc = func(c context.Context, gID int64, catID string, uID int64) (int64, error) {
+					return 0, nil
+				}
+				repo.CreateFunc = func(c context.Context, t *model.Ticket) (*model.Ticket, error) {
+					t.ID = "ticket-uuid-1234"
+					return t, nil
+				}
+				repo.SetChannelFunc = func(c context.Context, tID string, channelID, threadID *int64) error { return nil }
+			},
+			categorySetup: func(repo *MockTicketCategoryRepository) {
+				repo.GetCategoryFunc = func(c context.Context, id string) (*model.TicketCategory, error) {
+					return &model.TicketCategory{
+						ID:                 categoryID,
+						MaxTicketsPerUser:  5,
+						TicketNameTemplate: "{category}-{number}",
+						Name:               "billing",
+						TicketOpenContent:  stringPtr("Hi there!"),
+						TicketOpenTitle:    stringPtr("Welcome to billing"),
+						TicketOpenMessage:  stringPtr("Hello {mention}"),
+					}, nil
+				}
+			},
+			mockTransport: func(req *http.Request, createdCh *string, msgPayload *string) (*http.Response, error) {
+				if req.Method == "GET" && req.URL.Path == "/api/v9/users/@me" {
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"777","username":"shrimpy"}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/guilds/12345/channels" {
+					*createdCh = "billing-ticket-u"
+					return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(`{"id":"999888","name":"billing-ticket","type":0}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/999888/messages" {
+					b, _ := io.ReadAll(req.Body)
+					*msgPayload = string(b)
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"111222"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		},
+		{
+			name: "Success - plain text only, no embed fields",
+			ticketSetup: func(repo *MockTicketRepository) {
+				repo.CountOpenByUserFunc = func(c context.Context, gID int64, catID string, uID int64) (int64, error) {
+					return 0, nil
+				}
+				repo.CreateFunc = func(c context.Context, t *model.Ticket) (*model.Ticket, error) {
+					t.ID = "ticket-uuid-1234"
+					return t, nil
+				}
+				repo.SetChannelFunc = func(c context.Context, tID string, channelID, threadID *int64) error { return nil }
+			},
+			categorySetup: func(repo *MockTicketCategoryRepository) {
+				repo.GetCategoryFunc = func(c context.Context, id string) (*model.TicketCategory, error) {
+					return &model.TicketCategory{
+						ID:                 categoryID,
+						MaxTicketsPerUser:  5,
+						TicketNameTemplate: "{category}-{number}",
+						Name:               "billing",
+						TicketOpenContent:  stringPtr("Plain greeting only"),
+					}, nil
+				}
+			},
+			mockTransport: func(req *http.Request, createdCh *string, msgPayload *string) (*http.Response, error) {
+				if req.Method == "GET" && req.URL.Path == "/api/v9/users/@me" {
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"777","username":"shrimpy"}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/guilds/12345/channels" {
+					*createdCh = "billing-ticket-u"
+					return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(`{"id":"999888","name":"billing-ticket","type":0}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/999888/messages" {
+					b, _ := io.ReadAll(req.Body)
+					*msgPayload = string(b)
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"111222"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		},
+		{
+			name: "Success - nothing configured at all (legacy fallback)",
+			ticketSetup: func(repo *MockTicketRepository) {
+				repo.CountOpenByUserFunc = func(c context.Context, gID int64, catID string, uID int64) (int64, error) {
+					return 0, nil
+				}
+				repo.CreateFunc = func(c context.Context, t *model.Ticket) (*model.Ticket, error) {
+					t.ID = "ticket-uuid-1234"
+					return t, nil
+				}
+				repo.SetChannelFunc = func(c context.Context, tID string, channelID, threadID *int64) error { return nil }
+			},
+			categorySetup: func(repo *MockTicketCategoryRepository) {
+				repo.GetCategoryFunc = func(c context.Context, id string) (*model.TicketCategory, error) {
+					return &model.TicketCategory{
+						ID:                 categoryID,
+						MaxTicketsPerUser:  5,
+						TicketNameTemplate: "{category}-{number}",
+						Name:               "billing",
+					}, nil
+				}
+			},
+			mockTransport: func(req *http.Request, createdCh *string, msgPayload *string) (*http.Response, error) {
+				if req.Method == "GET" && req.URL.Path == "/api/v9/users/@me" {
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"777","username":"shrimpy"}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/guilds/12345/channels" {
+					*createdCh = "billing-ticket-u"
+					return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader(`{"id":"999888","name":"billing-ticket","type":0}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/999888/messages" {
+					b, _ := io.ReadAll(req.Body)
+					*msgPayload = string(b)
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"111222"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -478,16 +629,216 @@ func TestTicketService_Open(t *testing.T) {
 			if tt.expectError != nil {
 				assert.ErrorIs(t, err, tt.expectError)
 				assert.Nil(t, ticket)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, ticket)
-				assert.Equal(t, "ticket-uuid-1234", ticket.ID)
-				assert.Equal(t, "billing-ticket-u", createdCh)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, ticket)
+			assert.Equal(t, "ticket-uuid-1234", ticket.ID)
+			assert.Equal(t, "billing-ticket-u", createdCh)
+
+			switch tt.name {
+			case "Success":
 				assert.Contains(t, msgPayload, "Welcome to billing")
 				assert.Contains(t, msgPayload, "Hello \\u003c@67890\\u003e")
+			case "Success - plain text and embed both set":
+				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e\\nHi there!")
+				assert.Contains(t, msgPayload, "Welcome to billing")
+			case "Success - plain text only, no embed fields":
+				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e\\nPlain greeting only")
+				assert.Contains(t, msgPayload, `"embeds":null`)
+			case "Success - nothing configured at all (legacy fallback)":
+				assert.Contains(t, msgPayload, "Support Ticket Created")
+				assert.Contains(t, msgPayload, "Support staff will be with you shortly")
+				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e")
 			}
 		})
 	}
+}
+
+func TestTicketService_SyncPanelMessage(t *testing.T) {
+	ctx := context.Background()
+	panelID := "panel-uuid"
+	guildID := int64(12345)
+	channelID := int64(555444)
+
+	t.Run("posts a new message when MessageID is nil", func(t *testing.T) {
+		var setMessageCalled bool
+		var posted bool
+		categoryRepo := &MockTicketCategoryRepository{
+			GetPanelFunc: func(c context.Context, id string) (*model.TicketPanel, error) {
+				return &model.TicketPanel{ID: panelID, GuildID: guildID, ChannelID: channelID, EmbedTitle: stringPtr("Need help?")}, nil
+			},
+			ListCategoriesByPanelFunc: func(c context.Context, id string) ([]model.TicketCategory, error) {
+				return []model.TicketCategory{{ID: "cat-1", ButtonLabel: "Billing", ButtonStyle: "primary"}}, nil
+			},
+			SetPanelMessageFunc: func(c context.Context, id string, messageID int64) error {
+				setMessageCalled = true
+				assert.Equal(t, int64(555000), messageID)
+				return nil
+			},
+		}
+		svc := service.NewTicketService(nil, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/555444/messages" {
+					posted = true
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"555000"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		err := svc.SyncPanelMessage(ctx, dg, panelID)
+		assert.NoError(t, err)
+		assert.True(t, posted)
+		assert.True(t, setMessageCalled)
+	})
+
+	t.Run("edits in place when MessageID is set and the edit succeeds", func(t *testing.T) {
+		msgID := int64(555000)
+		var edited, posted bool
+		categoryRepo := &MockTicketCategoryRepository{
+			GetPanelFunc: func(c context.Context, id string) (*model.TicketPanel, error) {
+				return &model.TicketPanel{ID: panelID, GuildID: guildID, ChannelID: channelID, MessageID: &msgID, EmbedTitle: stringPtr("Need help?")}, nil
+			},
+			ListCategoriesByPanelFunc: func(c context.Context, id string) ([]model.TicketCategory, error) {
+				return nil, nil
+			},
+		}
+		svc := service.NewTicketService(nil, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "PATCH" && req.URL.Path == "/api/v9/channels/555444/messages/555000" {
+					edited = true
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"555000"}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/555444/messages" {
+					posted = true
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"666000"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		err := svc.SyncPanelMessage(ctx, dg, panelID)
+		assert.NoError(t, err)
+		assert.True(t, edited)
+		assert.False(t, posted)
+	})
+
+	t.Run("falls back to posting fresh when the edit fails", func(t *testing.T) {
+		msgID := int64(555000)
+		var setMessageCalled bool
+		categoryRepo := &MockTicketCategoryRepository{
+			GetPanelFunc: func(c context.Context, id string) (*model.TicketPanel, error) {
+				return &model.TicketPanel{ID: panelID, GuildID: guildID, ChannelID: channelID, MessageID: &msgID, EmbedTitle: stringPtr("Need help?")}, nil
+			},
+			ListCategoriesByPanelFunc: func(c context.Context, id string) ([]model.TicketCategory, error) {
+				return nil, nil
+			},
+			SetPanelMessageFunc: func(c context.Context, id string, messageID int64) error {
+				setMessageCalled = true
+				assert.Equal(t, int64(666000), messageID)
+				return nil
+			},
+		}
+		svc := service.NewTicketService(nil, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "PATCH" && req.URL.Path == "/api/v9/channels/555444/messages/555000" {
+					return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader(`{"message":"Unknown Message"}`))}, nil
+				}
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/555444/messages" {
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"666000"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		err := svc.SyncPanelMessage(ctx, dg, panelID)
+		assert.NoError(t, err)
+		assert.True(t, setMessageCalled)
+	})
+
+	t.Run("builds correct number of ActionsRows for more than 5 categories", func(t *testing.T) {
+		var cats []model.TicketCategory
+		for i := 0; i < 7; i++ {
+			cats = append(cats, model.TicketCategory{ID: fmt.Sprintf("cat-%d", i), ButtonLabel: fmt.Sprintf("Cat %d", i), ButtonStyle: "primary"})
+		}
+		var capturedComponents []discordgo.MessageComponent
+		categoryRepo := &MockTicketCategoryRepository{
+			GetPanelFunc: func(c context.Context, id string) (*model.TicketPanel, error) {
+				return &model.TicketPanel{ID: panelID, GuildID: guildID, ChannelID: channelID}, nil
+			},
+			ListCategoriesByPanelFunc: func(c context.Context, id string) ([]model.TicketCategory, error) {
+				return cats, nil
+			},
+			SetPanelMessageFunc: func(c context.Context, id string, messageID int64) error { return nil },
+		}
+		svc := service.NewTicketService(nil, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/555444/messages" {
+					var body struct {
+						Components []discordgo.MessageComponent `json:"-"`
+					}
+					_ = body
+					b, _ := io.ReadAll(req.Body)
+					var raw struct {
+						Components []json.RawMessage `json:"components"`
+					}
+					_ = json.Unmarshal(b, &raw)
+					capturedComponents = make([]discordgo.MessageComponent, len(raw.Components))
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"555000"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		err := svc.SyncPanelMessage(ctx, dg, panelID)
+		assert.NoError(t, err)
+		assert.Len(t, capturedComponents, 2) // 5 buttons in row 1, 2 buttons in row 2
+	})
+}
+
+func TestTicketService_DeletePanelMessage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no-op when MessageID is nil", func(t *testing.T) {
+		var called bool
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				called = true
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+		svc := service.NewTicketService(nil, &MockTicketCategoryRepository{}, nil, nil, nil)
+		err := svc.DeletePanelMessage(ctx, dg, &model.TicketPanel{ChannelID: 1})
+		assert.NoError(t, err)
+		assert.False(t, called)
+	})
+
+	t.Run("deletes the message when MessageID is set", func(t *testing.T) {
+		msgID := int64(999)
+		var calledPath string
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				calledPath = req.Method + " " + req.URL.Path
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+		svc := service.NewTicketService(nil, &MockTicketCategoryRepository{}, nil, nil, nil)
+		err := svc.DeletePanelMessage(ctx, dg, &model.TicketPanel{ChannelID: 555444, MessageID: &msgID})
+		assert.NoError(t, err)
+		assert.Equal(t, "DELETE /api/v9/channels/555444/messages/999", calledPath)
+	})
 }
 
 func TestTicketService_Claim_Unclaim(t *testing.T) {

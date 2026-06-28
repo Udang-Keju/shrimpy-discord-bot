@@ -36,6 +36,10 @@ type TicketCategoryRepository interface {
 	GetCategory(ctx context.Context, categoryID string) (*model.TicketCategory, error)
 	ListPanelHandlerRoles(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error)
 	ListCategoryHandlerRoles(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error)
+	GetPanel(ctx context.Context, panelID string) (*model.TicketPanel, error)
+	ListCategoriesByPanel(ctx context.Context, panelID string) ([]model.TicketCategory, error)
+	SetPanelMessage(ctx context.Context, panelID string, messageID int64) error
+	ClearPanelMessage(ctx context.Context, panelID string) error
 }
 
 // TicketGuildRepository defines operations on guilds and staff roles.
@@ -572,47 +576,34 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 		return r.Replace(text)
 	}
 
-	title := "Support Ticket Created"
-	if cat.TicketOpenTitle != nil && *cat.TicketOpenTitle != "" {
-		title = replaceVars(*cat.TicketOpenTitle)
+	media, _ := cat.GetOpenMedia()
+
+	plainText := cat.TicketOpenContent
+	embedFields := discordutil.EmbedFields{
+		Title:       cat.TicketOpenTitle,
+		Description: cat.TicketOpenMessage,
+		Color:       cat.TicketOpenColor,
+		Media:       media,
 	}
 
-	desc := "Support staff will be with you shortly.\nClick below to claim or close this ticket."
-	if cat.TicketOpenMessage != nil && *cat.TicketOpenMessage != "" {
-		desc = replaceVars(*cat.TicketOpenMessage)
+	legacyTitle := "Support Ticket Created"
+	legacyDesc := "Support staff will be with you shortly.\nClick below to claim or close this ticket."
+
+	// Preserve the legacy hardcoded greeting only when the admin has configured
+	// nothing at all (no plain text, no embed fields), so pre-existing/unconfigured
+	// categories keep behaving exactly as before after upgrade.
+	if (plainText == nil || *plainText == "") && !embedFields.HasContent() {
+		embedFields.Title = &legacyTitle
+		embedFields.Description = &legacyDesc
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: desc,
-	}
-	if cat.TicketOpenColor != nil {
-		embed.Color = int(*cat.TicketOpenColor)
-	}
+	content, embed := discordutil.BuildContentAndEmbed(plainText, embedFields, replaceVars)
 
-	media, err := cat.GetOpenMedia()
-	if err == nil && media != nil {
-		if media.Author != nil {
-			embed.Author = &discordgo.MessageEmbedAuthor{Name: replaceVars(media.Author.Name)}
-			if media.Author.IconURL != nil {
-				embed.Author.IconURL = *media.Author.IconURL
-			}
-			if media.Author.URL != nil {
-				embed.Author.URL = *media.Author.URL
-			}
-		}
-		if media.Thumbnail != nil {
-			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: media.Thumbnail.URL}
-		}
-		if media.Image != nil {
-			embed.Image = &discordgo.MessageEmbedImage{URL: media.Image.URL}
-		}
-		if media.Footer != nil {
-			embed.Footer = &discordgo.MessageEmbedFooter{Text: replaceVars(media.Footer.Text)}
-			if media.Footer.IconURL != nil {
-				embed.Footer.IconURL = *media.Footer.IconURL
-			}
-		}
+	// Keep the bot's own "Welcome {mention}" ping; the configurable plain text,
+	// if any, is appended below it rather than replacing it.
+	fullContent := fmt.Sprintf("Welcome %s", openerMention)
+	if content != "" {
+		fullContent = fullContent + "\n" + content
 	}
 
 	buttons := discordgo.ActionsRow{
@@ -633,17 +624,140 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	}
 
 	params := &discordgo.MessageSend{
-		Content:    fmt.Sprintf("Welcome %s", openerMention),
-		Embeds:     []*discordgo.MessageEmbed{embed},
+		Content:    fullContent,
 		Components: []discordgo.MessageComponent{buttons},
+	}
+	if embed != nil {
+		params.Embeds = []*discordgo.MessageEmbed{embed}
 	}
 
 	_, err = dg.ChannelMessageSendComplex(ch.ID, params)
 	if err != nil {
-		fmt.Printf("warning: failed to send greeting embed to ticket channel: %v\n", err)
+		fmt.Printf("warning: failed to send greeting message to ticket channel: %v\n", err)
 	}
 
 	return ticket, nil
+}
+
+// SyncPanelMessage rebuilds the panel's message (text, embed, category buttons) from
+// current DB state and posts it if not yet posted, or edits the existing message in place.
+// If the edit fails (e.g. the message was deleted manually), it falls back to posting fresh.
+func (s *TicketService) SyncPanelMessage(ctx context.Context, dg *discordgo.Session, panelID string) error {
+	panel, err := s.categoryRepo.GetPanel(ctx, panelID)
+	if err != nil {
+		return fmt.Errorf("failed to load panel: %w", err)
+	}
+
+	cats, err := s.categoryRepo.ListCategoriesByPanel(ctx, panelID)
+	if err != nil {
+		return fmt.Errorf("failed to load categories: %w", err)
+	}
+
+	identity := func(text string) string { return text }
+
+	media, _ := panel.GetMedia()
+	embedFields := discordutil.EmbedFields{
+		Title:       panel.EmbedTitle,
+		Description: panel.EmbedDescription,
+		Color:       panel.EmbedColor,
+		Media:       media,
+	}
+	content, embed := discordutil.BuildContentAndEmbed(panel.Content, embedFields, identity)
+
+	components := buildPanelButtons(cats)
+
+	params := &discordgo.MessageSend{Content: content, Components: components}
+	if embed != nil {
+		params.Embeds = []*discordgo.MessageEmbed{embed}
+	}
+
+	channelIDStr := discordutil.FormatID(panel.ChannelID)
+
+	if panel.MessageID == nil {
+		return s.postNewPanelMessage(ctx, dg, panel, channelIDStr, params)
+	}
+
+	embeds := params.Embeds
+	editParams := &discordgo.MessageEdit{
+		ID:         discordutil.FormatID(*panel.MessageID),
+		Channel:    channelIDStr,
+		Content:    &params.Content,
+		Components: &params.Components,
+		Embeds:     &embeds,
+	}
+
+	_, err = dg.ChannelMessageEditComplex(editParams)
+	if err != nil {
+		return s.postNewPanelMessage(ctx, dg, panel, channelIDStr, params)
+	}
+	return nil
+}
+
+// postNewPanelMessage sends a brand-new panel message and persists the returned Discord message ID.
+func (s *TicketService) postNewPanelMessage(ctx context.Context, dg *discordgo.Session, panel *model.TicketPanel, channelIDStr string, params *discordgo.MessageSend) error {
+	msg, err := dg.ChannelMessageSendComplex(channelIDStr, params)
+	if err != nil {
+		return fmt.Errorf("failed to post panel message: %w", err)
+	}
+	msgID, err := discordutil.ParseID(msg.ID)
+	if err != nil {
+		return fmt.Errorf("invalid Discord message ID returned: %w", err)
+	}
+	return s.categoryRepo.SetPanelMessage(ctx, panel.ID, msgID)
+}
+
+// DeletePanelMessage best-effort deletes the Discord message backing a panel, if one was ever posted.
+func (s *TicketService) DeletePanelMessage(ctx context.Context, dg *discordgo.Session, panel *model.TicketPanel) error {
+	if panel.MessageID == nil {
+		return nil
+	}
+	return dg.ChannelMessageDelete(discordutil.FormatID(panel.ChannelID), discordutil.FormatID(*panel.MessageID))
+}
+
+// buildPanelButtons renders one button per category (ordered by ButtonOrder via the
+// repository query), grouped into ActionsRows of up to 5 buttons (Discord's per-row
+// limit), capped at 5 rows (Discord's per-message limit).
+func buildPanelButtons(cats []model.TicketCategory) []discordgo.MessageComponent {
+	if len(cats) == 0 {
+		return nil
+	}
+	var rows []discordgo.MessageComponent
+	var current []discordgo.MessageComponent
+	for _, cat := range cats {
+		btn := discordgo.Button{
+			Label:    cat.ButtonLabel,
+			Style:    buttonStyleFromString(cat.ButtonStyle),
+			CustomID: fmt.Sprintf("ticket:open:%s", cat.ID),
+		}
+		if cat.Emoji != nil && *cat.Emoji != "" {
+			btn.Emoji = &discordgo.ComponentEmoji{Name: *cat.Emoji}
+		}
+		current = append(current, btn)
+		if len(current) == 5 {
+			rows = append(rows, discordgo.ActionsRow{Components: current})
+			current = nil
+		}
+	}
+	if len(current) > 0 {
+		rows = append(rows, discordgo.ActionsRow{Components: current})
+	}
+	if len(rows) > 5 {
+		rows = rows[:5]
+	}
+	return rows
+}
+
+func buttonStyleFromString(s string) discordgo.ButtonStyle {
+	switch s {
+	case "secondary":
+		return discordgo.SecondaryButton
+	case "success":
+		return discordgo.SuccessButton
+	case "danger":
+		return discordgo.DangerButton
+	default:
+		return discordgo.PrimaryButton
+	}
 }
 
 // Claim updates the ticket status and claimed_by field, renames the channel, and notifies staff.

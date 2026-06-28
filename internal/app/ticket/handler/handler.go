@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -67,6 +68,8 @@ func (h *Handler) CreatePanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.syncPanelMessage(r.Context(), guildID, created.ID)
+
 	apiutil.WriteJSON(w, http.StatusCreated, created)
 }
 
@@ -88,9 +91,12 @@ func (h *Handler) UpdatePanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldChannelID := existing.ChannelID
+
 	existing.Name = p.Name
 	existing.ChannelID = p.ChannelID
 	existing.PanelStyle = p.PanelStyle
+	existing.Content = p.Content
 	existing.EmbedTitle = p.EmbedTitle
 	existing.EmbedDescription = p.EmbedDescription
 	existing.EmbedColor = p.EmbedColor
@@ -102,12 +108,27 @@ func (h *Handler) UpdatePanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if oldChannelID != updated.ChannelID && updated.MessageID != nil {
+		if dg, dgErr := h.provider.GetSessionForGuild(r.Context(), guildID); dgErr == nil {
+			_ = dg.ChannelMessageDelete(discordutil.FormatID(oldChannelID), discordutil.FormatID(*updated.MessageID))
+		}
+		_ = h.categoryRepo.ClearPanelMessage(r.Context(), updated.ID)
+	}
+
+	h.syncPanelMessage(r.Context(), guildID, updated.ID)
+
 	apiutil.WriteJSON(w, http.StatusOK, updated)
 }
 
 // DeletePanel deletes a panel and its categories from DB.
 func (h *Handler) DeletePanel(w http.ResponseWriter, r *http.Request) {
 	panelID := chi.URLParam(r, "panelId")
+
+	if panel, pErr := h.categoryRepo.GetPanel(r.Context(), panelID); pErr == nil {
+		if dg, dgErr := h.provider.GetSessionForGuild(r.Context(), panel.GuildID); dgErr == nil {
+			_ = h.ticketSvc.DeletePanelMessage(r.Context(), dg, panel)
+		}
+	}
 
 	err := h.categoryRepo.DeletePanel(r.Context(), panelID)
 	if err != nil {
@@ -116,6 +137,20 @@ func (h *Handler) DeletePanel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
+}
+
+// syncPanelMessage fetches a live Discord session for the guild and republishes the panel
+// message. Failures are logged and swallowed: the DB write that triggered this already
+// succeeded, and the Discord-side message will catch up next time the panel is touched.
+func (h *Handler) syncPanelMessage(ctx context.Context, guildID int64, panelID string) {
+	dg, err := h.provider.GetSessionForGuild(ctx, guildID)
+	if err != nil {
+		fmt.Printf("warning: no bot session for guild %d, skipping panel sync: %v\n", guildID, err)
+		return
+	}
+	if err := h.ticketSvc.SyncPanelMessage(ctx, dg, panelID); err != nil {
+		fmt.Printf("warning: failed to sync panel message for panel %s: %v\n", panelID, err)
+	}
 }
 
 // ─── Panel Handler Role Endpoints ─────────────────────────────────────────────
@@ -211,6 +246,8 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.syncPanelMessageForGuildOfPanel(r.Context(), panelID)
+
 	apiutil.WriteJSON(w, http.StatusCreated, created)
 }
 
@@ -242,6 +279,7 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	existing.TicketOpenMessage = c.TicketOpenMessage
 	existing.TicketOpenColor = c.TicketOpenColor
 	existing.TicketOpenMedia = c.TicketOpenMedia
+	existing.TicketOpenContent = c.TicketOpenContent
 	existing.MaxTicketsPerUser = c.MaxTicketsPerUser
 	existing.AutoCloseHours = c.AutoCloseHours
 	existing.TranscriptChannelID = c.TranscriptChannelID
@@ -253,6 +291,8 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.syncPanelMessageForGuildOfPanel(r.Context(), updated.PanelID)
+
 	apiutil.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -260,13 +300,30 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	catID := chi.URLParam(r, "catId")
 
+	cat, catErr := h.categoryRepo.GetCategory(r.Context(), catID)
+
 	err := h.categoryRepo.DeleteCategory(r.Context(), catID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete category")
 		return
 	}
 
+	if catErr == nil {
+		h.syncPanelMessageForGuildOfPanel(r.Context(), cat.PanelID)
+	}
+
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
+}
+
+// syncPanelMessageForGuildOfPanel looks up the panel's guild (categories only carry
+// panelId, not guildId) and republishes the panel message to reflect category changes.
+func (h *Handler) syncPanelMessageForGuildOfPanel(ctx context.Context, panelID string) {
+	panel, err := h.categoryRepo.GetPanel(ctx, panelID)
+	if err != nil {
+		fmt.Printf("warning: failed to load panel %s for message sync: %v\n", panelID, err)
+		return
+	}
+	h.syncPanelMessage(ctx, panel.GuildID, panelID)
 }
 
 // ─── Category Handler Role Endpoints ──────────────────────────────────────────

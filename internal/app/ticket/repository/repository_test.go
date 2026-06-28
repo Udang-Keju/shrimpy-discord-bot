@@ -24,6 +24,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		channel_id INTEGER NOT NULL,
 		message_id INTEGER,
 		panel_style TEXT DEFAULT 'buttons',
+		content TEXT,
 		embed_title TEXT,
 		embed_description TEXT,
 		embed_color INTEGER,
@@ -48,6 +49,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		ticket_open_message TEXT,
 		ticket_open_color INTEGER,
 		ticket_open_media TEXT,
+		ticket_open_content TEXT,
 		max_tickets_per_user INTEGER DEFAULT 1,
 		auto_close_hours INTEGER,
 		transcript_channel_id INTEGER,
@@ -112,6 +114,7 @@ func TestPanelAndCategoryRepo(t *testing.T) {
 			Name:       "Main Support",
 			ChannelID:  999888,
 			PanelStyle: "buttons",
+			Content:    stringPtr("Need help? Click below."),
 		}
 		createdPanel, err := repo.CreatePanel(ctx, p)
 		assert.NoError(t, err)
@@ -121,6 +124,7 @@ func TestPanelAndCategoryRepo(t *testing.T) {
 		fetchedPanel, err := repo.GetPanel(ctx, createdPanel.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, "Main Support", fetchedPanel.Name)
+		assert.Equal(t, "Need help? Click below.", *fetchedPanel.Content)
 
 		// 3. Set Panel Message ID
 		err = repo.SetPanelMessage(ctx, createdPanel.ID, 555)
@@ -130,12 +134,26 @@ func TestPanelAndCategoryRepo(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, int64(555), *fetchedPanel.MessageID)
 
+		// 3b. Update panel content
+		fetchedPanel.Content = stringPtr("Updated text")
+		updatedPanel, err := repo.UpdatePanel(ctx, fetchedPanel)
+		assert.NoError(t, err)
+		assert.Equal(t, "Updated text", *updatedPanel.Content)
+
+		// 3c. Clear panel message
+		err = repo.ClearPanelMessage(ctx, createdPanel.ID)
+		assert.NoError(t, err)
+		fetchedPanel, err = repo.GetPanel(ctx, createdPanel.ID)
+		assert.NoError(t, err)
+		assert.Nil(t, fetchedPanel.MessageID)
+
 		// 4. Create Category
 		cat := &model.TicketCategory{
 			PanelID:           createdPanel.ID,
 			Name:              "billing",
 			ButtonLabel:       "Open Billing Ticket",
 			MaxTicketsPerUser: 3,
+			TicketOpenContent: stringPtr("Welcome, we'll be right with you."),
 		}
 		createdCat, err := repo.CreateCategory(ctx, cat)
 		assert.NoError(t, err)
@@ -145,6 +163,7 @@ func TestPanelAndCategoryRepo(t *testing.T) {
 		fetchedCat, err := repo.GetCategory(ctx, createdCat.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, "billing", fetchedCat.Name)
+		assert.Equal(t, "Welcome, we'll be right with you.", *fetchedCat.TicketOpenContent)
 
 		// 6. List categories by panel
 		cats, err := repo.ListCategoriesByPanel(ctx, createdPanel.ID)
@@ -153,9 +172,11 @@ func TestPanelAndCategoryRepo(t *testing.T) {
 
 		// 7. Update Category
 		fetchedCat.Name = "billing-updated"
+		fetchedCat.TicketOpenContent = stringPtr("Updated greeting")
 		updatedCat, err := repo.UpdateCategory(ctx, fetchedCat)
 		assert.NoError(t, err)
 		assert.Equal(t, "billing-updated", updatedCat.Name)
+		assert.Equal(t, "Updated greeting", *updatedCat.TicketOpenContent)
 
 		// 8. Delete Category
 		err = repo.DeleteCategory(ctx, createdCat.ID)

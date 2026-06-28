@@ -42,20 +42,21 @@ var (
 
 // TicketPanel maps to the ticket_panels table.
 type TicketPanel struct {
-	ID               string         `gorm:"primaryKey;type:uuid"`
-	GuildID          int64          `gorm:"column:guild_id;not null"`
-	Name             string         `gorm:"column:name;not null"`
-	ChannelID        int64          `gorm:"column:channel_id;not null"`
-	MessageID        *int64         `gorm:"column:message_id"`
-	PanelStyle       string         `gorm:"column:panel_style;default:'buttons'"`
-	EmbedTitle       *string        `gorm:"column:embed_title"`
-	EmbedDescription *string        `gorm:"column:embed_description"`
-	EmbedColor       *int32         `gorm:"column:embed_color"`
-	EmbedMedia       datatypes.JSON `gorm:"column:embed_media;type:jsonb"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               string         `gorm:"primaryKey;type:uuid" json:"id"`
+	GuildID          int64          `gorm:"column:guild_id;not null" json:"guildId,string"`
+	Name             string         `gorm:"column:name;not null" json:"name"`
+	ChannelID        int64          `gorm:"column:channel_id;not null" json:"channelId,string"`
+	MessageID        *int64         `gorm:"column:message_id" json:"messageId,string,omitempty"`
+	PanelStyle       string         `gorm:"column:panel_style;default:'buttons'" json:"panelStyle"`
+	Content          *string        `gorm:"column:content" json:"content,omitempty"`
+	EmbedTitle       *string        `gorm:"column:embed_title" json:"embedTitle,omitempty"`
+	EmbedDescription *string        `gorm:"column:embed_description" json:"embedDescription,omitempty"`
+	EmbedColor       *int32         `gorm:"column:embed_color" json:"embedColor,omitempty"`
+	EmbedMedia       datatypes.JSON `gorm:"column:embed_media;type:jsonb" json:"embedMedia,omitempty"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 	// Associations
-	Categories []TicketCategory `gorm:"foreignKey:PanelID"`
+	Categories []TicketCategory `gorm:"foreignKey:PanelID" json:"categories,omitempty"`
 }
 
 // TableName overrides the default table name mapping.
@@ -100,26 +101,27 @@ func (p *TicketPanel) SetMedia(m *discordutil.EmbedMedia) (err error) {
 
 // TicketCategory maps to the ticket_categories table.
 type TicketCategory struct {
-	ID                  string         `gorm:"primaryKey;type:uuid"`
-	PanelID             string         `gorm:"column:panel_id;not null;type:uuid"`
-	Name                string         `gorm:"column:name;not null"`
-	Emoji               *string        `gorm:"column:emoji"`
-	ButtonLabel         string         `gorm:"column:button_label;not null"`
-	ButtonStyle         string         `gorm:"column:button_style;default:'primary'"`
-	ButtonDescription   *string        `gorm:"column:button_description"`
-	ButtonOrder         int16          `gorm:"column:button_order;default:0"`
-	TicketDestination   string         `gorm:"column:ticket_destination;default:'thread'"`
-	TicketNameTemplate  string         `gorm:"column:ticket_name_template;default:'{category}-{number}'"`
-	TicketOpenTitle     *string        `gorm:"column:ticket_open_title"`
-	TicketOpenMessage   *string        `gorm:"column:ticket_open_message"`
-	TicketOpenColor     *int32         `gorm:"column:ticket_open_color"`
-	TicketOpenMedia     datatypes.JSON `gorm:"column:ticket_open_media;type:jsonb"`
-	MaxTicketsPerUser   int            `gorm:"column:max_tickets_per_user;default:1"`
-	AutoCloseHours      *int           `gorm:"column:auto_close_hours"`
-	TranscriptChannelID *int64         `gorm:"column:transcript_channel_id"`
-	AllowUserClose      bool           `gorm:"column:allow_user_close;default:true"`
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                  string         `gorm:"primaryKey;type:uuid" json:"id"`
+	PanelID             string         `gorm:"column:panel_id;not null;type:uuid" json:"panelId"`
+	Name                string         `gorm:"column:name;not null" json:"name"`
+	Emoji               *string        `gorm:"column:emoji" json:"emoji,omitempty"`
+	ButtonLabel         string         `gorm:"column:button_label;not null" json:"buttonLabel"`
+	ButtonStyle         string         `gorm:"column:button_style;default:'primary'" json:"buttonStyle"`
+	ButtonDescription   *string        `gorm:"column:button_description" json:"buttonDescription,omitempty"`
+	ButtonOrder         int16          `gorm:"column:button_order;default:0" json:"buttonOrder"`
+	TicketDestination   string         `gorm:"column:ticket_destination;default:'thread'" json:"ticketDestination"`
+	TicketNameTemplate  string         `gorm:"column:ticket_name_template;default:'{category}-{number}'" json:"ticketNameTemplate"`
+	TicketOpenTitle     *string        `gorm:"column:ticket_open_title" json:"ticketOpenTitle,omitempty"`
+	TicketOpenMessage   *string        `gorm:"column:ticket_open_message" json:"ticketOpenMessage,omitempty"`
+	TicketOpenColor     *int32         `gorm:"column:ticket_open_color" json:"ticketOpenColor,omitempty"`
+	TicketOpenMedia     datatypes.JSON `gorm:"column:ticket_open_media;type:jsonb" json:"ticketOpenMedia,omitempty"`
+	TicketOpenContent   *string        `gorm:"column:ticket_open_content" json:"ticketOpenContent,omitempty"`
+	MaxTicketsPerUser   int            `gorm:"column:max_tickets_per_user;default:1" json:"maxTicketsPerUser"`
+	AutoCloseHours      *int           `gorm:"column:auto_close_hours" json:"autoCloseHours,omitempty"`
+	TranscriptChannelID *int64         `gorm:"column:transcript_channel_id" json:"transcriptChannelId,string,omitempty"`
+	AllowUserClose      bool           `gorm:"column:allow_user_close;default:true" json:"allowUserClose"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
 }
 
 // TableName overrides the default table name mapping.
