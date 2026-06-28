@@ -172,6 +172,10 @@ export default function PanelsPage() {
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPanel || !newCatName || !newCatButtonLabel) return;
+    if (selectedPanel.panelStyle === 'buttons' && categories.length >= 3) {
+      showToast("Button layout supports up to 3 categories. Switch to Select Menu for more.", "warning");
+      return;
+    }
     try {
       const c = await ShrimpyAPI.createCategory(guildId, selectedPanel.id, {
         name: newCatName,
@@ -345,18 +349,6 @@ export default function PanelsPage() {
               </div>
 
               <div className={styles.formGroup}>
-                <label className={styles.label}>Button Layout</label>
-                <Dropdown
-                  value={newPanelStyle}
-                  onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
-                  options={[
-                    { value: "buttons", label: "Buttons (up to 25 categories)" },
-                    { value: "select_menu", label: "Select Menu" },
-                  ]}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
                 <label className={styles.label}>Plain Text Message (optional)</label>
                 <textarea className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
               </div>
@@ -414,6 +406,18 @@ export default function PanelsPage() {
                   <label className={styles.label}>Footer Icon URL</label>
                   <input className={styles.input} type="text" value={newFooterIconUrl} onChange={e => setNewFooterIconUrl(e.target.value)} />
                 </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Button Layout</label>
+                <Dropdown
+                  value={newPanelStyle}
+                  onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
+                  options={[
+                    { value: "buttons", label: "Buttons (up to 3 categories)" },
+                    { value: "select_menu", label: "Select Menu (up to 25 categories)" },
+                  ]}
+                />
               </div>
 
               <button type="submit" className={styles.submitBtn}>
@@ -552,6 +556,11 @@ export default function PanelsPage() {
                 ))}
               </div>
 
+              {selectedPanel.panelStyle === 'buttons' && categories.length >= 3 ? (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                  This panel uses Button layout, which supports up to 3 categories. Delete a category to add another, or create a new panel with Select Menu layout to support more.
+                </div>
+              ) : (
               <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Category Name</label>
@@ -650,6 +659,7 @@ export default function PanelsPage() {
                   <span>Add Category</span>
                 </button>
               </form>
+              )}
             </div>
           )}
 
