@@ -6,10 +6,12 @@ import { useParams } from "next/navigation";
 import {
   Save,
   Eye,
-  Sparkles
+  Sparkles,
+  Plus,
+  Trash2
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, WelcomeConfig, DiscordChannel } from "@/lib/api";
+import { ShrimpyAPI, WelcomeConfig, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 
 export default function WelcomePage() {
@@ -18,23 +20,57 @@ export default function WelcomePage() {
 
   const [config, setConfig] = useState<WelcomeConfig | null>(null);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
+  const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [autoRoles, setAutoRoles] = useState<string[]>([]);
+  const [selectedAutoRole, setSelectedAutoRole] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [confData, chansData] = await Promise.all([
+        const [confData, chansData, rolesData, guildData] = await Promise.all([
           ShrimpyAPI.getWelcomeConfig(guildId),
-          ShrimpyAPI.getDiscordChannels(guildId)
+          ShrimpyAPI.getDiscordChannels(guildId),
+          ShrimpyAPI.getDiscordRoles(guildId),
+          ShrimpyAPI.getGuildConfig(guildId)
         ]);
         setConfig(confData);
         setChannels(chansData);
+        setRoles(rolesData);
+        setAutoRoles(guildData.autoRoles);
+
+        if (rolesData.length > 0) {
+          setSelectedAutoRole(rolesData[0].id);
+        }
       } catch (err) {
         console.error(err);
       }
     }
     loadData();
   }, [guildId]);
+
+  const handleAddAutoRole = async () => {
+    if (!selectedAutoRole) return;
+    if (autoRoles.includes(selectedAutoRole)) {
+      alert("Role is already in Auto-Roles list!");
+      return;
+    }
+    try {
+      await ShrimpyAPI.addAutoRole(guildId, selectedAutoRole);
+      setAutoRoles(prev => [...prev, selectedAutoRole]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveAutoRole = async (roleId: string) => {
+    try {
+      await ShrimpyAPI.removeAutoRole(guildId, roleId);
+      setAutoRoles(prev => prev.filter(r => r !== roleId));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,6 +218,49 @@ export default function WelcomePage() {
                   />
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Auto-Roles on Join */}
+          <div className={styles.card}>
+            <h3 className={styles.cardTitle}>Auto-Roles on Join</h3>
+            <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
+              Roles automatically granted to new members immediately upon entering the server.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
+              {autoRoles.length === 0 ? (
+                <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No automatic roles configured yet.</div>
+              ) : (
+                autoRoles.map(rid => {
+                  const matched = roles.find(r => r.id === rid);
+                  return (
+                    <div key={rid} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
+                      <span style={{ fontWeight: 'bold' }}>{matched?.name || rid}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAutoRole(rid)}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+              <Dropdown
+                value={selectedAutoRole}
+                onChange={setSelectedAutoRole}
+                options={roles.map(r => ({ value: r.id, label: r.name }))}
+                style={{ flex: 1 }}
+              />
+              <button type="button" onClick={handleAddAutoRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                <Plus size={14} />
+                <span>Add</span>
+              </button>
             </div>
           </div>
 
