@@ -145,6 +145,16 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Patch("/panels/{panelId}/categories/{catId}", s.ticketHandler.UpdateCategory)
 				r.Delete("/panels/{panelId}/categories/{catId}", s.ticketHandler.DeleteCategory)
 
+				// Per-panel ticket handler roles (who gets added to the created ticket channel/thread)
+				r.Get("/panels/{panelId}/handler-roles", s.ticketHandler.ListPanelHandlerRoles)
+				r.Post("/panels/{panelId}/handler-roles", s.ticketHandler.AddPanelHandlerRole)
+				r.Delete("/panels/{panelId}/handler-roles/{roleId}", s.ticketHandler.RemovePanelHandlerRole)
+
+				// Per-category ticket handler roles (additive to the panel's handler roles)
+				r.Get("/panels/{panelId}/categories/{catId}/handler-roles", s.ticketHandler.ListCategoryHandlerRoles)
+				r.Post("/panels/{panelId}/categories/{catId}/handler-roles", s.ticketHandler.AddCategoryHandlerRole)
+				r.Delete("/panels/{panelId}/categories/{catId}/handler-roles/{roleId}", s.ticketHandler.RemoveCategoryHandlerRole)
+
 				// Ticket Management
 				r.Get("/tickets", s.ticketHandler.List)
 				r.Get("/tickets/{ticketId}", s.ticketHandler.Get)

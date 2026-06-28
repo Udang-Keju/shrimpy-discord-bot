@@ -118,6 +118,66 @@ func (h *Handler) DeletePanel(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
 }
 
+// ─── Panel Handler Role Endpoints ─────────────────────────────────────────────
+
+type handlerRolePayload struct {
+	RoleID string `json:"role_id"`
+}
+
+// ListPanelHandlerRoles lists the roles invited into tickets created from this panel.
+func (h *Handler) ListPanelHandlerRoles(w http.ResponseWriter, r *http.Request) {
+	panelID := chi.URLParam(r, "panelId")
+
+	roles, err := h.categoryRepo.ListPanelHandlerRoles(r.Context(), panelID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list panel handler roles")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, roles)
+}
+
+// AddPanelHandlerRole adds a Discord role to a panel's ticket handler list.
+func (h *Handler) AddPanelHandlerRole(w http.ResponseWriter, r *http.Request) {
+	panelID := chi.URLParam(r, "panelId")
+
+	var payload handlerRolePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid payload")
+		return
+	}
+
+	roleID, err := strconv.ParseInt(payload.RoleID, 10, 64)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid Role ID format")
+		return
+	}
+
+	created, err := h.categoryRepo.AddPanelHandlerRole(r.Context(), panelID, roleID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to save panel handler role")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusCreated, created)
+}
+
+// RemovePanelHandlerRole removes a role from a panel's ticket handler list.
+func (h *Handler) RemovePanelHandlerRole(w http.ResponseWriter, r *http.Request) {
+	panelID := chi.URLParam(r, "panelId")
+
+	roleIDStr := chi.URLParam(r, "roleId")
+	roleID, _ := strconv.ParseInt(roleIDStr, 10, 64)
+
+	err := h.categoryRepo.RemovePanelHandlerRole(r.Context(), panelID, roleID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to remove panel handler role")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
+}
+
 // ─── Category Handlers ────────────────────────────────────────────────────────
 
 // ListCategories lists categories for a panel.
@@ -203,6 +263,62 @@ func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	err := h.categoryRepo.DeleteCategory(r.Context(), catID)
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete category")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{"success": true})
+}
+
+// ─── Category Handler Role Endpoints ──────────────────────────────────────────
+
+// ListCategoryHandlerRoles lists the roles invited into tickets created from this category.
+func (h *Handler) ListCategoryHandlerRoles(w http.ResponseWriter, r *http.Request) {
+	catID := chi.URLParam(r, "catId")
+
+	roles, err := h.categoryRepo.ListCategoryHandlerRoles(r.Context(), catID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list category handler roles")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, roles)
+}
+
+// AddCategoryHandlerRole adds a Discord role to a category's ticket handler list.
+func (h *Handler) AddCategoryHandlerRole(w http.ResponseWriter, r *http.Request) {
+	catID := chi.URLParam(r, "catId")
+
+	var payload handlerRolePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid payload")
+		return
+	}
+
+	roleID, err := strconv.ParseInt(payload.RoleID, 10, 64)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid Role ID format")
+		return
+	}
+
+	created, err := h.categoryRepo.AddCategoryHandlerRole(r.Context(), catID, roleID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to save category handler role")
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusCreated, created)
+}
+
+// RemoveCategoryHandlerRole removes a role from a category's ticket handler list.
+func (h *Handler) RemoveCategoryHandlerRole(w http.ResponseWriter, r *http.Request) {
+	catID := chi.URLParam(r, "catId")
+
+	roleIDStr := chi.URLParam(r, "roleId")
+	roleID, _ := strconv.ParseInt(roleIDStr, 10, 64)
+
+	err := h.categoryRepo.RemoveCategoryHandlerRole(r.Context(), catID, roleID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to remove category handler role")
 		return
 	}
 

@@ -352,6 +352,80 @@ func (r *CategoryRepo) DeleteCategory(ctx context.Context, categoryID string) er
 	return r.db.WithContext(ctx).Where("id = ?", categoryID).Delete(&model.TicketCategory{}).Error
 }
 
+// ─── Panel Handler Roles ──────────────────────────────────────────────────────
+
+// ListPanelHandlerRoles returns all handler roles configured for a panel.
+func (r *CategoryRepo) ListPanelHandlerRoles(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error) {
+	var roles []model.PanelHandlerRole
+	result := r.db.WithContext(ctx).
+		Where("panel_id = ?", panelID).
+		Order("created_at").
+		Find(&roles)
+	return roles, result.Error
+}
+
+// AddPanelHandlerRole idempotently adds a Discord role as a panel handler role.
+func (r *CategoryRepo) AddPanelHandlerRole(ctx context.Context, panelID string, roleID int64) (*model.PanelHandlerRole, error) {
+	hr := model.PanelHandlerRole{ID: uuid.NewString(), PanelID: panelID, RoleID: roleID}
+	result := r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&hr)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		hr.ID = ""
+		result = r.db.WithContext(ctx).
+			Where("panel_id = ? AND role_id = ?", panelID, roleID).
+			First(&hr)
+	}
+	return &hr, result.Error
+}
+
+// RemovePanelHandlerRole removes a role from the panel's handler list.
+func (r *CategoryRepo) RemovePanelHandlerRole(ctx context.Context, panelID string, roleID int64) error {
+	return r.db.WithContext(ctx).
+		Where("panel_id = ? AND role_id = ?", panelID, roleID).
+		Delete(&model.PanelHandlerRole{}).Error
+}
+
+// ─── Category Handler Roles ───────────────────────────────────────────────────
+
+// ListCategoryHandlerRoles returns all handler roles configured for a category.
+func (r *CategoryRepo) ListCategoryHandlerRoles(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error) {
+	var roles []model.CategoryHandlerRole
+	result := r.db.WithContext(ctx).
+		Where("category_id = ?", categoryID).
+		Order("created_at").
+		Find(&roles)
+	return roles, result.Error
+}
+
+// AddCategoryHandlerRole idempotently adds a Discord role as a category handler role.
+func (r *CategoryRepo) AddCategoryHandlerRole(ctx context.Context, categoryID string, roleID int64) (*model.CategoryHandlerRole, error) {
+	hr := model.CategoryHandlerRole{ID: uuid.NewString(), CategoryID: categoryID, RoleID: roleID}
+	result := r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&hr)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		hr.ID = ""
+		result = r.db.WithContext(ctx).
+			Where("category_id = ? AND role_id = ?", categoryID, roleID).
+			First(&hr)
+	}
+	return &hr, result.Error
+}
+
+// RemoveCategoryHandlerRole removes a role from the category's handler list.
+func (r *CategoryRepo) RemoveCategoryHandlerRole(ctx context.Context, categoryID string, roleID int64) error {
+	return r.db.WithContext(ctx).
+		Where("category_id = ? AND role_id = ?", categoryID, roleID).
+		Delete(&model.CategoryHandlerRole{}).Error
+}
+
 // ─── MessageRepo ──────────────────────────────────────────────────────────────
 
 // MessageRepo handles database operations for the ticket_messages table.

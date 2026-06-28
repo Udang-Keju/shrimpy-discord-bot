@@ -61,6 +61,32 @@ type TicketPanel struct {
 // TableName overrides the default table name mapping.
 func (TicketPanel) TableName() string { return "ticket_panels" }
 
+// PanelHandlerRole maps to the panel_handler_roles table. These roles are invited into
+// the Discord channel/thread created for a ticket opened from the panel, so they can
+// handle the ticket — distinct from staff_roles, which gate dashboard access.
+type PanelHandlerRole struct {
+	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	PanelID   string    `gorm:"column:panel_id;not null;type:uuid" json:"panelId"`
+	RoleID    int64     `gorm:"column:role_id;not null" json:"roleId,string"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// TableName overrides the default table name mapping.
+func (PanelHandlerRole) TableName() string { return "panel_handler_roles" }
+
+// CategoryHandlerRole maps to the category_handler_roles table. These roles are invited
+// into the Discord channel/thread created for a ticket opened from this specific category,
+// additive to the panel's handler roles.
+type CategoryHandlerRole struct {
+	ID         string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	CategoryID string    `gorm:"column:category_id;not null;type:uuid" json:"categoryId"`
+	RoleID     int64     `gorm:"column:role_id;not null" json:"roleId,string"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+// TableName overrides the default table name mapping.
+func (CategoryHandlerRole) TableName() string { return "category_handler_roles" }
+
 // GetMedia deserializes the EmbedMedia JSONB column.
 func (p *TicketPanel) GetMedia() (*discordutil.EmbedMedia, error) {
 	return discordutil.DecodeMedia(p.EmbedMedia)

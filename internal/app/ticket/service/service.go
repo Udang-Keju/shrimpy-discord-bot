@@ -34,6 +34,8 @@ type TicketRepository interface {
 // TicketCategoryRepository defines operations on panels and categories.
 type TicketCategoryRepository interface {
 	GetCategory(ctx context.Context, categoryID string) (*model.TicketCategory, error)
+	ListPanelHandlerRoles(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error)
+	ListCategoryHandlerRoles(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error)
 }
 
 // TicketGuildRepository defines operations on guilds and staff roles.
@@ -490,12 +492,46 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 		},
 	}
 
+	addedRoleIDs := make(map[int64]bool)
 	for _, sr := range staffRoles {
 		permissionOverrides = append(permissionOverrides, &discordgo.PermissionOverwrite{
 			ID:    fmt.Sprintf("%d", sr.RoleID),
 			Type:  discordgo.PermissionOverwriteTypeRole,
 			Allow: discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles,
 		})
+		addedRoleIDs[sr.RoleID] = true
+	}
+
+	panelHandlerRoles, err := s.categoryRepo.ListPanelHandlerRoles(ctx, cat.PanelID)
+	if err != nil {
+		panelHandlerRoles = []model.PanelHandlerRole{}
+	}
+	for _, hr := range panelHandlerRoles {
+		if addedRoleIDs[hr.RoleID] {
+			continue
+		}
+		permissionOverrides = append(permissionOverrides, &discordgo.PermissionOverwrite{
+			ID:    fmt.Sprintf("%d", hr.RoleID),
+			Type:  discordgo.PermissionOverwriteTypeRole,
+			Allow: discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles,
+		})
+		addedRoleIDs[hr.RoleID] = true
+	}
+
+	categoryHandlerRoles, err := s.categoryRepo.ListCategoryHandlerRoles(ctx, cat.ID)
+	if err != nil {
+		categoryHandlerRoles = []model.CategoryHandlerRole{}
+	}
+	for _, hr := range categoryHandlerRoles {
+		if addedRoleIDs[hr.RoleID] {
+			continue
+		}
+		permissionOverrides = append(permissionOverrides, &discordgo.PermissionOverwrite{
+			ID:    fmt.Sprintf("%d", hr.RoleID),
+			Type:  discordgo.PermissionOverwriteTypeRole,
+			Allow: discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles,
+		})
+		addedRoleIDs[hr.RoleID] = true
 	}
 
 	botUser, err := dg.User("@me")

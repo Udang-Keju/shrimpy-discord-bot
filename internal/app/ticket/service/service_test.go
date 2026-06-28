@@ -146,12 +146,28 @@ func (m *MockTicketRepository) GetStats(ctx context.Context, guildID int64) (*mo
 
 // MockTicketCategoryRepository mocks TicketCategoryRepository
 type MockTicketCategoryRepository struct {
-	GetCategoryFunc func(ctx context.Context, categoryID string) (*model.TicketCategory, error)
+	GetCategoryFunc              func(ctx context.Context, categoryID string) (*model.TicketCategory, error)
+	ListPanelHandlerRolesFunc    func(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error)
+	ListCategoryHandlerRolesFunc func(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error)
 }
 
 func (m *MockTicketCategoryRepository) GetCategory(ctx context.Context, categoryID string) (*model.TicketCategory, error) {
 	if m.GetCategoryFunc != nil {
 		return m.GetCategoryFunc(ctx, categoryID)
+	}
+	return nil, nil
+}
+
+func (m *MockTicketCategoryRepository) ListPanelHandlerRoles(ctx context.Context, panelID string) ([]model.PanelHandlerRole, error) {
+	if m.ListPanelHandlerRolesFunc != nil {
+		return m.ListPanelHandlerRolesFunc(ctx, panelID)
+	}
+	return nil, nil
+}
+
+func (m *MockTicketCategoryRepository) ListCategoryHandlerRoles(ctx context.Context, categoryID string) ([]model.CategoryHandlerRole, error) {
+	if m.ListCategoryHandlerRolesFunc != nil {
+		return m.ListCategoryHandlerRolesFunc(ctx, categoryID)
 	}
 	return nil, nil
 }
@@ -707,13 +723,11 @@ func TestTicketService_Close(t *testing.T) {
 			}
 			if req.Method == "POST" && req.URL.Path == "/api/v9/channels/44444/messages" {
 				transcriptSent = true
-				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"999"}`)),
-				}, nil
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"999"}`))}, nil
 			}
 			if req.Method == "POST" && req.URL.Path == "/api/v9/channels/999888/messages" {
 				closeEmbedSent = true
-				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"999"}`)),
-				}, nil
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"999"}`))}, nil
 			}
 			return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
 		},

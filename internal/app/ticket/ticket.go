@@ -54,7 +54,9 @@ func Build(db *gorm.DB, guildRepo service.TicketGuildRepository, provider discor
 func (m *Module) Models() []any {
 	return []any{
 		&model.TicketPanel{},
+		&model.PanelHandlerRole{},
 		&model.TicketCategory{},
+		&model.CategoryHandlerRole{},
 		&model.Ticket{},
 		&model.TicketMessage{},
 	}
