@@ -54,7 +54,13 @@ export default function SettingsPage() {
     if (!config) return;
     setSaving(true);
     try {
-      await ShrimpyAPI.updateGuildConfig(guildId, config);
+      await Promise.all([
+        ShrimpyAPI.updateGuildConfig(guildId, {
+          prefix: config.prefix,
+          logChannelId: config.logChannelId
+        }),
+        ShrimpyAPI.updateNickname(guildId, config.nickname || null)
+      ]);
       alert("Guild settings saved successfully!");
     } catch (err) {
       console.error(err);
@@ -63,36 +69,52 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAddAutoRole = () => {
+  const handleAddAutoRole = async () => {
     if (!config || !selectedAutoRole) return;
     if (config.autoRoles.includes(selectedAutoRole)) {
       alert("Role is already in Auto-Roles list!");
       return;
     }
-    const updatedRoles = [...config.autoRoles, selectedAutoRole];
-    setConfig(prev => prev ? ({ ...prev, autoRoles: updatedRoles }) : null);
+    try {
+      await ShrimpyAPI.addAutoRole(guildId, selectedAutoRole);
+      setConfig(prev => prev ? ({ ...prev, autoRoles: [...prev.autoRoles, selectedAutoRole] }) : null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleRemoveAutoRole = (roleId: string) => {
+  const handleRemoveAutoRole = async (roleId: string) => {
     if (!config) return;
-    const updatedRoles = config.autoRoles.filter(r => r !== roleId);
-    setConfig(prev => prev ? ({ ...prev, autoRoles: updatedRoles }) : null);
+    try {
+      await ShrimpyAPI.removeAutoRole(guildId, roleId);
+      setConfig(prev => prev ? ({ ...prev, autoRoles: prev.autoRoles.filter(r => r !== roleId) }) : null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleAddStaffRole = () => {
+  const handleAddStaffRole = async () => {
     if (!config || !selectedStaffRole) return;
     if (config.staffRoles.includes(selectedStaffRole)) {
       alert("Role is already in Staff Dashboard Access list!");
       return;
     }
-    const updatedRoles = [...config.staffRoles, selectedStaffRole];
-    setConfig(prev => prev ? ({ ...prev, staffRoles: updatedRoles }) : null);
+    try {
+      await ShrimpyAPI.addStaffRole(guildId, selectedStaffRole);
+      setConfig(prev => prev ? ({ ...prev, staffRoles: [...prev.staffRoles, selectedStaffRole] }) : null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleRemoveStaffRole = (roleId: string) => {
+  const handleRemoveStaffRole = async (roleId: string) => {
     if (!config) return;
-    const updatedRoles = config.staffRoles.filter(r => r !== roleId);
-    setConfig(prev => prev ? ({ ...prev, staffRoles: updatedRoles }) : null);
+    try {
+      await ShrimpyAPI.removeStaffRole(guildId, roleId);
+      setConfig(prev => prev ? ({ ...prev, staffRoles: prev.staffRoles.filter(r => r !== roleId) }) : null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const updateField = <K extends keyof Guild>(key: K, val: Guild[K]) => {

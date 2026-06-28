@@ -71,7 +71,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, list)
 }
 
-// GetConfig returns the Shrimpy database configuration for a specific guild.
+type guildConfigResponse struct {
+	ID           string   `json:"id"`
+	Nickname     *string  `json:"nickname"`
+	Prefix       string   `json:"prefix"`
+	LogChannelID *string  `json:"logChannelId"`
+	AutoRoles    []string `json:"autoRoles"`
+	StaffRoles   []string `json:"staffRoles"`
+}
+
+// GetConfig returns the Shrimpy database configuration for a specific guild, including
+// dashboard-facing fields (auto-roles, staff roles) the frontend's Guild type expects.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")
 	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
@@ -82,7 +92,37 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, cfg)
+	autoRoles, err := h.guildSvc.ListAutoRoles(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list auto roles")
+		return
+	}
+
+	staffRoles, err := h.guildSvc.ListStaffRoles(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to list staff roles")
+		return
+	}
+
+	resp := guildConfigResponse{
+		ID:         guildIDStr,
+		Nickname:   cfg.BotNickname,
+		Prefix:     cfg.Prefix,
+		AutoRoles:  make([]string, 0, len(autoRoles)),
+		StaffRoles: make([]string, 0, len(staffRoles)),
+	}
+	if cfg.LogChannelID != nil {
+		logChannelID := strconv.FormatInt(*cfg.LogChannelID, 10)
+		resp.LogChannelID = &logChannelID
+	}
+	for _, ar := range autoRoles {
+		resp.AutoRoles = append(resp.AutoRoles, strconv.FormatInt(ar.RoleID, 10))
+	}
+	for _, sr := range staffRoles {
+		resp.StaffRoles = append(resp.StaffRoles, strconv.FormatInt(sr.RoleID, 10))
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, resp)
 }
 
 // UpdateConfig updates fields on the guild configuration.
@@ -103,21 +143,20 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if language, ok := updates["language"].(string); ok && len(language) <= 10 {
 		allowedUpdates["language"] = language
 	}
-	if logCh, ok := updates["log_channel_id"]; ok {
-		if logCh == nil {
+	if logCh, ok := updates["logChannelId"]; ok {
+		if logCh == nil || logCh == "" {
 			allowedUpdates["log_channel_id"] = nil
 		} else if logChVal, err := strconv.ParseInt(fmt.Sprintf("%v", logCh), 10, 64); err == nil {
 			allowedUpdates["log_channel_id"] = logChVal
 		}
 	}
 
-	cfg, err := h.guildSvc.UpdateConfig(r.Context(), guildID, allowedUpdates)
-	if err != nil {
+	if _, err := h.guildSvc.UpdateConfig(r.Context(), guildID, allowedUpdates); err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update configuration")
 		return
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, cfg)
+	h.GetConfig(w, r)
 }
 
 type nicknamePayload struct {

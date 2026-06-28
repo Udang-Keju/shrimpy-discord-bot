@@ -317,6 +317,60 @@ export const ShrimpyAPI = {
     });
   },
 
+  updateNickname: async (guildId: string, nickname: string | null): Promise<void> => {
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      g.nickname = nickname || undefined;
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/nickname`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nickname })
+    });
+  },
+
+  addAutoRole: async (guildId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      g.autoRoles.push(roleId);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/auto-roles`, {
+      method: 'POST',
+      body: JSON.stringify({ role_id: roleId })
+    });
+  },
+
+  removeAutoRole: async (guildId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      g.autoRoles = g.autoRoles.filter(r => r !== roleId);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/auto-roles/${roleId}`, { method: 'DELETE' });
+  },
+
+  addStaffRole: async (guildId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      g.staffRoles.push(roleId);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/staff-roles`, {
+      method: 'POST',
+      body: JSON.stringify({ role_id: roleId })
+    });
+  },
+
+  removeStaffRole: async (guildId: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) {
+      const g = mockGuilds.find(x => x.id === guildId) || mockGuilds[0];
+      g.staffRoles = g.staffRoles.filter(r => r !== roleId);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/staff-roles/${roleId}`, { method: 'DELETE' });
+  },
+
   // Discord API proxies (for dropdown selects)
   getDiscordChannels: async (guildId: string): Promise<DiscordChannel[]> => {
     if (isDemoMode()) return mockChannels;
