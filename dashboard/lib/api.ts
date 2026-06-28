@@ -31,22 +31,58 @@ export interface Ticket {
   closedAt?: string;
 }
 
+export interface EmbedMediaAuthor {
+  name: string;
+  iconUrl?: string;
+  url?: string;
+}
+
+export interface EmbedMediaFooter {
+  text: string;
+  iconUrl?: string;
+}
+
+export interface EmbedMedia {
+  author?: EmbedMediaAuthor;
+  thumbnail?: { url: string };
+  image?: { url: string };
+  footer?: EmbedMediaFooter;
+}
+
 export interface TicketPanel {
   id: string;
   guildId: string;
   channelId: string;
-  title: string;
-  description: string;
-  buttonLabel: string;
-  buttonStyle: 'primary' | 'success' | 'danger' | 'secondary';
+  messageId?: string;
+  name: string;
+  panelStyle: 'buttons' | 'select_menu';
+  content?: string;
+  embedTitle?: string;
+  embedDescription?: string;
+  embedColor?: number;
+  embedMedia?: EmbedMedia;
 }
 
 export interface TicketCategory {
   id: string;
   panelId: string;
   name: string;
-  channelId: string;
-  logChannelId?: string;
+  emoji?: string;
+  buttonLabel: string;
+  buttonStyle: 'primary' | 'secondary' | 'success' | 'danger';
+  buttonDescription?: string;
+  buttonOrder: number;
+  ticketDestination: 'thread' | 'channel';
+  ticketNameTemplate: string;
+  ticketOpenTitle?: string;
+  ticketOpenMessage?: string;
+  ticketOpenColor?: number;
+  ticketOpenMedia?: EmbedMedia;
+  ticketOpenContent?: string;
+  maxTicketsPerUser: number;
+  autoCloseHours?: number;
+  transcriptChannelId?: string;
+  allowUserClose: boolean;
 }
 
 // Roles invited into the Discord channel/thread created for a ticket, so they
@@ -207,17 +243,25 @@ let mockPanels: TicketPanel[] = [
     id: 'panel-001',
     guildId: '123456789012345678',
     channelId: 'support-desk',
-    title: 'Contact Support Services',
-    description: 'Click the button below to open a private support ticket. Our staff is available 24/7.',
-    buttonLabel: 'Create Ticket',
-    buttonStyle: 'primary'
+    name: 'Main Support Desk',
+    panelStyle: 'buttons',
+    embedTitle: 'Contact Support Services',
+    embedDescription: 'Click the button below to open a private support ticket. Our staff is available 24/7.'
   }
 ];
 
 const mockCategories: Record<string, TicketCategory[]> = {
   'panel-001': [
-    { id: 'cat-001', panelId: 'panel-001', name: 'General Help', channelId: 'tickets-gen' },
-    { id: 'cat-002', panelId: 'panel-001', name: 'Billing', channelId: 'tickets-bill' }
+    {
+      id: 'cat-001', panelId: 'panel-001', name: 'General Help', buttonLabel: 'General Help',
+      buttonStyle: 'primary', buttonOrder: 0, ticketDestination: 'thread',
+      ticketNameTemplate: '{category}-{number}', maxTicketsPerUser: 1, allowUserClose: true
+    },
+    {
+      id: 'cat-002', panelId: 'panel-001', name: 'Billing', buttonLabel: 'Billing',
+      buttonStyle: 'secondary', buttonOrder: 1, ticketDestination: 'thread',
+      ticketNameTemplate: '{category}-{number}', maxTicketsPerUser: 1, allowUserClose: true
+    }
   ]
 };
 

@@ -16,6 +16,22 @@ import { ShrimpyAPI, TicketPanel, TicketCategory, PanelHandlerRole, CategoryHand
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
 
+const BUTTON_COLORS: Record<string, string> = {
+  primary: '#5865F2',
+  success: '#3ba55d',
+  danger: '#d83c3e',
+  secondary: '#4f545c',
+};
+
+function colorToHex(n?: number): string {
+  if (n === undefined || n === null) return '#5865F2';
+  return '#' + Math.max(0, Math.min(0xffffff, n)).toString(16).padStart(6, '0');
+}
+
+function hexToColor(hex: string): number {
+  return parseInt(hex.replace('#', ''), 16) || 0;
+}
+
 export default function PanelsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
@@ -32,16 +48,31 @@ export default function PanelsPage() {
   const [categoryHandlerRoles, setCategoryHandlerRoles] = useState<CategoryHandlerRole[]>([]);
   const [selectedCategoryHandlerRole, setSelectedCategoryHandlerRole] = useState("");
 
-  // Form states for new panel
-  const [newTitle, setNewTitle] = useState("Contact Support Services");
-  const [newDesc, setNewDesc] = useState("Click the button below to open a private ticket.");
-  const [newBtnLabel, setNewBtnLabel] = useState("Create Ticket");
-  const [newBtnStyle, setNewBtnStyle] = useState<'primary' | 'success' | 'danger' | 'secondary'>('primary');
+  // Form state for new panel
+  const [newName, setNewName] = useState("Main Support Desk");
   const [newChannelId, setNewChannelId] = useState("");
+  const [newPanelStyle, setNewPanelStyle] = useState<'buttons' | 'select_menu'>('buttons');
+  const [newContent, setNewContent] = useState("");
+  const [newEmbedTitle, setNewEmbedTitle] = useState("Contact Support Services");
+  const [newEmbedDesc, setNewEmbedDesc] = useState("Click a button below to open a private ticket.");
+  const [newEmbedColor, setNewEmbedColor] = useState<string>('#5865F2');
+  const [newAuthorName, setNewAuthorName] = useState("");
+  const [newAuthorIconUrl, setNewAuthorIconUrl] = useState("");
+  const [newThumbnailUrl, setNewThumbnailUrl] = useState("");
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [newFooterText, setNewFooterText] = useState("");
+  const [newFooterIconUrl, setNewFooterIconUrl] = useState("");
 
-  // Form states for new category
+  // Form state for new category
   const [newCatName, setNewCatName] = useState("");
-  const [newCatChanId, setNewCatChanId] = useState("");
+  const [newCatButtonLabel, setNewCatButtonLabel] = useState("");
+  const [newCatButtonStyle, setNewCatButtonStyle] = useState<'primary' | 'secondary' | 'success' | 'danger'>('primary');
+  const [newCatEmoji, setNewCatEmoji] = useState("");
+  const [newCatDestination, setNewCatDestination] = useState<'thread' | 'channel'>('thread');
+  const [newCatOpenContent, setNewCatOpenContent] = useState("");
+  const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
+  const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
+  const [newCatOpenColor, setNewCatOpenColor] = useState<string>('#5865F2');
 
   useEffect(() => {
     async function loadData() {
@@ -54,10 +85,9 @@ export default function PanelsPage() {
         setPanels(panelsData);
         setChannels(chansData);
         setRoles(rolesData);
-        
+
         if (chansData.length > 0) {
           setNewChannelId(chansData[0].id);
-          setNewCatChanId(chansData[0].id);
         }
         if (rolesData.length > 0) {
           setSelectedHandlerRole(rolesData[0].id);
@@ -102,17 +132,28 @@ export default function PanelsPage() {
   const handleCreatePanel = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const hasMedia = !!(newAuthorName || newThumbnailUrl || newImageUrl || newFooterText);
       const p = await ShrimpyAPI.createPanel(guildId, {
         channelId: newChannelId,
-        title: newTitle,
-        description: newDesc,
-        buttonLabel: newBtnLabel,
-        buttonStyle: newBtnStyle
+        name: newName,
+        panelStyle: newPanelStyle,
+        content: newContent || undefined,
+        embedTitle: newEmbedTitle || undefined,
+        embedDescription: newEmbedDesc || undefined,
+        embedColor: (newEmbedTitle || newEmbedDesc) ? hexToColor(newEmbedColor) : undefined,
+        embedMedia: hasMedia ? {
+          author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
+          thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
+          image: newImageUrl ? { url: newImageUrl } : undefined,
+          footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
+        } : undefined,
       });
       setPanels(prev => [...prev, p]);
       setSelectedPanel(p);
+      showToast("Ticket panel deployed!", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to deploy panel.", "error");
     }
   };
 
@@ -130,16 +171,33 @@ export default function PanelsPage() {
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPanel || !newCatName) return;
+    if (!selectedPanel || !newCatName || !newCatButtonLabel) return;
     try {
       const c = await ShrimpyAPI.createCategory(guildId, selectedPanel.id, {
         name: newCatName,
-        channelId: newCatChanId
+        buttonLabel: newCatButtonLabel,
+        buttonStyle: newCatButtonStyle,
+        emoji: newCatEmoji || undefined,
+        buttonOrder: categories.length,
+        ticketDestination: newCatDestination,
+        ticketNameTemplate: '{category}-{number}',
+        ticketOpenContent: newCatOpenContent || undefined,
+        ticketOpenTitle: newCatOpenTitle || undefined,
+        ticketOpenMessage: newCatOpenDesc || undefined,
+        ticketOpenColor: (newCatOpenTitle || newCatOpenDesc) ? hexToColor(newCatOpenColor) : undefined,
+        maxTicketsPerUser: 1,
+        allowUserClose: true,
       });
       setCategories(prev => [...prev, c]);
       setNewCatName("");
+      setNewCatButtonLabel("");
+      setNewCatEmoji("");
+      setNewCatOpenContent("");
+      setNewCatOpenTitle("");
+      setNewCatOpenDesc("");
     } catch (err) {
       console.error(err);
+      showToast("Failed to add category.", "error");
     }
   };
 
@@ -208,17 +266,30 @@ export default function PanelsPage() {
     }
   };
 
+  const previewContent = selectedPanel ? selectedPanel.content : newContent;
+  const previewEmbedTitle = selectedPanel ? selectedPanel.embedTitle : newEmbedTitle;
+  const previewEmbedDesc = selectedPanel ? selectedPanel.embedDescription : newEmbedDesc;
+  const previewEmbedColor = colorToHex(selectedPanel ? selectedPanel.embedColor : hexToColor(newEmbedColor));
+  const previewMedia = selectedPanel ? selectedPanel.embedMedia : (newAuthorName || newThumbnailUrl || newImageUrl || newFooterText) ? {
+    author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
+    thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
+    image: newImageUrl ? { url: newImageUrl } : undefined,
+    footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
+  } : undefined;
+  const hasPreviewEmbed = !!(previewEmbedTitle || previewEmbedDesc || previewMedia);
+  const previewCategories = selectedPanel ? categories : [];
+
   return (
     <div>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Ticket Panels Builder</h2>
-        <p className={styles.sectionDesc}>Create beautiful, interactive ticket creation desks that post to your channels as Discord embeds.</p>
+        <p className={styles.sectionDesc}>Create interactive ticket creation desks that post plain text and/or an embed to your channels, with one button per category.</p>
       </div>
 
       <div className={styles.grid}>
         {/* Left Column: Creator / Config */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          
+
           {/* Active Panels List */}
           <div className={styles.card}>
             <h3 className={styles.cardTitle}>Active Support Desks</h3>
@@ -227,9 +298,9 @@ export default function PanelsPage() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {panels.map(p => (
-                  <div 
-                    key={p.id} 
-                    className={`${styles.actionBtn}`} 
+                  <div
+                    key={p.id}
+                    className={`${styles.actionBtn}`}
                     style={{
                       justifyContent: 'space-between',
                       borderColor: selectedPanel?.id === p.id ? 'var(--color-primary)' : '',
@@ -239,10 +310,10 @@ export default function PanelsPage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Layers size={14} style={{ color: 'var(--color-primary)' }} />
-                      <span style={{ fontWeight: 'bold' }}>{p.title}</span>
+                      <span style={{ fontWeight: 'bold' }}>{p.name}</span>
                       <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>in #{channels.find(c => c.id === p.channelId)?.name || p.channelId}</span>
                     </div>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleDeletePanel(p.id); }}
                       style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
                     >
@@ -258,43 +329,90 @@ export default function PanelsPage() {
           <div className={styles.card}>
             <h3 className={styles.cardTitle}>Create New Ticket Panel</h3>
             <form onSubmit={handleCreatePanel} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Panel Name (internal)</label>
+                  <input className={styles.input} type="text" value={newName} onChange={e => setNewName(e.target.value)} required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Destination Channel</label>
+                  <Dropdown
+                    value={newChannelId}
+                    onChange={setNewChannelId}
+                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                  />
+                </div>
+              </div>
+
               <div className={styles.formGroup}>
-                <label className={styles.label}>Panel Destination Channel</label>
+                <label className={styles.label}>Button Layout</label>
                 <Dropdown
-                  value={newChannelId}
-                  onChange={setNewChannelId}
-                  options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                  value={newPanelStyle}
+                  onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
+                  options={[
+                    { value: "buttons", label: "Buttons (up to 25 categories)" },
+                    { value: "select_menu", label: "Select Menu" },
+                  ]}
                 />
               </div>
 
               <div className={styles.formGroup}>
+                <label className={styles.label}>Plain Text Message (optional)</label>
+                <textarea className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
+                Embed (optional — leave title &amp; description empty to send plain text only)
+              </div>
+
+              <div className={styles.formGroup}>
                 <label className={styles.label}>Embed Title</label>
-                <input className={styles.input} type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} required />
+                <input className={styles.input} type="text" value={newEmbedTitle} onChange={e => setNewEmbedTitle(e.target.value)} />
               </div>
 
               <div className={styles.formGroup}>
                 <label className={styles.label}>Embed Description</label>
-                <textarea className={styles.textarea} rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} required />
+                <textarea className={styles.textarea} rows={3} value={newEmbedDesc} onChange={e => setNewEmbedDesc(e.target.value)} />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Embed Color</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input type="color" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
+                  <input className={styles.input} type="text" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ flex: 1 }} />
+                </div>
               </div>
 
               <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Button Text Label</label>
-                  <input className={styles.input} type="text" value={newBtnLabel} onChange={e => setNewBtnLabel(e.target.value)} required />
+                  <label className={styles.label}>Author Name</label>
+                  <input className={styles.input} type="text" value={newAuthorName} onChange={e => setNewAuthorName(e.target.value)} />
                 </div>
-                
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Button Accent Style</label>
-                  <Dropdown
-                    value={newBtnStyle}
-                    onChange={val => setNewBtnStyle(val as 'primary' | 'success' | 'danger' | 'secondary')}
-                    options={[
-                      { value: "primary", label: "Primary (Blue)" },
-                      { value: "success", label: "Success (Green)" },
-                      { value: "danger", label: "Danger (Red)" },
-                      { value: "secondary", label: "Secondary (Gray)" },
-                    ]}
-                  />
+                  <label className={styles.label}>Author Icon URL</label>
+                  <input className={styles.input} type="text" value={newAuthorIconUrl} onChange={e => setNewAuthorIconUrl(e.target.value)} />
+                </div>
+              </div>
+
+              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Thumbnail URL</label>
+                  <input className={styles.input} type="text" value={newThumbnailUrl} onChange={e => setNewThumbnailUrl(e.target.value)} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Main Image URL</label>
+                  <input className={styles.input} type="text" value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} />
+                </div>
+              </div>
+
+              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Footer Text</label>
+                  <input className={styles.input} type="text" value={newFooterText} onChange={e => setNewFooterText(e.target.value)} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Footer Icon URL</label>
+                  <input className={styles.input} type="text" value={newFooterIconUrl} onChange={e => setNewFooterIconUrl(e.target.value)} />
                 </div>
               </div>
 
@@ -309,40 +427,91 @@ export default function PanelsPage() {
 
         {/* Right Column: Live Preview & Ticket Categories */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          
+
           {/* Real-time Discord Preview Card */}
           <div className={styles.card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Eye size={16} style={{ color: 'var(--color-accent)' }} />
               <h3 className={styles.cardTitle}>Real-time Discord Preview</h3>
             </div>
-            
-            <div className="previewPanel" style={{ background: '#36393f', border: '1px solid #202225', padding: '16px', borderRadius: '8px', minHeight: 'auto' }}>
-              <div style={{ background: '#2f3136', borderLeft: '4px solid #5865F2', borderRadius: '4px', padding: '16px', width: '100%' }}>
-                <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '15px', marginBottom: '8px' }}>
-                  {selectedPanel ? selectedPanel.title : newTitle}
+
+            <div style={{ background: '#36393f', border: '1px solid #202225', padding: '16px', borderRadius: '8px', minHeight: 'auto' }}>
+              {previewContent && (
+                <div style={{ color: '#dcddde', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.4', marginBottom: hasPreviewEmbed ? '10px' : 0 }}>
+                  {previewContent}
                 </div>
-                <div style={{ color: '#dcddde', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                  {selectedPanel ? selectedPanel.description : newDesc}
+              )}
+
+              {hasPreviewEmbed && (
+                <div style={{ background: '#2f3136', borderLeft: `4px solid ${previewEmbedColor}`, borderRadius: '4px', padding: '16px', width: '100%', display: 'flex', gap: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    {previewMedia?.author?.name && (
+                      <div style={{ color: '#ffffff', fontSize: '12px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {previewMedia.author.iconUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={previewMedia.author.iconUrl} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                        )}
+                        <span>{previewMedia.author.name}</span>
+                      </div>
+                    )}
+                    {previewEmbedTitle && (
+                      <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '15px', marginBottom: '8px' }}>
+                        {previewEmbedTitle}
+                      </div>
+                    )}
+                    {previewEmbedDesc && (
+                      <div style={{ color: '#dcddde', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                        {previewEmbedDesc}
+                      </div>
+                    )}
+                    {previewMedia?.image?.url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previewMedia.image.url} alt="" style={{ maxWidth: '100%', borderRadius: '4px', marginTop: '10px' }} />
+                    )}
+                    {previewMedia?.footer?.text && (
+                      <div style={{ color: '#72767d', fontSize: '11px', marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {previewMedia.footer.iconUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={previewMedia.footer.iconUrl} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
+                        )}
+                        <span>{previewMedia.footer.text}</span>
+                      </div>
+                    )}
+                  </div>
+                  {previewMedia?.thumbnail?.url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewMedia.thumbnail.url} alt="" style={{ width: '64px', height: '64px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
+                  )}
                 </div>
-                <div style={{ color: '#72767d', fontSize: '11px', marginTop: '12px' }}>
-                  Response time: &lt; 15 mins
-                </div>
-                
-                <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-                  <button 
+              )}
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
+                {previewCategories.length > 0 ? (
+                  previewCategories.map(c => (
+                    <button
+                      key={c.id}
+                      style={{
+                        backgroundColor: BUTTON_COLORS[c.buttonStyle] || BUTTON_COLORS.primary,
+                        color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px'
+                      }}
+                      disabled
+                    >
+                      <Ticket size={14} />
+                      <span>{c.emoji ? `${c.emoji} ` : ''}{c.buttonLabel}</span>
+                    </button>
+                  ))
+                ) : (
+                  <button
                     style={{
-                      backgroundColor: (selectedPanel ? selectedPanel.buttonStyle : newBtnStyle) === 'primary' ? '#5865F2' :
-                                      (selectedPanel ? selectedPanel.buttonStyle : newBtnStyle) === 'success' ? '#3ba55d' :
-                                      (selectedPanel ? selectedPanel.buttonStyle : newBtnStyle) === 'danger' ? '#d83c3e' : '#4f545c',
-                      color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px'
+                      backgroundColor: BUTTON_COLORS[newCatButtonStyle] || BUTTON_COLORS.primary,
+                      color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.6
                     }}
                     disabled
                   >
                     <Ticket size={14} />
-                    <span>{selectedPanel ? selectedPanel.buttonLabel : newBtnLabel}</span>
+                    <span>Add a category to see buttons</span>
                   </button>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -352,7 +521,7 @@ export default function PanelsPage() {
             <div className={styles.card}>
               <h3 className={styles.cardTitle}>Support Categories</h3>
               <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-                Route tickets to different channels based on user issue selections. Click a category to manage its ticket handler roles.
+                Each category becomes one button on the panel. Click a category to manage its ticket handler roles.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
@@ -368,9 +537,9 @@ export default function PanelsPage() {
                     onClick={() => setSelectedCategory(c)}
                   >
                     <div>
-                      <span style={{ fontWeight: 'bold' }}>{c.name}</span>
+                      <span style={{ fontWeight: 'bold' }}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</span>
                       <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
-                        routes to #{channels.find(ch => ch.id === c.channelId)?.name || c.channelId}
+                        opens a {c.ticketDestination}
                       </span>
                     </div>
                     <button
@@ -396,18 +565,89 @@ export default function PanelsPage() {
                   />
                 </div>
 
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Spawn Thread Channel</label>
-                  <Dropdown
-                    value={newCatChanId}
-                    onChange={setNewCatChanId}
-                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
-                  />
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Button Label</label>
+                    <input
+                      className={styles.input}
+                      type="text"
+                      placeholder="e.g. Billing Help"
+                      value={newCatButtonLabel}
+                      onChange={e => setNewCatButtonLabel(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Button Emoji (optional)</label>
+                    <input
+                      className={styles.input}
+                      type="text"
+                      placeholder="🎫"
+                      value={newCatEmoji}
+                      onChange={e => setNewCatEmoji(e.target.value)}
+                    />
+                  </div>
                 </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Button Style</label>
+                    <Dropdown
+                      value={newCatButtonStyle}
+                      onChange={val => setNewCatButtonStyle(val as 'primary' | 'secondary' | 'success' | 'danger')}
+                      options={[
+                        { value: "primary", label: "Primary (Blue)" },
+                        { value: "success", label: "Success (Green)" },
+                        { value: "danger", label: "Danger (Red)" },
+                        { value: "secondary", label: "Secondary (Gray)" },
+                      ]}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Opens As</label>
+                    <Dropdown
+                      value={newCatDestination}
+                      onChange={val => setNewCatDestination(val as 'thread' | 'channel')}
+                      options={[
+                        { value: "thread", label: "Private Thread" },
+                        { value: "channel", label: "Dedicated Channel" },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
+                  Ticket greeting (sent inside the opened ticket)
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Plain Text Greeting (optional)</label>
+                  <textarea className={styles.textarea} rows={2} value={newCatOpenContent} onChange={e => setNewCatOpenContent(e.target.value)} placeholder="Sent below the automatic &quot;Welcome @user&quot; line." />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Greeting Embed Title (optional)</label>
+                  <input className={styles.input} type="text" value={newCatOpenTitle} onChange={e => setNewCatOpenTitle(e.target.value)} />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Greeting Embed Description (optional)</label>
+                  <textarea className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
+                </div>
+
+                {(newCatOpenTitle || newCatOpenDesc) && (
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Greeting Embed Color</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
+                      <input className={styles.input} type="text" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ flex: 1 }} />
+                    </div>
+                  </div>
+                )}
 
                 <button type="submit" className={styles.submitBtn} style={{ padding: '10px' }}>
                   <Plus size={14} />
-                  <span>Add Category Routing</span>
+                  <span>Add Category</span>
                 </button>
               </form>
             </div>
@@ -418,7 +658,7 @@ export default function PanelsPage() {
             <div className={styles.card}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <Users size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 className={styles.cardTitle}>"{selectedCategory.name}" Handler Roles</h3>
+                <h3 className={styles.cardTitle}>&quot;{selectedCategory.name}&quot; Handler Roles</h3>
               </div>
               <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
                 Roles invited into tickets opened from this category specifically, in addition to the panel&apos;s handler roles above. This does not grant dashboard access.
