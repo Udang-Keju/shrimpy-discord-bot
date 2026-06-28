@@ -81,7 +81,7 @@ These are the rules every screen and flow should be judged against.
 1. **Guide, don't dump.** Never drop a user onto an empty data table. Every entry point either shows progress (a setup checklist) or a meaningful empty state with one obvious next action.
 2. **One product, one skin.** Every pixel uses the [Design System](./DESIGN_SYSTEM.md) tokens (coral + teal + navy). No screen invents its own palette. *(This is the single biggest current violation — see §12.)*
 3. **Show the outcome.** Config screens render a **live Discord-accurate preview** of what the Member will see, so the admin edits with confidence.
-4. **Progressive disclosure.** Defaults that work out of the box; advanced options tucked behind "Advanced" toggles. A low-technical admin should never be confronted with `supportRoles[]` or "gateway constraints."
+4. **Progressive disclosure.** Defaults that work out of the box; advanced options tucked behind "Advanced" toggles. A low-technical admin should never be confronted with `handlerRoleIds[]` or "gateway constraints."
 5. **Feedback is immediate and human.** Saves confirm with toasts (not `alert()`), errors are surfaced inline with a recovery action, and destructive actions confirm before firing.
 6. **Respect the role.** Staff see only what they can act on. Admins see everything. Owners get the multi-bot admin area.
 7. **Real ≠ demo.** The sandbox/demo experience is clearly labeled and visually separated from a real authenticated session.
@@ -311,14 +311,15 @@ Each step deep-links to the relevant config screen and returns to the checklist 
 The config screens largely exist; the journey work is **ordering, previewing, and depth**. Recommended in-product order mirrors the checklist. (b)–(d) below are the **Server Management** sidebar group (§5.3); (a) and (e) are **Settings**.
 
 **(a) Staff & Access — `/settings/access`** (split out of today's Settings)
-- Satisfies `A-05`. Two distinct concepts that today's copy conflates:
-  - **Dashboard-access roles** (Level 2 — who can log into this console) — [settings/page.tsx:181-228](../../dashboard/app/dashboard/[guildId]/settings/page.tsx#L181-L228).
-  - **Per-category support roles** (who can *see/handle* a given ticket category) — set on the panel screen.
-- Rename "Level 2 credentials" → plain language ("People who can manage tickets here").
+- Satisfies `A-05`. Two distinct concepts, now correctly separated (previously conflated in one card's copy):
+  - **Dashboard-access roles** (Level 2 — who can log into this console; does *not* affect ticket handling) — [settings/page.tsx:177](../../dashboard/app/dashboard/[guildId]/settings/page.tsx#L177).
+  - **Ticket handler roles** (who is invited into a ticket's Discord channel/thread to handle it) — configured per panel and per category on the panel screen, see (b) below.
+- "Level 2 credentials" already reworded to plain language in the settings card copy; carry the same phrasing into `/settings/access` when it's split out.
 
 **(b) Ticket Panels — `/panels`** ([panels/page.tsx](../../dashboard/app/dashboard/[guildId]/panels/page.tsx))
 - Satisfies `A-02`, `A-06`. Has a solid two-column **form + live Discord preview** pattern — keep and replicate this everywhere.
-- **Depth gaps vs PRD:** UI supports only **one button per panel**; PRD allows up to 3 buttons or a 25-option select menu. No per-category opening embed, no thread-vs-channel choice (`A-06`), categories accept only **one** support role (`supportRoles: [newCatRoleId]` — [panels/page.tsx:115](../../dashboard/app/dashboard/[guildId]/panels/page.tsx#L115)).
+- Categories now support a real **multi-select** of handler roles, both at the panel level ([panels/page.tsx:460-478](../../dashboard/app/dashboard/[guildId]/panels/page.tsx#L460-L478)) and additively per category ([panels/page.tsx:412-459](../../dashboard/app/dashboard/[guildId]/panels/page.tsx#L412-L459)) — the `supportRoles: [oneRole]` gap noted below in §A.6 is resolved.
+- **Remaining depth gaps vs PRD:** UI supports only **one button per panel**; PRD allows up to 3 buttons or a 25-option select menu. No per-category opening embed, no thread-vs-channel choice (`A-06`).
 
 **(c) Welcome — `/welcome`** ([welcome/page.tsx](../../dashboard/app/dashboard/[guildId]/welcome/page.tsx))
 - Satisfies `A-03`, `A-04` (fold auto-roles-on-join in here — they're conceptually part of "what happens when someone joins," currently stranded in Settings).
@@ -365,7 +366,7 @@ Login ─ Pick server ─ Tickets inbox ─ Open a ticket ─ Claim ─ Set prio
   - `S-07` **Generate/view transcript** — only an `alert()` stub ([tickets/page.tsx:81-83](../../dashboard/app/dashboard/[guildId]/tickets/page.tsx#L81-L83)).
   - There is **no ticket detail view** — staff can't read the conversation in the dashboard, only act on a row.
 
-> `S-05` (add/remove participants) is **deferred** (§14.8 decided) — per-category support roles already auto-grant every role-holder access to a ticket's thread, covering the real workflow without a per-ticket participants table.
+> `S-05` (add/remove participants) is **deferred** (§14.8 decided) — panel- and category-level handler roles already auto-grant every role-holder access to a ticket's channel/thread, covering the real workflow without a per-ticket participants table.
 
 ### 8.1 ★ Proposed: Ticket detail (`/tickets/[ticketId]`)
 
@@ -435,7 +436,7 @@ Mapped to the four problem areas you identified, plus the design issue.
 | Screen | Missing vs PRD/Spec |
 |--------|---------------------|
 | Tickets | Detail view, priority (`S-02`), internal notes (`S-04`), real transcript (`S-07`) — `S-05` participants deferred (§14.8) |
-| Panels | Multi-button/select-menu, per-category embed, thread-vs-channel (`A-06`), multiple support roles |
+| Panels | Multi-button/select-menu, per-category embed, thread-vs-channel (`A-06`) — handler roles done |
 | Welcome | Template-variable picker (`A-03`), test-send |
 | Settings | Auto-close duration (`A-08`), language |
 | (none) | Statistics page (`A-09`), Transcripts archive (`A-11`), Multi-bot admin UI |
@@ -515,7 +516,7 @@ The rule: **every screen renders from [Design System](./DESIGN_SYSTEM.md) tokens
 - Write for a **low-technical admin** ([PRD §3.1](./PRD.md#3-target-users--personas)). Concrete renames:
   - "Banner Image Knobs" → "Welcome Card"
   - "Spawn Thread Channel" → "Where tickets open"
-  - "Level 2 credentials" / "Dashboard Access Roles (Level 2)" → "Who can manage tickets"
+  - "Level 2 credentials" / "Dashboard Access Roles (Level 2)" → "Who can access this dashboard" (console login/config only — see §A.6 for who handles tickets inside Discord)
   - "Gateway Requirements / gateway constraint error" → an automated check: "⚠ Move Shrimpy's role above these roles so it can assign them. [Fix]"
 
 ### 12.5 Interaction defaults
@@ -563,7 +564,7 @@ Sequenced so each phase ships a coherent, testable improvement.
 - **Transcripts archive** page + export (replace the stub).
 
 ### Phase 3 — Configuration depth (Admin value)
-- Panels: multi-button/select-menu, per-category embed + thread-vs-channel + multiple support roles.
+- Panels: multi-button/select-menu, per-category embed + thread-vs-channel. (Multi-role handler roles already shipped.)
 - Welcome: template-variable picker, test-send, fold in auto-roles-on-join.
 - Settings: auto-close duration, language; split out **Staff & Access**.
 - Wire **statistics** into Overview.
@@ -585,7 +586,7 @@ All eight items below were open questions; each is now **Decided** and reflected
 5. **Statistics depth for v1 — Decided: counts only, no chart.** Overview ships open/claimed/closed counts + avg. resolution; sparkline/trend charts deferred to "Dashboard v2" per [PRD §9](./PRD.md#9-out-of-scope-items) — avoids a charting dependency before the core journey ships. See §7.5.
 6. **Invite permissions — Decided: scoped, not Administrator.** Request View Channels, Manage Channels, Manage Roles, Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions, Use External Emojis, Manage Messages — not `permissions=8`. See §7.4.
 7. **Dashboard→thread reply scope — Decided: read-only in v1.** No composer, no `POST …/tickets/:id/messages` endpoint. Staff already live in the Discord thread to reply; ticket-detail shows claim/priority/notes/transcript only. Revisit if dashboard-first support is requested. See §8.1, [TECHNICAL_SPEC §4.4](./TECHNICAL_SPEC.md#44-tickets).
-8. **Participants (`S-05`) — Decided: defer, no `ticket_participants` table.** Per-category **support roles** ([§A.6](#a6--panels-ticket-panels--categories), `ticket_categories`, multi-role) already auto-grant every role-holder access to a ticket's thread the moment it opens — the real workflow (route to the right team) is already covered. Participants would only add value for one-off individual escalation outside the support-role list, which isn't needed now. Revisit only if that specific case is requested. See §8, [TECHNICAL_SPEC §3.2](./TECHNICAL_SPEC.md#32-postgresql-ddl).
+8. **Participants (`S-05`) — Decided: defer, no `ticket_participants` table.** Panel- and category-level **handler roles** ([§A.6](#a6--panels-ticket-panels--categories), `panel_handler_roles` / `category_handler_roles`, both multi-role) already auto-grant every role-holder access to a ticket's channel/thread the moment it opens — the real workflow (route to the right team) is already covered. Participants would only add value for one-off individual escalation outside the handler-role lists, which isn't needed now. Revisit only if that specific case is requested. See §8, [TECHNICAL_SPEC §3.2](./TECHNICAL_SPEC.md#32-table-definitions-ddl).
 
 ---
 
@@ -725,7 +726,7 @@ The missing keystone. Shown inside the full app shell (grouped, role-aware sideb
 │   ▓▓▓▓▓░░░░░░░░░░░░░░░  1 of 4 complete                    │  progress: --primary on --bg-surface-elevated
 ├───────────────────────────────────────────────────────────┤
 │  ✅  ①  Designate staff roles                              │  done: --success check, muted text,
-│         People who can manage tickets here.   [ Edit  ]    │  secondary btn
+│         People who can access this dashboard.  [ Edit  ]   │  secondary btn
 │ ─────────────────────────────────────────────────────────  │
 │  ◯  ②  Create your first ticket panel        [ Build → ]   │  NEXT step emphasized: --primary btn
 │         The button members click to get help. ▲ start here │  + --primary left border
@@ -865,7 +866,7 @@ Welcome                                                            --text-3xl
 
 ### A.6 — `/panels` (Ticket Panels & Categories)
 
-Admin-only. The screen that already has the best form+preview pattern today — the work is **depth** (`A-02`, `A-06`): up to 3 buttons *or* a 25-option select menu (not one button), thread-vs-channel choice, **multiple** support roles per category, and — most importantly — a **fully configurable opening message** (the embed the bot posts into the ticket the instant a member clicks a button / picks a select option), each with its own live preview.
+Admin-only. The screen that already has the best form+preview pattern today — the remaining work is **depth** (`A-02`, `A-06`): up to 3 buttons *or* a 25-option select menu (not one button), thread-vs-channel choice, and — most importantly — a **fully configurable opening message** (the embed the bot posts into the ticket the instant a member clicks a button / picks a select option), each with its own live preview. (**Multiple handler roles per panel and per category are already shipped** — see below.)
 
 There are **two** things to preview here, so the screen has **two** editors: the **public panel** (what members click) and, behind each ⚙, the **category editor** including the **opening message** (what the bot posts when the ticket opens).
 
@@ -893,7 +894,7 @@ CATEGORY — the ⚙ editor; the OPENING MESSAGE is what the bot posts when the 
 │  Button label  [ 💳 Billing          ]  │ │ first message the member sees inside │  <DiscordPreview/>
 │  Opens as   (•) Private thread          │ │ their brand-new ticket               │
 │             ( ) New channel             │ │ ┌──────────────────────────────────┐ │
-│  Who can see  @Support @Billing [+role] │ │ │ 🦐 Shrimpy                       │ │  MULTIPLE support roles
+│  Who can see  @Support @Billing [+role] │ │ │ 🦐 Shrimpy                       │ │  MULTIPLE handler roles
 │  ── Opening message (embed, A-06) ───── │ │ │ Thanks for reaching out, @alice! │ │  ← a FULL embed, not plain text
 │  Title  [ Thanks for reaching out!   ]  │ │ │ ────────────────────────────     │ │
 │  Body                                   │ │ │ A billing specialist will be     │ │  title + body + accent + media,
@@ -909,8 +910,8 @@ CATEGORY — the ⚙ editor; the OPENING MESSAGE is what the bot posts when the 
 ```
 
 - **Multi-button / select-menu (`A-02`):** toggle between ≤3 buttons and a ≤25-option select menu; the panel preview re-renders the component type live.
-- **Opening message is a configurable embed (`A-06`):** the message the bot posts into the freshly-opened ticket is a **full embed** — its own **title, body, accent color, and optional media** — edited per category with a **dedicated live preview** of exactly what the member sees on open (not the public panel). The body supports template variables — member tokens shared with Welcome (`{mention}`, `{user}`) plus the **ticket-context** tokens `{category}` and `{number}` ([Command Reference §9](COMMAND_REFERENCE.md#9-template-variables-reference)) — resolved against the live guild (P3 "show the outcome"). **Already backed by schema** — `ticket_categories.ticket_open_{title,message,color,media}` ([Technical Spec §3.2](TECHNICAL_SPEC.md#32-postgresql-ddl)) — so this is frontend + the panels API exposing those fields, **no migration**.
-- **Per-category depth (`A-06`):** beyond the opening message, each category gets a **thread vs channel** choice and a **list** of support roles (the current `supportRoles: [oneRole]` becomes a real multi-select).
+- **Opening message is a configurable embed (`A-06`):** the message the bot posts into the freshly-opened ticket is a **full embed** — its own **title, body, accent color, and optional media** — edited per category with a **dedicated live preview** of exactly what the member sees on open (not the public panel). The body supports template variables — member tokens shared with Welcome (`{mention}`, `{user}`) plus the **ticket-context** tokens `{category}` and `{number}` ([Command Reference §9](COMMAND_REFERENCE.md#9-template-variables-reference)) — resolved against the live guild (P3 "show the outcome"). **Already backed by schema** — `ticket_categories.ticket_open_{title,message,color,media}` ([Technical Spec §3.2](TECHNICAL_SPEC.md#32-table-definitions-ddl)) — so this is frontend + the panels API exposing those fields, **no migration**.
+- **Per-category depth (`A-06`):** the handler-roles half is **done** — each panel has its own multi-select role list, and each category can add further roles on top (`panel_handler_roles` / `category_handler_roles`, [Technical Spec §3.2](TECHNICAL_SPEC.md#32-table-definitions-ddl); UI: [panels/page.tsx:460-478](../../dashboard/app/dashboard/[guildId]/panels/page.tsx#L460-L478) and [:412-459](../../dashboard/app/dashboard/[guildId]/panels/page.tsx#L412-L459)). Still missing: a **thread vs channel** choice per category.
 - **Destructive guards:** removing a button/category or re-posting a panel confirms first (§12.5); "Save & post" updates the live Discord message.
 
 ### A.7 — `/roles` (Reaction Roles)
@@ -963,21 +964,21 @@ Settings   [ General ]  [ Staff & Access ]                  ← sub-nav tabs (--
 ▒ Unsaved changes                              [ Discard ]  [ Save ]
 
 ┌─ Staff & Access ───────────────────────────────────────────┐
-│  WHO CAN MANAGE TICKETS HERE                                │  was "Dashboard Access Roles
-│  Roles you grant dashboard access (operate tickets only):   │  (Level 2)" — now plain language
+│  WHO CAN ACCESS THIS DASHBOARD                               │  was "Dashboard Access Roles
+│  Roles you grant console login + config access to:          │  (Level 2)" — now plain language
 │   @Support   @Mods            [ + add role ]                │
 │   ↑ these users see Overview + Tickets + Transcripts only   │  mirrors the §A.4 staff sidebar
 │  ──────────────────────────────────────────────────────────│
 │  ℹ Admins (Manage Server / Administrator) always have full  │  --info note; explains the
 │    access — you don't need to list them here.               │  two-level model without jargon
 │  ──────────────────────────────────────────────────────────│
-│  Per-category support roles (who handles which ticket type) │  cross-link, not duplicated —
-│  are set on each panel category →  [ Go to Panels ]         │  lives on §A.6
+│  ℹ This does not control who handles tickets inside Discord │  --info note; this list is
+│    — that's set per panel and per category →  [ Go to Panels ] │  console access only (§A.6)
 └─────────────────────────────────────────────────────────────┘
 ```
 
 - **General:** adds **language** and **auto-close duration** (`A-08`) alongside the existing nickname/prefix/log-channel/ticket-limit.
-- **Staff & Access (`A-05`):** separates the two concepts today's copy conflates — *dashboard-access roles* (Level 2, here) vs *per-category support roles* (on Panels, linked not duplicated). Copy is plain; the two-level model is explained in an info note, not assumed.
+- **Staff & Access (`A-05`):** separates the two concepts today's copy used to conflate — *dashboard-access roles* (Level 2, here) vs *ticket handler roles* (panel- and category-level, on Panels, linked not duplicated). Copy is plain; the two-level model is explained in an info note, not assumed.
 
 ### A.9 — Shared component patterns (§12.3)
 
@@ -1225,7 +1226,7 @@ Every screen in this journey, mapped to the [Technical Spec §4](./TECHNICAL_SPE
 | `GET …/guilds/:id/health` | Bot health strip + role-height check (A.2, A.5, A.7) | A-09 / A-04 |
 | `setup` object on `GET /guilds/:id` | First-run Setup checklist completion (A.2) | A-09 |
 
-**Deferred/dropped per §14 decisions** — not built in v1: `POST …/tickets/:id/messages` (§14.7, read-only conversation) and `GET/POST/DELETE …/tickets/:id/participants` + the `ticket_participants` table (§14.8, covered by existing per-category support roles).
+**Deferred/dropped per §14 decisions** — not built in v1: `POST …/tickets/:id/messages` (§14.7, read-only conversation) and `GET/POST/DELETE …/tickets/:id/participants` + the `ticket_participants` table (§14.8, covered by panel- and category-level handler roles — see below).
 
 ### B.3 Already-covered (no change needed — common misconception)
 
@@ -1233,9 +1234,10 @@ Every screen in this journey, mapped to the [Technical Spec §4](./TECHNICAL_SPE
 - **Close with resolution note (`S-03`)** → `close_reason` via `POST …/tickets/:id/close`.
 - **Claim (`S-08`)** → `tickets.claimed_by` via `PATCH …/tickets/:id`.
 - **Internal-note storage** → already modeled (`ticket_messages.is_staff_note`); only the *write* endpoint was missing.
-- **Per-category support roles, thread-vs-channel, panel style** → already columns on `ticket_categories` (`panel_style`, `ticket_destination`, …); Panels depth (A.6) is richer payloads, not new routes. These same support roles are also why participants (`S-05`) is deferred — §14.8.
+- **Thread-vs-channel, panel style** → already columns on `ticket_categories` (`panel_style`, `ticket_destination`, …); Panels depth (A.6) is richer payloads, not new routes.
+- **Ticket handler roles** (who's invited into a ticket's channel/thread) → shipped post-spec as `panel_handler_roles` + `category_handler_roles` ([TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md#32-table-definitions-ddl) §3.2/§4.3) — these are the tables that make participants (`S-05`) unnecessary, superseding the single unpersisted `supportRoles` field this spec originally pointed to.
 
-> **Implementation takeaway:** the journey is overwhelmingly buildable on the existing API. The only genuinely new backend surface is **4 endpoints + 0 new tables** (B.2) — `messages`/`participants`/`ticket_participants` were scoped out by the §14 decisions, not deferred for lack of clarity.
+> **Implementation takeaway:** the journey is overwhelmingly buildable on the existing API. The only genuinely new backend surface identified by the original §14 analysis was **4 endpoints + 0 new tables** (B.2) — `messages`/`participants`/`ticket_participants` were scoped out by those decisions, not deferred for lack of clarity. (Handler roles, added afterward to make good on that deferral, did add 2 small junction tables — see above.)
 
 ---
 
