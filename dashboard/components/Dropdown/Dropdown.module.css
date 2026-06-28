@@ -96,6 +96,15 @@
   flex-shrink: 0;
 }
 
+.groupLabel {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
 .empty {
   padding: 8px 10px;
   font-size: var(--text-sm);

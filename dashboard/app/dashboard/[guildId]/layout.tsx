@@ -138,7 +138,10 @@ export default function DashboardLayout({
             value={guildId}
             onChange={handleGuildChange}
             placeholder="Select a server..."
-            options={guilds.map(g => ({ value: g.id, label: g.name, icon: g.icon }))}
+            options={[
+              ...guilds.filter(g => g.bot_joined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Invited" })),
+              ...guilds.filter(g => !g.bot_joined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Not Invited" })),
+            ]}
           />
         </div>
 

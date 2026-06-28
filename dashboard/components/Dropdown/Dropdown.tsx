@@ -10,6 +10,8 @@ export interface DropdownOption {
   label: string;
   /** Emoji/text icon, or an image URL to render as an avatar */
   icon?: string;
+  /** Optional group header this option is rendered under, in first-seen order */
+  group?: string;
 }
 
 interface DropdownProps {
@@ -46,6 +48,16 @@ export default function Dropdown({ value, onChange, options, placeholder, classN
 
   const selected = options.find(o => o.value === value);
 
+  const groups: { label?: string; options: DropdownOption[] }[] = [];
+  for (const opt of options) {
+    const last = groups[groups.length - 1];
+    if (last && last.label === opt.group) {
+      last.options.push(opt);
+    } else {
+      groups.push({ label: opt.group, options: [opt] });
+    }
+  }
+
   const renderIcon = (icon?: string) => {
     if (!icon) return null;
     if (isIconUrl(icon)) {
@@ -80,17 +92,22 @@ export default function Dropdown({ value, onChange, options, placeholder, classN
           {options.length === 0 ? (
             <div className={styles.empty}>No options available</div>
           ) : (
-            options.map(opt => (
-              <div
-                key={opt.value}
-                className={`${styles.option} ${opt.value === value ? styles.optionActive : ""}`}
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-              >
-                {renderIcon(opt.icon)}
-                <span>{opt.label}</span>
+            groups.map((group, idx) => (
+              <div key={group.label ?? `__group_${idx}`}>
+                {group.label && <div className={styles.groupLabel}>{group.label}</div>}
+                {group.options.map(opt => (
+                  <div
+                    key={opt.value}
+                    className={`${styles.option} ${opt.value === value ? styles.optionActive : ""}`}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setOpen(false);
+                    }}
+                  >
+                    {renderIcon(opt.icon)}
+                    <span>{opt.label}</span>
+                  </div>
+                ))}
               </div>
             ))
           )}
