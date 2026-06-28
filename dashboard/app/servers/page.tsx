@@ -229,8 +229,8 @@ export default function ServersPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <h3 style={{ fontSize: "16px", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>{g.name}</h3>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
-                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: hasJoined ? "var(--color-success)" : "var(--color-text-muted)" }} />
-                          <span style={{ fontSize: "12px", color: hasJoined ? "var(--color-success)" : "var(--color-text-muted)", fontWeight: 500 }}>
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: hasJoined ? "var(--color-warning)" : "var(--color-text-muted)" }} />
+                          <span style={{ fontSize: "12px", color: hasJoined ? "var(--color-warning)" : "var(--color-text-muted)", fontWeight: 500 }}>
                             {hasJoined ? "Invited" : "Invite Needed"}
                           </span>
                         </div>

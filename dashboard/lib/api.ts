@@ -421,7 +421,8 @@ export const ShrimpyAPI = {
   // Tickets management
   listTickets: async (guildId: string): Promise<Ticket[]> => {
     if (isDemoMode()) return mockTickets.filter(t => t.guildId === guildId);
-    return fetchJSON<Ticket[]>(`/api/v1/guilds/${guildId}/tickets`);
+    const res = await fetchJSON<{ tickets: Ticket[] }>(`/api/v1/guilds/${guildId}/tickets`);
+    return res.tickets;
   },
 
   updateTicket: async (guildId: string, ticketId: string, updates: Partial<Ticket>): Promise<Ticket> => {
