@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
+import { ToastProvider } from "@/components/Toast/ToastProvider";
 import "./globals.css";
 
 const ggSans = localFont({
@@ -66,7 +67,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

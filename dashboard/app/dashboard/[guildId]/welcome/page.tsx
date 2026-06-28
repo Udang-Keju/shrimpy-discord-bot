@@ -13,10 +13,12 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, WelcomeConfig, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import { useToast } from "@/hooks/useToast";
 
 export default function WelcomePage() {
   const params = useParams();
   const guildId = params?.guildId as string;
+  const { showToast } = useToast();
 
   const [config, setConfig] = useState<WelcomeConfig | null>(null);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
@@ -52,7 +54,7 @@ export default function WelcomePage() {
   const handleAddAutoRole = async () => {
     if (!selectedAutoRole) return;
     if (autoRoles.includes(selectedAutoRole)) {
-      alert("Role is already in Auto-Roles list!");
+      showToast("Role is already in Auto-Roles list!", "warning");
       return;
     }
     try {
@@ -60,6 +62,7 @@ export default function WelcomePage() {
       setAutoRoles(prev => [...prev, selectedAutoRole]);
     } catch (err) {
       console.error(err);
+      showToast("Failed to add auto-role.", "error");
     }
   };
 
@@ -78,9 +81,10 @@ export default function WelcomePage() {
     setSaving(true);
     try {
       await ShrimpyAPI.saveWelcomeConfig(guildId, config);
-      alert("Welcome settings saved successfully!");
+      showToast("Welcome settings saved successfully!", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to save welcome settings.", "error");
     } finally {
       setSaving(false);
     }

@@ -14,10 +14,12 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, PanelHandlerRole, CategoryHandlerRole, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import { useToast } from "@/hooks/useToast";
 
 export default function PanelsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
+  const { showToast } = useToast();
 
   const [panels, setPanels] = useState<TicketPanel[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
@@ -157,7 +159,7 @@ export default function PanelsPage() {
   const handleAddCategoryHandlerRole = async () => {
     if (!selectedPanel || !selectedCategory || !selectedCategoryHandlerRole) return;
     if (categoryHandlerRoles.some(r => r.roleId === selectedCategoryHandlerRole)) {
-      alert("Role is already a ticket handler for this category!");
+      showToast("Role is already a ticket handler for this category!", "warning");
       return;
     }
     try {
@@ -166,6 +168,7 @@ export default function PanelsPage() {
       setCategoryHandlerRoles(refreshed);
     } catch (err) {
       console.error(err);
+      showToast("Failed to add category handler role.", "error");
     }
   };
 
@@ -182,7 +185,7 @@ export default function PanelsPage() {
   const handleAddHandlerRole = async () => {
     if (!selectedPanel || !selectedHandlerRole) return;
     if (handlerRoles.some(r => r.roleId === selectedHandlerRole)) {
-      alert("Role is already a ticket handler for this panel!");
+      showToast("Role is already a ticket handler for this panel!", "warning");
       return;
     }
     try {
@@ -191,6 +194,7 @@ export default function PanelsPage() {
       setHandlerRoles(refreshed);
     } catch (err) {
       console.error(err);
+      showToast("Failed to add panel handler role.", "error");
     }
   };
 

@@ -12,10 +12,12 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Guild, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import { useToast } from "@/hooks/useToast";
 
 export default function SettingsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
+  const { showToast } = useToast();
 
   const [config, setConfig] = useState<Guild | null>(null);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
@@ -59,9 +61,10 @@ export default function SettingsPage() {
         }),
         ShrimpyAPI.updateNickname(guildId, config.nickname || null)
       ]);
-      alert("Guild settings saved successfully!");
+      showToast("Guild settings saved successfully!", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to save guild settings.", "error");
     } finally {
       setSaving(false);
     }
@@ -70,7 +73,7 @@ export default function SettingsPage() {
   const handleAddStaffRole = async () => {
     if (!config || !selectedStaffRole) return;
     if (config.staffRoles.includes(selectedStaffRole)) {
-      alert("Role is already in Staff Dashboard Access list!");
+      showToast("Role is already in Staff Dashboard Access list!", "warning");
       return;
     }
     try {
@@ -78,6 +81,7 @@ export default function SettingsPage() {
       setConfig(prev => prev ? ({ ...prev, staffRoles: [...prev.staffRoles, selectedStaffRole] }) : null);
     } catch (err) {
       console.error(err);
+      showToast("Failed to add staff role.", "error");
     }
   };
 

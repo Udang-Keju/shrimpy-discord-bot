@@ -12,10 +12,12 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, ReactionRole, ReactionRoleMapping, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import { useToast } from "@/hooks/useToast";
 
 export default function ReactionRolesPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
+  const { showToast } = useToast();
 
   const [reactionRoles, setReactionRoles] = useState<ReactionRole[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
@@ -63,7 +65,7 @@ export default function ReactionRolesPage() {
 
     // Check if emoji or role is already mapped
     if (mappings.some(m => m.emoji === tempEmoji || m.roleId === tempRoleId)) {
-      alert("Emoji or Role already mapped in this panel!");
+      showToast("Emoji or Role already mapped in this panel!", "warning");
       return;
     }
 
@@ -82,7 +84,7 @@ export default function ReactionRolesPage() {
   const handleCreateRR = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mappings.length === 0) {
-      alert("Please add at least one emoji-to-role mapping!");
+      showToast("Please add at least one emoji-to-role mapping!", "warning");
       return;
     }
     try {
@@ -93,14 +95,15 @@ export default function ReactionRolesPage() {
         mappings
       });
       setReactionRoles(prev => [...prev, newWidget]);
-      
+
       // Reset form
       setNewTitle("Select Your Roles");
       setNewDesc("React below to pick up or drop server tags.");
       setMappings([]);
-      alert("Reaction role panel published successfully!");
+      showToast("Reaction role panel published successfully!", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to publish reaction role panel.", "error");
     }
   };
 

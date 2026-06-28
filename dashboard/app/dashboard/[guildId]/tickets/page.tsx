@@ -14,10 +14,12 @@ import {
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Ticket } from "@/lib/api";
+import { useToast } from "@/hooks/useToast";
 
 export default function TicketsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -79,7 +81,7 @@ export default function TicketsPage() {
   };
 
   const handleDownloadTranscript = (ticketId: string) => {
-    alert(`Downloading transcript for ${ticketId}. In production, this targets GET /api/v1/guilds/:guildId/tickets/:ticketId/transcript`);
+    showToast(`Downloading transcript for ${ticketId}. In production, this targets GET /api/v1/guilds/:guildId/tickets/:ticketId/transcript`, "info");
   };
 
   const filteredTickets = tickets.filter(t => {
