@@ -22,6 +22,7 @@ import styles from "./dashboard.module.css";
 import { ShrimpyAPI, Guild, DiscordUser, isDemoMode } from "@/lib/api";
 import { getSavedTheme, applyTheme, Theme } from "@/lib/theme";
 import DemoBanner from "@/components/DemoBanner";
+import Dropdown from "@/components/Dropdown";
 
 export default function DashboardLayout({
   children,
@@ -72,11 +73,12 @@ export default function DashboardLayout({
     applyTheme(nextTheme);
   };
 
-  const handleGuildChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedId = e.target.value;
+  const handleGuildChange = (selectedId: string) => {
     const currentTab = pathname.split("/").pop() || "tickets";
     router.push(`/dashboard/${selectedId}/${currentTab}`);
   };
+
+  const isIconUrl = (icon?: string) => !!icon && icon.startsWith("http");
 
   const handleLogout = async () => {
     if (isDemoMode()) {
@@ -94,15 +96,15 @@ export default function DashboardLayout({
 
   const navigationGroups = [
     {
-      label: "Operate",
+      label: "Tickets",
       items: [
         { name: "Support Tickets", href: `/dashboard/${guildId}/tickets`, icon: Ticket },
+        { name: "Ticket Panels", href: `/dashboard/${guildId}/panels`, icon: Layers },
       ],
     },
     {
       label: "Server Management",
       items: [
-        { name: "Ticket Panels", href: `/dashboard/${guildId}/panels`, icon: Layers },
         { name: "Welcome Greetings", href: `/dashboard/${guildId}/welcome`, icon: UserPlus },
         { name: "Reaction Roles", href: `/dashboard/${guildId}/roles`, icon: Tags },
       ],
@@ -132,17 +134,12 @@ export default function DashboardLayout({
 
         <div className={styles.guildSelectorWrapper}>
           <div className={styles.label} style={{ marginBottom: '6px' }}>Active Guild</div>
-          <select 
-            className={styles.guildSelect} 
-            value={guildId} 
+          <Dropdown
+            value={guildId}
             onChange={handleGuildChange}
-          >
-            {guilds.map(g => (
-              <option key={g.id} value={g.id}>
-                {g.icon} {g.name}
-              </option>
-            ))}
-          </select>
+            placeholder="Select a server..."
+            options={guilds.map(g => ({ value: g.id, label: g.name, icon: g.icon }))}
+          />
         </div>
 
         <nav className={styles.sidebarNav}>
@@ -183,7 +180,12 @@ export default function DashboardLayout({
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
             <div className={styles.guildBadge}>
-              {activeGuild?.icon || "🦐"}
+              {isIconUrl(activeGuild?.icon) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={activeGuild!.icon} alt="" className={styles.guildBadgeImg} />
+              ) : (
+                activeGuild?.icon || "🦐"
+              )}
             </div>
             <div>
               <h1 className={styles.pageTitle}>{getPageTitle()}</h1>

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, WelcomeConfig, DiscordChannel } from "@/lib/api";
+import Dropdown from "@/components/Dropdown";
 
 export default function WelcomePage() {
   const params = useParams();
@@ -75,29 +76,29 @@ export default function WelcomePage() {
               <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Avatar Emoji</label>
-                  <select 
-                    className={styles.select} 
-                    value={config.avatarEmoji} 
-                    onChange={e => updateField('avatarEmoji', e.target.value)}
-                  >
-                    <option value="🦐">🦐 Shrimp</option>
-                    <option value="🐠">🐠 Fish</option>
-                    <option value="🌊">🌊 Wave</option>
-                    <option value="🌴">🌴 Palm</option>
-                    <option value="🐙">🐙 Octopus</option>
-                  </select>
+                  <Dropdown
+                    value={config.avatarEmoji}
+                    onChange={val => updateField('avatarEmoji', val)}
+                    options={[
+                      { value: "🦐", label: "🦐 Shrimp" },
+                      { value: "🐠", label: "🐠 Fish" },
+                      { value: "🌊", label: "🌊 Wave" },
+                      { value: "🌴", label: "🌴 Palm" },
+                      { value: "🐙", label: "🐙 Octopus" },
+                    ]}
+                  />
                 </div>
 
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Banner Theme Style</label>
-                  <select 
-                    className={styles.select} 
-                    value={config.cardStyle} 
-                    onChange={e => updateField('cardStyle', e.target.value as 'dark' | 'light')}
-                  >
-                    <option value="dark">Deep Blue Dark</option>
-                    <option value="light">Warm Apricot Light</option>
-                  </select>
+                  <Dropdown
+                    value={config.cardStyle}
+                    onChange={val => updateField('cardStyle', val as 'dark' | 'light')}
+                    options={[
+                      { value: "dark", label: "Deep Blue Dark" },
+                      { value: "light", label: "Warm Apricot Light" },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -137,16 +138,12 @@ export default function WelcomePage() {
               {config.sendChannel && (
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Announcement Channel Target</label>
-                  <select 
-                    className={styles.select} 
-                    value={config.channelId} 
-                    onChange={e => updateField('channelId', e.target.value)}
-                  >
-                    <option value="">Select a channel...</option>
-                    {channels.map(c => (
-                      <option key={c.id} value={c.id}>#{c.name}</option>
-                    ))}
-                  </select>
+                  <Dropdown
+                    value={config.channelId}
+                    onChange={val => updateField('channelId', val)}
+                    placeholder="Select a channel..."
+                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                  />
                 </div>
               )}
             </div>

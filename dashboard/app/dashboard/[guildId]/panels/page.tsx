@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
+import Dropdown from "@/components/Dropdown";
 
 export default function PanelsPage() {
   const params = useParams();
@@ -183,11 +184,11 @@ export default function PanelsPage() {
             <form onSubmit={handleCreatePanel} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div className={styles.formGroup}>
                 <label className={styles.label}>Panel Destination Channel</label>
-                <select className={styles.select} value={newChannelId} onChange={e => setNewChannelId(e.target.value)}>
-                  {channels.map(c => (
-                    <option key={c.id} value={c.id}>#{c.name}</option>
-                  ))}
-                </select>
+                <Dropdown
+                  value={newChannelId}
+                  onChange={setNewChannelId}
+                  options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                />
               </div>
 
               <div className={styles.formGroup}>
@@ -208,12 +209,16 @@ export default function PanelsPage() {
                 
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Button Accent Style</label>
-                  <select className={styles.select} value={newBtnStyle} onChange={e => setNewBtnStyle(e.target.value as 'primary' | 'success' | 'danger' | 'secondary')}>
-                    <option value="primary">Primary (Blue)</option>
-                    <option value="success">Success (Green)</option>
-                    <option value="danger">Danger (Red)</option>
-                    <option value="secondary">Secondary (Gray)</option>
-                  </select>
+                  <Dropdown
+                    value={newBtnStyle}
+                    onChange={val => setNewBtnStyle(val as 'primary' | 'success' | 'danger' | 'secondary')}
+                    options={[
+                      { value: "primary", label: "Primary (Blue)" },
+                      { value: "success", label: "Success (Green)" },
+                      { value: "danger", label: "Danger (Red)" },
+                      { value: "secondary", label: "Secondary (Gray)" },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -309,20 +314,20 @@ export default function PanelsPage() {
                 <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   <div className={styles.formGroup}>
                     <label className={styles.label}>Spawn Thread Channel</label>
-                    <select className={styles.select} value={newCatChanId} onChange={e => setNewCatChanId(e.target.value)}>
-                      {channels.map(c => (
-                        <option key={c.id} value={c.id}>#{c.name}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      value={newCatChanId}
+                      onChange={setNewCatChanId}
+                      options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                    />
                   </div>
 
                   <div className={styles.formGroup}>
                     <label className={styles.label}>Assigned Staff Role</label>
-                    <select className={styles.select} value={newCatRoleId} onChange={e => setNewCatRoleId(e.target.value)}>
-                      {roles.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      value={newCatRoleId}
+                      onChange={setNewCatRoleId}
+                      options={roles.map(r => ({ value: r.id, label: r.name }))}
+                    />
                   </div>
                 </div>
 

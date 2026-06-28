@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, ReactionRole, ReactionRoleMapping, DiscordChannel, DiscordRole } from "@/lib/api";
+import Dropdown from "@/components/Dropdown";
 
 export default function ReactionRolesPage() {
   const params = useParams();
@@ -128,11 +129,11 @@ export default function ReactionRolesPage() {
               
               <div className={styles.formGroup}>
                 <label className={styles.label}>Destination Channel</label>
-                <select className={styles.select} value={newChannelId} onChange={e => setNewChannelId(e.target.value)}>
-                  {channels.map(c => (
-                    <option key={c.id} value={c.id}>#{c.name}</option>
-                  ))}
-                </select>
+                <Dropdown
+                  value={newChannelId}
+                  onChange={setNewChannelId}
+                  options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                />
               </div>
 
               <div className={styles.formGroup}>
@@ -176,23 +177,20 @@ export default function ReactionRolesPage() {
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div className={styles.formGroup} style={{ width: '80px' }}>
                     <label className={styles.label} style={{ fontSize: '10px' }}>Emoji</label>
-                    <select className={styles.select} value={tempEmoji} onChange={e => setTempEmoji(e.target.value)}>
-                      <option value="🦐">🦐</option>
-                      <option value="🛠️">🛠️</option>
-                      <option value="🎮">🎮</option>
-                      <option value="📢">📢</option>
-                      <option value="🎨">🎨</option>
-                      <option value="🏆">🏆</option>
-                    </select>
+                    <Dropdown
+                      value={tempEmoji}
+                      onChange={setTempEmoji}
+                      options={["🦐", "🛠️", "🎮", "📢", "🎨", "🏆"].map(e => ({ value: e, label: e }))}
+                    />
                   </div>
                   
                   <div className={styles.formGroup} style={{ flex: 1, minWidth: '150px' }}>
                     <label className={styles.label} style={{ fontSize: '10px' }}>Role</label>
-                    <select className={styles.select} value={tempRoleId} onChange={e => setTempRoleId(e.target.value)}>
-                      {roles.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      value={tempRoleId}
+                      onChange={setTempRoleId}
+                      options={roles.map(r => ({ value: r.id, label: r.name }))}
+                    />
                   </div>
 
                   <button 

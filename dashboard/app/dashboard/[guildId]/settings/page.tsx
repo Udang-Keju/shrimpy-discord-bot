@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Guild, DiscordChannel, DiscordRole } from "@/lib/api";
+import Dropdown from "@/components/Dropdown";
 
 export default function SettingsPage() {
   const params = useParams();
@@ -154,16 +155,12 @@ export default function SettingsPage() {
 
               <div className={styles.formGroup}>
                 <label className={styles.label}>Bot Log Channel</label>
-                <select 
-                  className={styles.select} 
-                  value={config.logChannelId || ""} 
-                  onChange={e => updateField('logChannelId', e.target.value)}
-                >
-                  <option value="">No logging channel selected</option>
-                  {channels.map(c => (
-                    <option key={c.id} value={c.id}>#{c.name}</option>
-                  ))}
-                </select>
+                <Dropdown
+                  value={config.logChannelId || ""}
+                  onChange={val => updateField('logChannelId', val)}
+                  placeholder="No logging channel selected"
+                  options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                />
               </div>
             </div>
           </div>
@@ -210,16 +207,12 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-              <select 
-                className={styles.select} 
-                value={selectedStaffRole} 
-                onChange={e => setSelectedStaffRole(e.target.value)}
+              <Dropdown
+                value={selectedStaffRole}
+                onChange={setSelectedStaffRole}
+                options={roles.map(r => ({ value: r.id, label: r.name }))}
                 style={{ flex: 1 }}
-              >
-                {roles.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
+              />
               <button onClick={handleAddStaffRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
                 <Plus size={14} />
                 <span>Add</span>
@@ -257,16 +250,12 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-              <select 
-                className={styles.select} 
-                value={selectedAutoRole} 
-                onChange={e => setSelectedAutoRole(e.target.value)}
+              <Dropdown
+                value={selectedAutoRole}
+                onChange={setSelectedAutoRole}
+                options={roles.map(r => ({ value: r.id, label: r.name }))}
                 style={{ flex: 1 }}
-              >
-                {roles.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
+              />
               <button onClick={handleAddAutoRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
                 <Plus size={14} />
                 <span>Add</span>
