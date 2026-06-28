@@ -40,6 +40,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	list := make([]apiutil.Guild, 0, len(managedGuilds))
 	for _, g := range managedGuilds {
 		g.BotJoined = h.provider.IsBotInGuild(g.ID)
+		if !g.BotJoined {
+			// Gateway session may be offline/reconnecting; fall back to the persisted
+			// DB record so an already-invited guild doesn't report as uninvited.
+			if gID, err := strconv.ParseInt(g.ID, 10, 64); err == nil {
+				g.BotJoined = h.guildSvc.IsJoined(r.Context(), gID)
+			}
+		}
 
 		if g.BotJoined {
 			if gID, err := strconv.ParseInt(g.ID, 10, 64); err == nil {

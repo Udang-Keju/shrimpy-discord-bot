@@ -231,7 +231,7 @@ export default function ServersPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
                           <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: hasJoined ? "var(--color-success)" : "var(--color-text-muted)" }} />
                           <span style={{ fontSize: "12px", color: hasJoined ? "var(--color-success)" : "var(--color-text-muted)", fontWeight: 500 }}>
-                            {hasJoined ? "Active" : "Invite Needed"}
+                            {hasJoined ? "Invited" : "Invite Needed"}
                           </span>
                         </div>
                       </div>
@@ -298,7 +298,7 @@ export default function ServersPage() {
                         }}
                       >
                         <Bot size={16} />
-                        <span>Setup Shrimpy</span>
+                        <span>Invite Shrimpy</span>
                         <ExternalLink size={14} />
                       </a>
                     ) : (

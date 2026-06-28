@@ -69,6 +69,17 @@ func (s *GuildService) GetConfig(ctx context.Context, guildID int64) (*model.Gui
 	return cfg, nil
 }
 
+// IsJoined reports whether the bot has ever joined this guild and hasn't since left it,
+// per the persisted DB row. Used as a fallback when the bot's gateway session is offline,
+// so a temporary disconnect doesn't make an already-invited server look uninvited.
+func (s *GuildService) IsJoined(ctx context.Context, guildID int64) bool {
+	cfg, err := s.repo.GetByID(ctx, guildID)
+	if err != nil {
+		return false
+	}
+	return cfg.IsActive
+}
+
 // RegisterGuild is called by the Gateway event handler when a bot joins a server or reconnects.
 func (s *GuildService) RegisterGuild(ctx context.Context, guildID int64, clientID string) (*model.Guild, error) {
 	appID, err := s.repo.GetAppIDByClientID(ctx, clientID)
