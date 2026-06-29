@@ -31,6 +31,13 @@ function hexToColor(hex: string): number {
   return parseInt(hex.replace('#', ''), 16) || 0;
 }
 
+// Guards the live preview's <img> tags: an in-progress, non-absolute URL
+// (e.g. typed character-by-character) would otherwise resolve relative to
+// the current page and fire a real (404) request on every keystroke.
+function isImageUrl(url?: string): boolean {
+  return !!url && /^https?:\/\//i.test(url);
+}
+
 export default function PanelsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
@@ -777,7 +784,7 @@ export default function PanelsPage() {
                   <div style={{ flex: 1 }}>
                     {previewMedia?.author?.name && (
                       <div style={{ color: '#ffffff', fontSize: '12px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {previewMedia.author.iconUrl && (
+                        {isImageUrl(previewMedia.author.iconUrl) && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={previewMedia.author.iconUrl} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
                         )}
@@ -794,13 +801,13 @@ export default function PanelsPage() {
                         {previewEmbedDesc}
                       </div>
                     )}
-                    {previewMedia?.image?.url && (
+                    {isImageUrl(previewMedia?.image?.url) && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={previewMedia.image.url} alt="" style={{ maxWidth: '100%', borderRadius: '4px', marginTop: '10px' }} />
+                      <img src={previewMedia!.image!.url} alt="" style={{ maxWidth: '100%', borderRadius: '4px', marginTop: '10px' }} />
                     )}
                     {previewMedia?.footer?.text && (
                       <div style={{ color: '#72767d', fontSize: '11px', marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {previewMedia.footer.iconUrl && (
+                        {isImageUrl(previewMedia.footer.iconUrl) && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={previewMedia.footer.iconUrl} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
                         )}
@@ -808,9 +815,9 @@ export default function PanelsPage() {
                       </div>
                     )}
                   </div>
-                  {previewMedia?.thumbnail?.url && (
+                  {isImageUrl(previewMedia?.thumbnail?.url) && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={previewMedia.thumbnail.url} alt="" style={{ width: '64px', height: '64px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
+                    <img src={previewMedia!.thumbnail!.url} alt="" style={{ width: '64px', height: '64px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
                   )}
                 </div>
               )}
