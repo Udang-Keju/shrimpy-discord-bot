@@ -114,6 +114,12 @@ type TicketCategory struct {
 	ButtonDescription   *string        `gorm:"column:button_description" json:"buttonDescription,omitempty"`
 	ButtonOrder         int16          `gorm:"column:button_order;default:0" json:"buttonOrder"`
 	TicketDestination   string         `gorm:"column:ticket_destination;default:'thread'" json:"ticketDestination"`
+	// ThreadParentChannelID is the text channel a private thread is started from (thread
+	// destination only). NULL ⇒ fall back to the panel's channel.
+	ThreadParentChannelID *int64 `gorm:"column:thread_parent_channel_id" json:"threadParentChannelId,string,omitempty"`
+	// ChannelCategoryID is the Discord channel group a dedicated channel is placed under
+	// (channel destination only). NULL ⇒ no group / guild root.
+	ChannelCategoryID   *int64         `gorm:"column:channel_category_id" json:"channelCategoryId,string,omitempty"`
 	TicketNameTemplate  string         `gorm:"column:ticket_name_template;default:'{category}-{number}'" json:"ticketNameTemplate"`
 	TicketOpenTitle     *string        `gorm:"column:ticket_open_title" json:"ticketOpenTitle,omitempty"`
 	TicketOpenMessage   *string        `gorm:"column:ticket_open_message" json:"ticketOpenMessage,omitempty"`

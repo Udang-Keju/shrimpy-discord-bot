@@ -547,23 +547,74 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 		})
 	}
 
-	ch, err := dg.GuildChannelCreateComplex(guildIDStr, discordgo.GuildChannelCreateData{
-		Name:                 channelName,
-		Type:                 discordgo.ChannelTypeGuildText,
-		PermissionOverwrites: permissionOverrides,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Discord channel: %w", err)
-	}
+	// targetID is the channel or thread the greeting is posted to, set per branch below.
+	var targetID string
+	switch cat.TicketDestination {
+	case "thread":
+		// Private threads don't support per-role permission overwrites: resolve a parent text
+		// channel (the category's configured one, else the panel's channel), start a private
+		// thread there, add the opener, and ping handler/staff roles in the greeting so Discord
+		// auto-adds those members (see the fullContent construction below).
+		var parentChannelID string
+		if cat.ThreadParentChannelID != nil {
+			parentChannelID = fmt.Sprintf("%d", *cat.ThreadParentChannelID)
+		} else {
+			panel, perr := s.categoryRepo.GetPanel(ctx, cat.PanelID)
+			if perr != nil {
+				return nil, fmt.Errorf("failed to resolve thread parent channel: %w", perr)
+			}
+			parentChannelID = fmt.Sprintf("%d", panel.ChannelID)
+		}
 
-	chID, _ := discordutil.ParseID(ch.ID)
-	targetChannelID = &chID
+		thread, terr := dg.ThreadStartComplex(parentChannelID, &discordgo.ThreadStart{
+			Name:                channelName,
+			Type:                discordgo.ChannelTypeGuildPrivateThread,
+			Invitable:           false,
+			AutoArchiveDuration: 1440,
+		})
+		if terr != nil {
+			return nil, fmt.Errorf("failed to create Discord thread: %w", terr)
+		}
 
-	err = s.ticketRepo.SetChannel(ctx, ticket.ID, targetChannelID, targetThreadID)
-	if err != nil {
-		return nil, err
+		if aerr := dg.ThreadMemberAdd(thread.ID, userIDStr); aerr != nil {
+			fmt.Printf("warning: failed to add opener to ticket thread: %v\n", aerr)
+		}
+
+		thID, _ := discordutil.ParseID(thread.ID)
+		targetThreadID = &thID
+		targetID = thread.ID
+
+		if err = s.ticketRepo.SetChannel(ctx, ticket.ID, targetChannelID, targetThreadID); err != nil {
+			return nil, err
+		}
+		ticket.ThreadID = targetThreadID
+	default:
+		// "channel" (and legacy/unset): create a dedicated text channel, optionally placed under
+		// the configured channel group, carrying the per-role permission overwrites built above.
+		var parentID string
+		if cat.ChannelCategoryID != nil {
+			parentID = fmt.Sprintf("%d", *cat.ChannelCategoryID)
+		}
+
+		ch, cerr := dg.GuildChannelCreateComplex(guildIDStr, discordgo.GuildChannelCreateData{
+			Name:                 channelName,
+			Type:                 discordgo.ChannelTypeGuildText,
+			ParentID:             parentID,
+			PermissionOverwrites: permissionOverrides,
+		})
+		if cerr != nil {
+			return nil, fmt.Errorf("failed to create Discord channel: %w", cerr)
+		}
+
+		chID, _ := discordutil.ParseID(ch.ID)
+		targetChannelID = &chID
+		targetID = ch.ID
+
+		if err = s.ticketRepo.SetChannel(ctx, ticket.ID, targetChannelID, targetThreadID); err != nil {
+			return nil, err
+		}
+		ticket.ChannelID = targetChannelID
 	}
-	ticket.ChannelID = targetChannelID
 
 	openerMention := fmt.Sprintf("<@%d>", userID)
 	replaceVars := func(text string) string {
@@ -602,6 +653,15 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	// Keep the bot's own "Welcome {mention}" ping; the configurable plain text,
 	// if any, is appended below it rather than replacing it.
 	fullContent := fmt.Sprintf("Welcome %s", openerMention)
+	// Private threads can't carry per-role permission overwrites, so ping the handler/staff
+	// roles (gathered into addedRoleIDs above) to make Discord auto-add those members.
+	if cat.TicketDestination == "thread" && len(addedRoleIDs) > 0 {
+		mentions := make([]string, 0, len(addedRoleIDs))
+		for roleID := range addedRoleIDs {
+			mentions = append(mentions, fmt.Sprintf("<@&%d>", roleID))
+		}
+		fullContent = strings.Join(mentions, " ") + "\n" + fullContent
+	}
 	if content != "" {
 		fullContent = fullContent + "\n" + content
 	}
@@ -631,7 +691,7 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 		params.Embeds = []*discordgo.MessageEmbed{embed}
 	}
 
-	_, err = dg.ChannelMessageSendComplex(ch.ID, params)
+	_, err = dg.ChannelMessageSendComplex(targetID, params)
 	if err != nil {
 		fmt.Printf("warning: failed to send greeting message to ticket channel: %v\n", err)
 	}

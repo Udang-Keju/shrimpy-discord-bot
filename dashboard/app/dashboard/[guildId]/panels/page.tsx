@@ -45,6 +45,7 @@ export default function PanelsPage() {
 
   const [panels, setPanels] = useState<TicketPanel[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
+  const [channelGroups, setChannelGroups] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<TicketPanel | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
@@ -82,6 +83,10 @@ export default function PanelsPage() {
   const [newCatButtonStyle, setNewCatButtonStyle] = useState<'primary' | 'secondary' | 'success' | 'danger'>('primary');
   const [newCatEmoji, setNewCatEmoji] = useState("");
   const [newCatDestination, setNewCatDestination] = useState<'thread' | 'channel'>('thread');
+  // Thread destination: parent channel the private thread is started from ('' ⇒ panel's channel).
+  const [newCatThreadParentId, setNewCatThreadParentId] = useState("");
+  // Channel destination: channel group the dedicated channel is placed under ('' ⇒ no group).
+  const [newCatChannelGroupId, setNewCatChannelGroupId] = useState("");
   const [newCatOpenContent, setNewCatOpenContent] = useState("");
   const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
   const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
@@ -132,6 +137,8 @@ export default function PanelsPage() {
     setNewCatButtonStyle('primary');
     setNewCatEmoji("");
     setNewCatDestination('thread');
+    setNewCatThreadParentId("");
+    setNewCatChannelGroupId("");
     setNewCatOpenContent("");
     setNewCatOpenTitle("");
     setNewCatOpenDesc("");
@@ -142,14 +149,16 @@ export default function PanelsPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [panelsData, chansData, rolesData, guildConfig] = await Promise.all([
+        const [panelsData, chansData, groupsData, rolesData, guildConfig] = await Promise.all([
           ShrimpyAPI.listPanels(guildId),
           ShrimpyAPI.getDiscordChannels(guildId),
+          ShrimpyAPI.getDiscordChannelGroups(guildId),
           ShrimpyAPI.getDiscordRoles(guildId),
           ShrimpyAPI.getGuildConfig(guildId)
         ]);
         setPanels(panelsData);
         setChannels(chansData);
+        setChannelGroups(groupsData);
         setRoles(rolesData);
         setStaffRoleIds(guildConfig.staffRoles);
 
@@ -344,6 +353,8 @@ export default function PanelsPage() {
     setNewCatButtonStyle(c.buttonStyle);
     setNewCatEmoji(c.emoji || "");
     setNewCatDestination(c.ticketDestination);
+    setNewCatThreadParentId(c.threadParentChannelId || "");
+    setNewCatChannelGroupId(c.channelCategoryId || "");
     setNewCatOpenContent(c.ticketOpenContent || "");
     setNewCatOpenTitle(c.ticketOpenTitle || "");
     setNewCatOpenDesc(c.ticketOpenMessage || "");
@@ -395,6 +406,8 @@ export default function PanelsPage() {
       emoji: newCatEmoji || undefined,
       buttonOrder: original?.buttonOrder ?? categories.length,
       ticketDestination: newCatDestination,
+      threadParentChannelId: newCatDestination === 'thread' ? (newCatThreadParentId || undefined) : undefined,
+      channelCategoryId: newCatDestination === 'channel' ? (newCatChannelGroupId || undefined) : undefined,
       ticketNameTemplate: original?.ticketNameTemplate ?? '{category}-{number}',
       ticketOpenContent: newCatOpenContent || undefined,
       ticketOpenTitle: newCatOpenTitle || undefined,
@@ -993,11 +1006,43 @@ export default function PanelsPage() {
                       onChange={val => setNewCatDestination(val as 'thread' | 'channel')}
                       options={[
                         { value: "thread", label: "Private Thread" },
-                        { value: "channel", label: "Dedicated Channel" },
+                        { value: "channel", label: "Private Channel" },
                       ]}
                     />
                   </div>
                 </div>
+
+                {newCatDestination === 'thread' ? (
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Thread Parent Channel (optional)</label>
+                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                      The channel private threads are started in. Leave as the default to use this panel&apos;s channel.
+                    </p>
+                    <Dropdown
+                      value={newCatThreadParentId}
+                      onChange={setNewCatThreadParentId}
+                      options={[
+                        { value: "", label: "Use panel's channel" },
+                        ...channels.map(c => ({ value: c.id, label: `#${c.name}` })),
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Channel Group (optional)</label>
+                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                      The category the dedicated channel is placed under. Choose &quot;No group&quot; to create it at the server root.
+                    </p>
+                    <Dropdown
+                      value={newCatChannelGroupId}
+                      onChange={setNewCatChannelGroupId}
+                      options={[
+                        { value: "", label: "No group" },
+                        ...channelGroups.map(g => ({ value: g.id, label: g.name })),
+                      ]}
+                    />
+                  </div>
+                )}
 
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Category Handler Roles</label>

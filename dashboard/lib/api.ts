@@ -76,6 +76,12 @@ export interface TicketCategory {
   buttonDescription?: string;
   buttonOrder: number;
   ticketDestination: 'thread' | 'channel';
+  // Thread destination: the parent text channel a private thread is started from.
+  // Empty/omitted ⇒ the panel's channel is used.
+  threadParentChannelId?: string;
+  // Channel destination: the Discord channel group the dedicated channel is placed under.
+  // Empty/omitted ⇒ no group (guild root).
+  channelCategoryId?: string;
   ticketNameTemplate: string;
   ticketOpenTitle?: string;
   ticketOpenMessage?: string;
@@ -294,6 +300,11 @@ const mockChannels: DiscordChannel[] = [
   { id: 'logs', name: 'bot-logs', type: 'text' }
 ];
 
+const mockChannelGroups: DiscordChannel[] = [
+  { id: 'group-support', name: 'Support', type: 'category' },
+  { id: 'group-community', name: 'Community', type: 'category' }
+];
+
 const mockRoles: DiscordRole[] = [
   { id: 'member', name: 'Server Member', color: '#7289da' },
   { id: 'developer', name: 'Guild Developer', color: '#4f545c' },
@@ -455,6 +466,12 @@ export const ShrimpyAPI = {
   getDiscordChannels: async (guildId: string): Promise<DiscordChannel[]> => {
     if (isDemoMode()) return mockChannels;
     return fetchJSON<DiscordChannel[]>(`/api/v1/guilds/${guildId}/discord/channels`);
+  },
+
+  // Channel groups (Discord category channels) — used to place a ticket's dedicated channel.
+  getDiscordChannelGroups: async (guildId: string): Promise<DiscordChannel[]> => {
+    if (isDemoMode()) return mockChannelGroups;
+    return fetchJSON<DiscordChannel[]>(`/api/v1/guilds/${guildId}/discord/categories`);
   },
 
   getDiscordRoles: async (guildId: string): Promise<DiscordRole[]> => {

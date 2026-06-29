@@ -107,6 +107,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Patch("/", s.guildHandler.UpdateConfig)
 				r.Patch("/nickname", s.guildHandler.UpdateNickname)
 				r.Get("/discord/channels", s.guildHandler.GetDiscordChannels)
+				r.Get("/discord/categories", s.guildHandler.GetDiscordCategories)
 				r.Get("/discord/roles", s.guildHandler.GetDiscordRoles)
 
 				// Welcome onboarding config

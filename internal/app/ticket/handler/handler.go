@@ -305,6 +305,8 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	existing.ButtonDescription = c.ButtonDescription
 	existing.ButtonOrder = c.ButtonOrder
 	existing.TicketDestination = c.TicketDestination
+	existing.ThreadParentChannelID = c.ThreadParentChannelID
+	existing.ChannelCategoryID = c.ChannelCategoryID
 	existing.TicketNameTemplate = c.TicketNameTemplate
 	existing.TicketOpenTitle = c.TicketOpenTitle
 	existing.TicketOpenMessage = c.TicketOpenMessage
