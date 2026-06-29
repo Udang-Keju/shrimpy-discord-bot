@@ -57,6 +57,10 @@ type TicketPanel struct {
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	// Associations
 	Categories []TicketCategory `gorm:"foreignKey:PanelID" json:"categories,omitempty"`
+	// HandlerRoleIDs is a transient, non-persisted field: when present (even if empty) on
+	// a create/update payload, the handler reconciles panel_handler_roles to match it
+	// exactly. Nil means "leave handler roles untouched" (e.g. responses from reads).
+	HandlerRoleIDs *[]string `gorm:"-" json:"handlerRoleIds,omitempty"`
 }
 
 // TableName overrides the default table name mapping.
@@ -122,6 +126,10 @@ type TicketCategory struct {
 	AllowUserClose      bool           `gorm:"column:allow_user_close;default:true" json:"allowUserClose"`
 	CreatedAt           time.Time      `json:"createdAt"`
 	UpdatedAt           time.Time      `json:"updatedAt"`
+	// HandlerRoleIDs is a transient, non-persisted field: when present (even if empty) on
+	// a create/update payload, the handler reconciles category_handler_roles to match it
+	// exactly. Nil means "leave handler roles untouched" (e.g. responses from reads).
+	HandlerRoleIDs *[]string `gorm:"-" json:"handlerRoleIds,omitempty"`
 }
 
 // TableName overrides the default table name mapping.

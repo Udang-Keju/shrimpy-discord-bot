@@ -68,6 +68,12 @@ func (h *Handler) CreatePanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.HandlerRoleIDs != nil {
+		if err := h.categoryRepo.SetPanelHandlerRoles(r.Context(), created.ID, parseRoleIDs(*p.HandlerRoleIDs)); err != nil {
+			fmt.Printf("warning: failed to set handler roles for panel %s: %v\n", created.ID, err)
+		}
+	}
+
 	h.syncPanelMessage(r.Context(), guildID, created.ID)
 
 	apiutil.WriteJSON(w, http.StatusCreated, created)
@@ -106,6 +112,12 @@ func (h *Handler) UpdatePanel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update panel")
 		return
+	}
+
+	if p.HandlerRoleIDs != nil {
+		if err := h.categoryRepo.SetPanelHandlerRoles(r.Context(), updated.ID, parseRoleIDs(*p.HandlerRoleIDs)); err != nil {
+			fmt.Printf("warning: failed to set handler roles for panel %s: %v\n", updated.ID, err)
+		}
 	}
 
 	if oldChannelID != updated.ChannelID && updated.MessageID != nil {
@@ -157,6 +169,19 @@ func (h *Handler) syncPanelMessage(ctx context.Context, guildID int64, panelID s
 
 type handlerRolePayload struct {
 	RoleID string `json:"role_id"`
+}
+
+// parseRoleIDs converts Discord snowflake role ID strings to int64, silently skipping
+// any that fail to parse (the payload comes from the dashboard's own role dropdown, so
+// malformed entries aren't expected in practice).
+func parseRoleIDs(ids []string) []int64 {
+	parsed := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if roleID, err := strconv.ParseInt(id, 10, 64); err == nil {
+			parsed = append(parsed, roleID)
+		}
+	}
+	return parsed
 }
 
 // ListPanelHandlerRoles lists the roles invited into tickets created from this panel.
@@ -246,6 +271,12 @@ func (h *Handler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if c.HandlerRoleIDs != nil {
+		if err := h.categoryRepo.SetCategoryHandlerRoles(r.Context(), created.ID, parseRoleIDs(*c.HandlerRoleIDs)); err != nil {
+			fmt.Printf("warning: failed to set handler roles for category %s: %v\n", created.ID, err)
+		}
+	}
+
 	h.syncPanelMessageForGuildOfPanel(r.Context(), panelID)
 
 	apiutil.WriteJSON(w, http.StatusCreated, created)
@@ -289,6 +320,12 @@ func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update category")
 		return
+	}
+
+	if c.HandlerRoleIDs != nil {
+		if err := h.categoryRepo.SetCategoryHandlerRoles(r.Context(), updated.ID, parseRoleIDs(*c.HandlerRoleIDs)); err != nil {
+			fmt.Printf("warning: failed to set handler roles for category %s: %v\n", updated.ID, err)
+		}
 	}
 
 	h.syncPanelMessageForGuildOfPanel(r.Context(), updated.PanelID)

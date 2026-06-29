@@ -400,6 +400,27 @@ func (r *CategoryRepo) RemovePanelHandlerRole(ctx context.Context, panelID strin
 		Delete(&model.PanelHandlerRole{}).Error
 }
 
+// SetPanelHandlerRoles reconciles the panel's handler roles to exactly match roleIDs:
+// removes rows not in the set, then idempotently inserts the rest.
+func (r *CategoryRepo) SetPanelHandlerRoles(ctx context.Context, panelID string, roleIDs []int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		del := tx.Where("panel_id = ?", panelID)
+		if len(roleIDs) > 0 {
+			del = del.Where("role_id NOT IN ?", roleIDs)
+		}
+		if err := del.Delete(&model.PanelHandlerRole{}).Error; err != nil {
+			return err
+		}
+		for _, roleID := range roleIDs {
+			hr := model.PanelHandlerRole{ID: uuid.NewString(), PanelID: panelID, RoleID: roleID}
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&hr).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // ─── Category Handler Roles ───────────────────────────────────────────────────
 
 // ListCategoryHandlerRoles returns all handler roles configured for a category.
@@ -435,6 +456,27 @@ func (r *CategoryRepo) RemoveCategoryHandlerRole(ctx context.Context, categoryID
 	return r.db.WithContext(ctx).
 		Where("category_id = ? AND role_id = ?", categoryID, roleID).
 		Delete(&model.CategoryHandlerRole{}).Error
+}
+
+// SetCategoryHandlerRoles reconciles the category's handler roles to exactly match
+// roleIDs: removes rows not in the set, then idempotently inserts the rest.
+func (r *CategoryRepo) SetCategoryHandlerRoles(ctx context.Context, categoryID string, roleIDs []int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		del := tx.Where("category_id = ?", categoryID)
+		if len(roleIDs) > 0 {
+			del = del.Where("role_id NOT IN ?", roleIDs)
+		}
+		if err := del.Delete(&model.CategoryHandlerRole{}).Error; err != nil {
+			return err
+		}
+		for _, roleID := range roleIDs {
+			hr := model.CategoryHandlerRole{ID: uuid.NewString(), CategoryID: categoryID, RoleID: roleID}
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&hr).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ─── MessageRepo ──────────────────────────────────────────────────────────────
