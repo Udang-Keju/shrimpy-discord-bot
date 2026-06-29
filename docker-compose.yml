@@ -26,14 +26,14 @@ services:
       - DISCORD_TOKEN=${DISCORD_TOKEN:-your_bot_token_here}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-your_application_client_id}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-your_application_client_secret}
-      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:8080/api/v1/auth/callback}
-      - JWT_SECRET=${JWT_SECRET:-devjwtsecretstringforlocallogin32bytes}
-      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:18080/api/v1/auth/callback}
+      - JWT_SECRET=devjwtsecretstringforlocallogin32bytes
+      - TOKEN_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       - API_PORT=8080
       - ENVIRONMENT=development
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - CORS_ALLOWED_ORIGINS=http://localhost:13000
     ports:
-      - "8080:8080"
+      - "18080:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -45,14 +45,16 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile.dev
     environment:
-      - NEXT_PUBLIC_SHRIMPY_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_SHRIMPY_API_URL=http://localhost:18080
+      - NEXT_TELEMETRY_DISABLED=1
     ports:
-      - "3000:3000"
+      - "13000:3000"
     depends_on:
       - backend
     volumes:
       - ./dashboard:/app
       - /app/node_modules
+      - /app/.next
 
 volumes:
   postgres_dev_data:
