@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useRef, useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, Info, X } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Info, Loader2, X } from "lucide-react";
 import styles from "./Toast.module.css";
 
-export type ToastVariant = "success" | "warning" | "error" | "info";
+export type ToastVariant = "success" | "warning" | "error" | "info" | "loading";
 
 interface ToastItem {
   id: number;
@@ -14,7 +14,9 @@ interface ToastItem {
 }
 
 interface ToastContextValue {
-  showToast: (message: string, variant?: ToastVariant) => void;
+  showToast: (message: string, variant?: ToastVariant) => number;
+  updateToast: (id: number, message: string, variant?: ToastVariant) => void;
+  dismissToast: (id: number) => void;
 }
 
 export const ToastContext = createContext<ToastContextValue | null>(null);
@@ -27,6 +29,7 @@ const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
   warning: AlertTriangle,
   error: XCircle,
   info: Info,
+  loading: Loader2,
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -46,13 +49,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (message: string, variant: ToastVariant = "info") => {
       const id = nextId.current++;
       setToasts((prev) => [...prev, { id, message, variant, exiting: false }]);
-      setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
+      if (variant !== "loading") {
+        setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
+      }
+      return id;
     },
     [removeToast]
   );
 
+  const updateToast = useCallback(
+    (id: number, message: string, variant: ToastVariant = "info") => {
+      setToasts((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, message, variant } : t))
+      );
+      if (variant !== "loading") {
+        setTimeout(() => removeToast(id), AUTO_DISMISS_MS);
+      }
+    },
+    [removeToast]
+  );
+
+  const dismissToast = useCallback((id: number) => removeToast(id), [removeToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, updateToast, dismissToast }}>
       {children}
       <div className={styles.container}>
         {toasts.map((toast) => {
