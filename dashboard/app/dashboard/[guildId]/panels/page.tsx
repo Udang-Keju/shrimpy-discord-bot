@@ -1,7 +1,7 @@
 // dashboard/app/dashboard/[guildId]/panels/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Layers,
@@ -35,7 +35,7 @@ function hexToColor(hex: string): number {
 export default function PanelsPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
-  const { showToast } = useToast();
+  const { showToast, updateToast } = useToast();
 
   const [panels, setPanels] = useState<TicketPanel[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
@@ -73,6 +73,16 @@ export default function PanelsPage() {
   const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
   const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
   const [newCatOpenColor, setNewCatOpenColor] = useState<string>('#5865F2');
+
+  // Tracks the live selection so async completions can tell whether the
+  // panel/category they were issued for is still the one on screen.
+  const selectedPanelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedPanelIdRef.current = selectedPanel?.id ?? null;
+  }, [selectedPanel]);
+
+  const isCreatingPanel = useRef(false);
+  const isCreatingCategory = useRef(false);
 
   useEffect(() => {
     async function loadData() {
@@ -131,29 +141,51 @@ export default function PanelsPage() {
 
   const handleCreatePanel = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingPanel.current) return;
+    isCreatingPanel.current = true;
+
+    const hasMedia = !!(newAuthorName || newThumbnailUrl || newImageUrl || newFooterText);
+    const payload = {
+      channelId: newChannelId,
+      name: newName,
+      panelStyle: newPanelStyle,
+      content: newContent || undefined,
+      embedTitle: newEmbedTitle || undefined,
+      embedDescription: newEmbedDesc || undefined,
+      embedColor: (newEmbedTitle || newEmbedDesc) ? hexToColor(newEmbedColor) : undefined,
+      embedMedia: hasMedia ? {
+        author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
+        thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
+        image: newImageUrl ? { url: newImageUrl } : undefined,
+        footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
+      } : undefined,
+    };
+
+    // Reset the form immediately so the user can start the next panel
+    // without waiting for this one's Discord round-trip to finish.
+    setNewName("Main Support Desk");
+    setNewContent("");
+    setNewEmbedTitle("Contact Support Services");
+    setNewEmbedDesc("Click a button below to open a private ticket.");
+    setNewEmbedColor('#5865F2');
+    setNewAuthorName("");
+    setNewAuthorIconUrl("");
+    setNewThumbnailUrl("");
+    setNewImageUrl("");
+    setNewFooterText("");
+    setNewFooterIconUrl("");
+    setNewPanelStyle('buttons');
+    isCreatingPanel.current = false;
+
+    const toastId = showToast(`Deploying "${payload.name}"…`, "loading");
     try {
-      const hasMedia = !!(newAuthorName || newThumbnailUrl || newImageUrl || newFooterText);
-      const p = await ShrimpyAPI.createPanel(guildId, {
-        channelId: newChannelId,
-        name: newName,
-        panelStyle: newPanelStyle,
-        content: newContent || undefined,
-        embedTitle: newEmbedTitle || undefined,
-        embedDescription: newEmbedDesc || undefined,
-        embedColor: (newEmbedTitle || newEmbedDesc) ? hexToColor(newEmbedColor) : undefined,
-        embedMedia: hasMedia ? {
-          author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
-          thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
-          image: newImageUrl ? { url: newImageUrl } : undefined,
-          footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
-        } : undefined,
-      });
+      const p = await ShrimpyAPI.createPanel(guildId, payload);
       setPanels(prev => [...prev, p]);
-      setSelectedPanel(p);
-      showToast("Ticket panel deployed!", "success");
+      setSelectedPanel(prev => prev ?? p);
+      updateToast(toastId, `"${p.name}" deployed!`, "success");
     } catch (err) {
       console.error(err);
-      showToast("Failed to deploy panel.", "error");
+      updateToast(toastId, `Failed to deploy "${payload.name}".`, "error");
     }
   };
 
@@ -164,8 +196,10 @@ export default function PanelsPage() {
       if (selectedPanel?.id === panelId) {
         setSelectedPanel(null);
       }
+      showToast("Panel deleted.", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to delete panel.", "error");
     }
   };
 
@@ -176,45 +210,68 @@ export default function PanelsPage() {
       showToast("Button layout supports up to 3 categories. Switch to Select Menu for more.", "warning");
       return;
     }
+    if (isCreatingCategory.current) return;
+    isCreatingCategory.current = true;
+
+    const panelId = selectedPanel.id;
+    const buttonOrder = categories.length;
+    const payload = {
+      name: newCatName,
+      buttonLabel: newCatButtonLabel,
+      buttonStyle: newCatButtonStyle,
+      emoji: newCatEmoji || undefined,
+      buttonOrder,
+      ticketDestination: newCatDestination,
+      ticketNameTemplate: '{category}-{number}',
+      ticketOpenContent: newCatOpenContent || undefined,
+      ticketOpenTitle: newCatOpenTitle || undefined,
+      ticketOpenMessage: newCatOpenDesc || undefined,
+      ticketOpenColor: (newCatOpenTitle || newCatOpenDesc) ? hexToColor(newCatOpenColor) : undefined,
+      maxTicketsPerUser: 1,
+      allowUserClose: true,
+    };
+
+    // Reset the category form immediately so the user can start the next
+    // category without waiting for this one's Discord round-trip to finish.
+    setNewCatName("");
+    setNewCatButtonLabel("");
+    setNewCatButtonStyle('primary');
+    setNewCatEmoji("");
+    setNewCatDestination('thread');
+    setNewCatOpenContent("");
+    setNewCatOpenTitle("");
+    setNewCatOpenDesc("");
+    setNewCatOpenColor('#5865F2');
+    isCreatingCategory.current = false;
+
+    const toastId = showToast(`Adding category "${payload.name}"…`, "loading");
     try {
-      const c = await ShrimpyAPI.createCategory(guildId, selectedPanel.id, {
-        name: newCatName,
-        buttonLabel: newCatButtonLabel,
-        buttonStyle: newCatButtonStyle,
-        emoji: newCatEmoji || undefined,
-        buttonOrder: categories.length,
-        ticketDestination: newCatDestination,
-        ticketNameTemplate: '{category}-{number}',
-        ticketOpenContent: newCatOpenContent || undefined,
-        ticketOpenTitle: newCatOpenTitle || undefined,
-        ticketOpenMessage: newCatOpenDesc || undefined,
-        ticketOpenColor: (newCatOpenTitle || newCatOpenDesc) ? hexToColor(newCatOpenColor) : undefined,
-        maxTicketsPerUser: 1,
-        allowUserClose: true,
-      });
-      setCategories(prev => [...prev, c]);
-      setNewCatName("");
-      setNewCatButtonLabel("");
-      setNewCatEmoji("");
-      setNewCatOpenContent("");
-      setNewCatOpenTitle("");
-      setNewCatOpenDesc("");
+      const c = await ShrimpyAPI.createCategory(guildId, panelId, payload);
+      if (selectedPanelIdRef.current === panelId) {
+        setCategories(prev => [...prev, c]);
+      }
+      updateToast(toastId, `Category "${c.name}" added.`, "success");
     } catch (err) {
       console.error(err);
-      showToast("Failed to add category.", "error");
+      updateToast(toastId, `Failed to add category "${payload.name}".`, "error");
     }
   };
 
   const handleDeleteCategory = async (catId: string) => {
     if (!selectedPanel) return;
+    const panelId = selectedPanel.id;
     try {
-      await ShrimpyAPI.deleteCategory(guildId, selectedPanel.id, catId);
-      setCategories(prev => prev.filter(c => c.id !== catId));
-      if (selectedCategory?.id === catId) {
-        setSelectedCategory(null);
+      await ShrimpyAPI.deleteCategory(guildId, panelId, catId);
+      if (selectedPanelIdRef.current === panelId) {
+        setCategories(prev => prev.filter(c => c.id !== catId));
+        if (selectedCategory?.id === catId) {
+          setSelectedCategory(null);
+        }
       }
+      showToast("Category deleted.", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to delete category.", "error");
     }
   };
 
@@ -228,6 +285,7 @@ export default function PanelsPage() {
       await ShrimpyAPI.addCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, selectedCategoryHandlerRole);
       const refreshed = await ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id);
       setCategoryHandlerRoles(refreshed);
+      showToast("Handler role added.", "success");
     } catch (err) {
       console.error(err);
       showToast("Failed to add category handler role.", "error");
@@ -239,8 +297,10 @@ export default function PanelsPage() {
     try {
       await ShrimpyAPI.removeCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, roleId);
       setCategoryHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
+      showToast("Handler role removed.", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to remove category handler role.", "error");
     }
   };
 
@@ -254,6 +314,7 @@ export default function PanelsPage() {
       await ShrimpyAPI.addPanelHandlerRole(guildId, selectedPanel.id, selectedHandlerRole);
       const refreshed = await ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id);
       setHandlerRoles(refreshed);
+      showToast("Handler role added.", "success");
     } catch (err) {
       console.error(err);
       showToast("Failed to add panel handler role.", "error");
@@ -265,8 +326,10 @@ export default function PanelsPage() {
     try {
       await ShrimpyAPI.removePanelHandlerRole(guildId, selectedPanel.id, roleId);
       setHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
+      showToast("Handler role removed.", "success");
     } catch (err) {
       console.error(err);
+      showToast("Failed to remove panel handler role.", "error");
     }
   };
 
