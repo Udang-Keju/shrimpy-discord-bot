@@ -15,6 +15,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/service"
 	"github.com/bwmarrin/discordgo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
 )
 
@@ -803,6 +804,65 @@ func TestTicketService_SyncPanelMessage(t *testing.T) {
 		err := svc.SyncPanelMessage(ctx, dg, panelID)
 		assert.NoError(t, err)
 		assert.Len(t, capturedComponents, 2) // 5 buttons in row 1, 2 buttons in row 2
+	})
+
+	t.Run("renders a select menu instead of buttons when PanelStyle is select_menu", func(t *testing.T) {
+		desc := "Get help with billing issues"
+		cats := []model.TicketCategory{
+			{ID: "cat-1", ButtonLabel: "Billing", ButtonStyle: "primary", ButtonDescription: &desc},
+			{ID: "cat-2", ButtonLabel: "Technical", ButtonStyle: "primary"},
+		}
+		var rawBody []byte
+		categoryRepo := &MockTicketCategoryRepository{
+			GetPanelFunc: func(c context.Context, id string) (*model.TicketPanel, error) {
+				return &model.TicketPanel{ID: panelID, GuildID: guildID, ChannelID: channelID, PanelStyle: "select_menu"}, nil
+			},
+			ListCategoriesByPanelFunc: func(c context.Context, id string) ([]model.TicketCategory, error) {
+				return cats, nil
+			},
+			SetPanelMessageFunc: func(c context.Context, id string, messageID int64) error { return nil },
+		}
+		svc := service.NewTicketService(nil, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/555444/messages" {
+					rawBody, _ = io.ReadAll(req.Body)
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"555000"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		err := svc.SyncPanelMessage(ctx, dg, panelID)
+		assert.NoError(t, err)
+
+		var raw struct {
+			Components []struct {
+				Type       int `json:"type"`
+				Components []struct {
+					Type        int    `json:"type"`
+					CustomID    string `json:"custom_id"`
+					Placeholder string `json:"placeholder"`
+					Options     []struct {
+						Label       string `json:"label"`
+						Value       string `json:"value"`
+						Description string `json:"description"`
+					} `json:"options"`
+				} `json:"components"`
+			} `json:"components"`
+		}
+		require.NoError(t, json.Unmarshal(rawBody, &raw))
+		require.Len(t, raw.Components, 1)
+		require.Len(t, raw.Components[0].Components, 1)
+		menu := raw.Components[0].Components[0]
+		assert.Equal(t, "ticket:open_select", menu.CustomID)
+		require.Len(t, menu.Options, 2)
+		assert.Equal(t, "Billing", menu.Options[0].Label)
+		assert.Equal(t, "cat-1", menu.Options[0].Value)
+		assert.Equal(t, "Get help with billing issues", menu.Options[0].Description)
+		assert.Equal(t, "Technical", menu.Options[1].Label)
+		assert.Equal(t, "cat-2", menu.Options[1].Value)
 	})
 }
 

@@ -664,7 +664,7 @@ func (s *TicketService) SyncPanelMessage(ctx context.Context, dg *discordgo.Sess
 	}
 	content, embed := discordutil.BuildContentAndEmbed(panel.Content, embedFields, identity)
 
-	components := buildPanelButtons(cats)
+	components := buildPanelComponents(panel, cats)
 
 	params := &discordgo.MessageSend{Content: content, Components: components}
 	if embed != nil {
@@ -712,6 +712,47 @@ func (s *TicketService) DeletePanelMessage(ctx context.Context, dg *discordgo.Se
 		return nil
 	}
 	return dg.ChannelMessageDelete(discordutil.FormatID(panel.ChannelID), discordutil.FormatID(*panel.MessageID))
+}
+
+// buildPanelComponents renders the panel's category picker according to its PanelStyle:
+// a row of buttons, or a single select menu dropdown.
+func buildPanelComponents(panel *model.TicketPanel, cats []model.TicketCategory) []discordgo.MessageComponent {
+	if len(cats) == 0 {
+		return nil
+	}
+	if panel.PanelStyle == "select_menu" {
+		return buildPanelSelectMenu(cats)
+	}
+	return buildPanelButtons(cats)
+}
+
+// buildPanelSelectMenu renders all categories (ordered by ButtonOrder via the repository
+// query) as options of a single Discord select menu, capped at 25 options (Discord's
+// per-select-menu limit).
+func buildPanelSelectMenu(cats []model.TicketCategory) []discordgo.MessageComponent {
+	if len(cats) > 25 {
+		cats = cats[:25]
+	}
+	options := make([]discordgo.SelectMenuOption, 0, len(cats))
+	for _, cat := range cats {
+		opt := discordgo.SelectMenuOption{
+			Label: cat.ButtonLabel,
+			Value: cat.ID,
+		}
+		if cat.ButtonDescription != nil && *cat.ButtonDescription != "" {
+			opt.Description = *cat.ButtonDescription
+		}
+		if cat.Emoji != nil && *cat.Emoji != "" {
+			opt.Emoji = &discordgo.ComponentEmoji{Name: *cat.Emoji}
+		}
+		options = append(options, opt)
+	}
+	menu := discordgo.SelectMenu{
+		CustomID:    "ticket:open_select",
+		Placeholder: "Select a category to open a ticket...",
+		Options:     options,
+	}
+	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{menu}}}
 }
 
 // buildPanelButtons renders one button per category (ordered by ButtonOrder via the

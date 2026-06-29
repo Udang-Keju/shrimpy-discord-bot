@@ -65,12 +65,24 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 	data := i.MessageComponentData()
 	parts := strings.Split(data.CustomID, ":")
 
-	if len(parts) < 3 || parts[0] != "ticket" {
+	if len(parts) < 2 || parts[0] != "ticket" {
 		return
 	}
 
 	action := parts[1]
-	targetID := parts[2]
+	var targetID string
+	if action == "open_select" {
+		if len(data.Values) == 0 {
+			return
+		}
+		action = "open"
+		targetID = data.Values[0]
+	} else {
+		if len(parts) < 3 {
+			return
+		}
+		targetID = parts[2]
+	}
 
 	guildID, _ := strconv.ParseInt(i.GuildID, 10, 64)
 	userID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
