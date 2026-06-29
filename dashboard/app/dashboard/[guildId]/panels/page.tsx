@@ -8,11 +8,10 @@ import {
   Plus,
   Trash2,
   Eye,
-  Ticket,
-  Users
+  Ticket
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, TicketPanel, TicketCategory, PanelHandlerRole, CategoryHandlerRole, DiscordChannel, DiscordRole } from "@/lib/api";
+import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
 
@@ -42,11 +41,18 @@ export default function PanelsPage() {
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<TicketPanel | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
-  const [handlerRoles, setHandlerRoles] = useState<PanelHandlerRole[]>([]);
+  // Working list of role IDs for the panel form (create or edit) — saved as part of the
+  // panel payload; the backend reconciles panel_handler_roles to match.
+  const [handlerRoleIds, setHandlerRoleIds] = useState<string[]>([]);
   const [selectedHandlerRole, setSelectedHandlerRole] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<TicketCategory | null>(null);
-  const [categoryHandlerRoles, setCategoryHandlerRoles] = useState<CategoryHandlerRole[]>([]);
+  // Working list of role IDs for the category form — saved as part of the category
+  // payload; the backend reconciles category_handler_roles to match.
+  const [categoryHandlerRoleIds, setCategoryHandlerRoleIds] = useState<string[]>([]);
   const [selectedCategoryHandlerRole, setSelectedCategoryHandlerRole] = useState("");
+  // Guild staff roles (dashboard-access tier) — always invited into tickets, shown
+  // read-only in both forms so users see the full handler-role hierarchy.
+  const [staffRoleIds, setStaffRoleIds] = useState<string[]>([]);
 
   // Form state for new panel
   const [newName, setNewName] = useState("Main Support Desk");
@@ -110,6 +116,7 @@ export default function PanelsPage() {
     setNewFooterText("");
     setNewFooterIconUrl("");
     setNewPanelStyle('buttons');
+    setHandlerRoleIds([]);
   };
 
   const resetCategoryForm = () => {
@@ -122,19 +129,22 @@ export default function PanelsPage() {
     setNewCatOpenTitle("");
     setNewCatOpenDesc("");
     setNewCatOpenColor('#5865F2');
+    setCategoryHandlerRoleIds([]);
   };
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [panelsData, chansData, rolesData] = await Promise.all([
+        const [panelsData, chansData, rolesData, guildConfig] = await Promise.all([
           ShrimpyAPI.listPanels(guildId),
           ShrimpyAPI.getDiscordChannels(guildId),
-          ShrimpyAPI.getDiscordRoles(guildId)
+          ShrimpyAPI.getDiscordRoles(guildId),
+          ShrimpyAPI.getGuildConfig(guildId)
         ]);
         setPanels(panelsData);
         setChannels(chansData);
         setRoles(rolesData);
+        setStaffRoleIds(guildConfig.staffRoles);
 
         if (chansData.length > 0) {
           setNewChannelId(chansData[0].id);
@@ -174,7 +184,7 @@ export default function PanelsPage() {
     resetPanelForm();
     if (!p) {
       setCategories([]);
-      setHandlerRoles([]);
+      setHandlerRoleIds([]);
     }
   };
 
@@ -187,16 +197,16 @@ export default function PanelsPage() {
         const atLimit = selectedPanel.panelStyle === 'buttons' && cats.length >= 3;
         setCreatingNewCategory(cats.length > 0 && !atLimit);
       });
-      ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id).then(setHandlerRoles);
+      ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id).then(res => setHandlerRoleIds(res.map(hr => hr.roleId)));
     }
   }, [selectedPanel, guildId]);
 
   useEffect(() => {
     if (selectedPanel && selectedCategory) {
-      ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id).then(setCategoryHandlerRoles);
+      ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id).then(res => setCategoryHandlerRoleIds(res.map(hr => hr.roleId)));
     } else {
       const timer = setTimeout(() => {
-        setCategoryHandlerRoles([]);
+        setCategoryHandlerRoleIds([]);
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -264,6 +274,7 @@ export default function PanelsPage() {
         image: newImageUrl ? { url: newImageUrl } : undefined,
         footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
       } : undefined,
+      handlerRoleIds,
     };
 
     const editId = editingPanelId;
@@ -386,6 +397,7 @@ export default function PanelsPage() {
       autoCloseHours: original?.autoCloseHours,
       transcriptChannelId: original?.transcriptChannelId,
       allowUserClose: original?.allowUserClose ?? true,
+      handlerRoleIds: categoryHandlerRoleIds,
     };
 
     isCreatingCategory.current = false;
@@ -461,79 +473,65 @@ export default function PanelsPage() {
     }
   };
 
-  const handleAddCategoryHandlerRole = async () => {
-    if (!selectedPanel || !selectedCategory || !selectedCategoryHandlerRole) return;
-    if (categoryHandlerRoles.some(r => r.roleId === selectedCategoryHandlerRole)) {
-      showToast("Role is already a ticket handler for this category!", "warning");
+  // Handler roles are now plain form fields, saved as part of the panel/category
+  // payload (the backend reconciles the tables) — these are local list edits only,
+  // with no API calls of their own.
+  const handleAddHandlerRole = () => {
+    if (!selectedHandlerRole) return;
+    if (staffRoleIds.includes(selectedHandlerRole)) {
+      showToast("Role is already a staff role and is always included.", "warning");
       return;
     }
-    try {
-      await ShrimpyAPI.addCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, selectedCategoryHandlerRole);
-      const refreshed = await ShrimpyAPI.listCategoryHandlerRoles(guildId, selectedPanel.id, selectedCategory.id);
-      setCategoryHandlerRoles(refreshed);
-      showToast("Handler role added.", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to add category handler role.", "error");
-    }
-  };
-
-  const handleRemoveCategoryHandlerRole = async (roleId: string) => {
-    if (!selectedPanel || !selectedCategory) return;
-    try {
-      await ShrimpyAPI.removeCategoryHandlerRole(guildId, selectedPanel.id, selectedCategory.id, roleId);
-      setCategoryHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
-      showToast("Handler role removed.", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to remove category handler role.", "error");
-    }
-  };
-
-  const handleAddHandlerRole = async () => {
-    if (!selectedPanel || !selectedHandlerRole) return;
-    if (handlerRoles.some(r => r.roleId === selectedHandlerRole)) {
+    if (handlerRoleIds.includes(selectedHandlerRole)) {
       showToast("Role is already a ticket handler for this panel!", "warning");
       return;
     }
-    try {
-      await ShrimpyAPI.addPanelHandlerRole(guildId, selectedPanel.id, selectedHandlerRole);
-      const refreshed = await ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id);
-      setHandlerRoles(refreshed);
-      showToast("Handler role added.", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to add panel handler role.", "error");
-    }
+    setHandlerRoleIds(prev => [...prev, selectedHandlerRole]);
   };
 
-  const handleRemoveHandlerRole = async (roleId: string) => {
-    if (!selectedPanel) return;
-    try {
-      await ShrimpyAPI.removePanelHandlerRole(guildId, selectedPanel.id, roleId);
-      setHandlerRoles(prev => prev.filter(r => r.roleId !== roleId));
-      showToast("Handler role removed.", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to remove panel handler role.", "error");
-    }
+  const handleRemoveHandlerRole = (roleId: string) => {
+    setHandlerRoleIds(prev => prev.filter(id => id !== roleId));
   };
 
-  const showFormPreview = creatingNew || !!editingPanelId || !selectedPanel;
-  const previewContent = showFormPreview ? newContent : selectedPanel!.content;
-  const previewEmbedTitle = showFormPreview ? newEmbedTitle : selectedPanel!.embedTitle;
-  const previewEmbedDesc = showFormPreview ? newEmbedDesc : selectedPanel!.embedDescription;
-  const previewEmbedColor = colorToHex(showFormPreview ? hexToColor(newEmbedColor) : selectedPanel!.embedColor);
-  const previewMedia = showFormPreview ? ((newAuthorName || newThumbnailUrl || newImageUrl || newFooterText) ? {
+  const handleAddCategoryHandlerRole = () => {
+    if (!selectedCategoryHandlerRole) return;
+    if (staffRoleIds.includes(selectedCategoryHandlerRole) || handlerRoleIds.includes(selectedCategoryHandlerRole)) {
+      showToast("Role is already inherited from staff or panel handler roles.", "warning");
+      return;
+    }
+    if (categoryHandlerRoleIds.includes(selectedCategoryHandlerRole)) {
+      showToast("Role is already a ticket handler for this category!", "warning");
+      return;
+    }
+    setCategoryHandlerRoleIds(prev => [...prev, selectedCategoryHandlerRole]);
+  };
+
+  const handleRemoveCategoryHandlerRole = (roleId: string) => {
+    setCategoryHandlerRoleIds(prev => prev.filter(id => id !== roleId));
+  };
+
+  const previewContent = newContent;
+  const previewEmbedTitle = newEmbedTitle;
+  const previewEmbedDesc = newEmbedDesc;
+  const previewEmbedColor = colorToHex(hexToColor(newEmbedColor));
+  const previewMedia = (newAuthorName || newThumbnailUrl || newImageUrl || newFooterText) ? {
     author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
     thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
     image: newImageUrl ? { url: newImageUrl } : undefined,
     footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
-  } : undefined) : selectedPanel!.embedMedia;
+  } : undefined;
   const hasPreviewEmbed = !!(previewEmbedTitle || previewEmbedDesc || previewMedia);
   const atCategoryLimit = !!selectedPanel && selectedPanel.panelStyle === 'buttons' && categories.length >= 3;
   const showCategoryForm = (creatingNewCategory || !!editingCategoryId) && !(!editingCategoryId && atCategoryLimit);
   const previewCategories = selectedPanel ? categories : [];
+
+  // Handler-role hierarchy: staff roles are always included; panel roles apply to every
+  // category on the panel; category roles are additive to just that category. Each role
+  // is shown editable in exactly one tier — lower tiers show higher ones read-only.
+  const visiblePanelRoleIds = handlerRoleIds.filter(id => !staffRoleIds.includes(id));
+  const inheritedCategoryRoleIds = Array.from(new Set([...staffRoleIds, ...handlerRoleIds]));
+  const visibleCategoryRoleIds = categoryHandlerRoleIds.filter(id => !inheritedCategoryRoleIds.includes(id));
+  const roleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || roleId;
 
   return (
     <div>
@@ -542,9 +540,7 @@ export default function PanelsPage() {
         <p className={styles.sectionDesc}>Create interactive ticket creation desks that post plain text and/or an embed to your channels, with one button per category.</p>
       </div>
 
-      <div className={styles.grid}>
-        {/* Left Column: Creator / Config */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
 
           {/* Active Panels List */}
           <div className={styles.card}>
@@ -603,8 +599,9 @@ export default function PanelsPage() {
             )}
           </div>
 
-          {/* Panel Creator / Editor Form */}
+          {/* Panel Creator / Editor Form, paired with the Real-time Preview */}
           {(creatingNew || editingPanelId) && (
+          <div className={styles.grid} style={{ alignItems: 'start' }}>
           <div className={styles.card}>
             <div>
               <h3 className={styles.cardTitle}>{editingPanelId ? 'Edit Ticket Panel' : 'Create New Ticket Panel'}</h3>
@@ -625,6 +622,53 @@ export default function PanelsPage() {
                     onChange={setNewChannelId}
                     options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
                   />
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Ticket Handler Roles</label>
+                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                  Tickets always include your server&apos;s staff roles. Roles added here apply to every category on this panel, in addition to staff roles. This does not grant dashboard access.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                  {staffRoleIds.length === 0 && visiblePanelRoleIds.length === 0 && (
+                    <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No handler roles added. Only the ticket opener and the bot will see the channel.</div>
+                  )}
+                  {staffRoleIds.map(roleId => (
+                    <div
+                      key={`staff-${roleId}`}
+                      className={styles.actionBtn}
+                      style={{ justifyContent: 'space-between', cursor: 'default', opacity: 0.7 }}
+                      title="Always added — from staff roles, managed on the Roles page."
+                    >
+                      <span style={{ fontWeight: 'bold' }}>{roleName(roleId)}</span>
+                      <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Staff role</span>
+                    </div>
+                  ))}
+                  {visiblePanelRoleIds.map(roleId => (
+                    <div key={roleId} className={styles.actionBtn} style={{ justifyContent: 'space-between' }}>
+                      <span style={{ fontWeight: 'bold' }}>{roleName(roleId)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveHandlerRole(roleId)}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Dropdown
+                    value={selectedHandlerRole}
+                    onChange={setSelectedHandlerRole}
+                    options={roles.filter(r => !staffRoleIds.includes(r.id) && !handlerRoleIds.includes(r.id)).map(r => ({ value: r.id, label: r.name }))}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" onClick={handleAddHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                    <Plus size={14} />
+                    <span>Add</span>
+                  </button>
                 </div>
               </div>
 
@@ -713,12 +757,6 @@ export default function PanelsPage() {
               </div>
             </form>
           </div>
-          )}
-
-        </div>
-
-        {/* Right Column: Live Preview & Ticket Categories */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
 
           {/* Real-time Discord Preview Card */}
           <div className={styles.card}>
@@ -807,9 +845,12 @@ export default function PanelsPage() {
               </div>
             </div>
           </div>
+          </div>
+          )}
 
           {/* Categories inside Selected Panel */}
           {selectedPanel && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             <div className={styles.card}>
               {categories.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
@@ -878,9 +919,8 @@ export default function PanelsPage() {
                 </>
               )}
             </div>
-          )}
 
-          {selectedPanel && showCategoryForm && (
+          {showCategoryForm && (
             <div className={styles.card}>
               <div>
                 <h3 className={styles.cardTitle}>{editingCategoryId ? 'Edit Category' : 'New Category'}</h3>
@@ -952,6 +992,64 @@ export default function PanelsPage() {
                   </div>
                 </div>
 
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Category Handler Roles</label>
+                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                    Tickets always include your server&apos;s staff roles and this panel&apos;s handler roles. Roles added here apply only to tickets opened from this category. This does not grant dashboard access.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                    {staffRoleIds.length === 0 && visiblePanelRoleIds.length === 0 && visibleCategoryRoleIds.length === 0 && (
+                      <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No handler roles added. Only the ticket opener and the bot will see the channel.</div>
+                    )}
+                    {staffRoleIds.map(roleId => (
+                      <div
+                        key={`staff-${roleId}`}
+                        className={styles.actionBtn}
+                        style={{ justifyContent: 'space-between', cursor: 'default', opacity: 0.7 }}
+                        title="Always added — from staff roles, managed on the Roles page."
+                      >
+                        <span style={{ fontWeight: 'bold' }}>{roleName(roleId)}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Staff role</span>
+                      </div>
+                    ))}
+                    {visiblePanelRoleIds.map(roleId => (
+                      <div
+                        key={`panel-${roleId}`}
+                        className={styles.actionBtn}
+                        style={{ justifyContent: 'space-between', cursor: 'default', opacity: 0.7 }}
+                        title="Always added — from this panel's handler roles."
+                      >
+                        <span style={{ fontWeight: 'bold' }}>{roleName(roleId)}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Panel</span>
+                      </div>
+                    ))}
+                    {visibleCategoryRoleIds.map(roleId => (
+                      <div key={roleId} className={styles.actionBtn} style={{ justifyContent: 'space-between' }}>
+                        <span style={{ fontWeight: 'bold' }}>{roleName(roleId)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCategoryHandlerRole(roleId)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Dropdown
+                      value={selectedCategoryHandlerRole}
+                      onChange={setSelectedCategoryHandlerRole}
+                      options={roles.filter(r => !inheritedCategoryRoleIds.includes(r.id) && !categoryHandlerRoleIds.includes(r.id)).map(r => ({ value: r.id, label: r.name }))}
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" onClick={handleAddCategoryHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                      <Plus size={14} />
+                      <span>Add</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
                   Ticket greeting (sent inside the opened ticket)
                 </div>
@@ -995,103 +1093,8 @@ export default function PanelsPage() {
               </form>
             </div>
           )}
-
-          {/* Ticket Handler Roles for Selected Category */}
-          {selectedPanel && selectedCategory && (
-            <div className={styles.card}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <Users size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 className={styles.cardTitle}>&quot;{selectedCategory.name}&quot; Handler Roles</h3>
-              </div>
-              <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-                Roles invited into tickets opened from this category specifically, in addition to the panel&apos;s handler roles above. This does not grant dashboard access.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
-                {categoryHandlerRoles.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No category-specific handler roles. Only the panel&apos;s handler roles will be invited.</div>
-                ) : (
-                  categoryHandlerRoles.map(hr => {
-                    const matched = roles.find(r => r.id === hr.roleId);
-                    return (
-                      <div key={hr.id} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
-                        <span style={{ fontWeight: 'bold' }}>{matched?.name || hr.roleId}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCategoryHandlerRole(hr.roleId)}
-                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-                <Dropdown
-                  value={selectedCategoryHandlerRole}
-                  onChange={setSelectedCategoryHandlerRole}
-                  options={roles.map(r => ({ value: r.id, label: r.name }))}
-                  style={{ flex: 1 }}
-                />
-                <button onClick={handleAddCategoryHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
-                  <Plus size={14} />
-                  <span>Add</span>
-                </button>
-              </div>
-            </div>
+          </div>
           )}
-
-          {/* Ticket Handler Roles for Selected Panel */}
-          {selectedPanel && (
-            <div className={styles.card}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <Users size={18} style={{ color: 'var(--color-primary)' }} />
-                <h3 className={styles.cardTitle}>Ticket Handler Roles</h3>
-              </div>
-              <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-                Roles invited into the Discord channel or thread created for a ticket opened from this panel, so they can handle it. This does not grant dashboard access.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
-                {handlerRoles.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>No handler roles added. Only the ticket opener and the bot will see the channel.</div>
-                ) : (
-                  handlerRoles.map(hr => {
-                    const matched = roles.find(r => r.id === hr.roleId);
-                    return (
-                      <div key={hr.id} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
-                        <span style={{ fontWeight: 'bold' }}>{matched?.name || hr.roleId}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveHandlerRole(hr.roleId)}
-                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
-                <Dropdown
-                  value={selectedHandlerRole}
-                  onChange={setSelectedHandlerRole}
-                  options={roles.map(r => ({ value: r.id, label: r.name }))}
-                  style={{ flex: 1 }}
-                />
-                <button onClick={handleAddHandlerRole} className={styles.actionBtn} style={{ padding: '0 16px', display: 'flex', alignItems: 'center' }}>
-                  <Plus size={14} />
-                  <span>Add</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

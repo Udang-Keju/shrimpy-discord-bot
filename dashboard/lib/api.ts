@@ -61,6 +61,9 @@ export interface TicketPanel {
   embedDescription?: string;
   embedColor?: number;
   embedMedia?: EmbedMedia;
+  // Write-only: included in create/update payloads so the backend can reconcile
+  // panel_handler_roles to match exactly. Omitted (not just empty) on reads.
+  handlerRoleIds?: string[];
 }
 
 export interface TicketCategory {
@@ -83,6 +86,9 @@ export interface TicketCategory {
   autoCloseHours?: number;
   transcriptChannelId?: string;
   allowUserClose: boolean;
+  // Write-only: included in create/update payloads so the backend can reconcile
+  // category_handler_roles to match exactly. Omitted (not just empty) on reads.
+  handlerRoleIds?: string[];
 }
 
 // Roles invited into the Discord channel/thread created for a ticket, so they
@@ -498,6 +504,11 @@ export const ShrimpyAPI = {
         guildId
       };
       mockPanels.push(newPanel);
+      if (panel.handlerRoleIds) {
+        mockPanelHandlerRoles[newPanel.id] = panel.handlerRoleIds.map(roleId => ({
+          id: `phr-${Math.floor(Math.random() * 1000)}`, panelId: newPanel.id, roleId
+        }));
+      }
       return newPanel;
     }
     return fetchJSON<TicketPanel>(`/api/v1/guilds/${guildId}/panels`, {
@@ -510,6 +521,11 @@ export const ShrimpyAPI = {
     if (isDemoMode()) {
       const updated: TicketPanel = { ...panel, id: panelId, guildId };
       mockPanels = mockPanels.map(p => p.id === panelId ? updated : p);
+      if (panel.handlerRoleIds) {
+        mockPanelHandlerRoles[panelId] = panel.handlerRoleIds.map(roleId => ({
+          id: `phr-${Math.floor(Math.random() * 1000)}`, panelId, roleId
+        }));
+      }
       return updated;
     }
     return fetchJSON<TicketPanel>(`/api/v1/guilds/${guildId}/panels/${panelId}`, {
@@ -540,6 +556,11 @@ export const ShrimpyAPI = {
       };
       if (!mockCategories[panelId]) mockCategories[panelId] = [];
       mockCategories[panelId].push(newCat);
+      if (cat.handlerRoleIds) {
+        mockCategoryHandlerRoles[newCat.id] = cat.handlerRoleIds.map(roleId => ({
+          id: `chr-${Math.floor(Math.random() * 1000)}`, categoryId: newCat.id, roleId
+        }));
+      }
       return newCat;
     }
     return fetchJSON<TicketCategory>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`, {
@@ -553,6 +574,11 @@ export const ShrimpyAPI = {
       const updated: TicketCategory = { ...cat, id: catId, panelId };
       if (mockCategories[panelId]) {
         mockCategories[panelId] = mockCategories[panelId].map(c => c.id === catId ? updated : c);
+      }
+      if (cat.handlerRoleIds) {
+        mockCategoryHandlerRoles[catId] = cat.handlerRoleIds.map(roleId => ({
+          id: `chr-${Math.floor(Math.random() * 1000)}`, categoryId: catId, roleId
+        }));
       }
       return updated;
     }
@@ -572,60 +598,19 @@ export const ShrimpyAPI = {
     await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, { method: 'DELETE', credentials: 'include' });
   },
 
-  // Per-panel ticket handler roles (who gets invited into the created ticket channel/thread)
+  // Per-panel ticket handler roles (who gets invited into the created ticket channel/thread).
+  // Writes happen via createPanel/updatePanel's handlerRoleIds field instead of dedicated
+  // endpoints — the backend reconciles the set from the panel payload.
   listPanelHandlerRoles: async (guildId: string, panelId: string): Promise<PanelHandlerRole[]> => {
     if (isDemoMode()) return mockPanelHandlerRoles[panelId] || [];
     return fetchJSON<PanelHandlerRole[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles`);
   },
 
-  addPanelHandlerRole: async (guildId: string, panelId: string, roleId: string): Promise<void> => {
-    if (isDemoMode()) {
-      if (!mockPanelHandlerRoles[panelId]) mockPanelHandlerRoles[panelId] = [];
-      mockPanelHandlerRoles[panelId].push({ id: `phr-${Math.floor(Math.random() * 1000)}`, panelId, roleId });
-      return;
-    }
-    await fetchJSON(`/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles`, {
-      method: 'POST',
-      body: JSON.stringify({ role_id: roleId })
-    });
-  },
-
-  removePanelHandlerRole: async (guildId: string, panelId: string, roleId: string): Promise<void> => {
-    if (isDemoMode()) {
-      if (mockPanelHandlerRoles[panelId]) {
-        mockPanelHandlerRoles[panelId] = mockPanelHandlerRoles[panelId].filter(r => r.roleId !== roleId);
-      }
-      return;
-    }
-    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/handler-roles/${roleId}`, { method: 'DELETE', credentials: 'include' });
-  },
-
-  // Per-category ticket handler roles (additive to the panel's handler roles)
+  // Per-category ticket handler roles (additive to the panel's handler roles). Writes
+  // happen via createCategory/updateCategory's handlerRoleIds field.
   listCategoryHandlerRoles: async (guildId: string, panelId: string, catId: string): Promise<CategoryHandlerRole[]> => {
     if (isDemoMode()) return mockCategoryHandlerRoles[catId] || [];
     return fetchJSON<CategoryHandlerRole[]>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles`);
-  },
-
-  addCategoryHandlerRole: async (guildId: string, panelId: string, catId: string, roleId: string): Promise<void> => {
-    if (isDemoMode()) {
-      if (!mockCategoryHandlerRoles[catId]) mockCategoryHandlerRoles[catId] = [];
-      mockCategoryHandlerRoles[catId].push({ id: `chr-${Math.floor(Math.random() * 1000)}`, categoryId: catId, roleId });
-      return;
-    }
-    await fetchJSON(`/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles`, {
-      method: 'POST',
-      body: JSON.stringify({ role_id: roleId })
-    });
-  },
-
-  removeCategoryHandlerRole: async (guildId: string, panelId: string, catId: string, roleId: string): Promise<void> => {
-    if (isDemoMode()) {
-      if (mockCategoryHandlerRoles[catId]) {
-        mockCategoryHandlerRoles[catId] = mockCategoryHandlerRoles[catId].filter(r => r.roleId !== roleId);
-      }
-      return;
-    }
-    await fetch(`${API_BASE}/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}/handler-roles/${roleId}`, { method: 'DELETE', credentials: 'include' });
   },
 
   // Tickets management
