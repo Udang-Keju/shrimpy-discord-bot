@@ -506,6 +506,18 @@ export const ShrimpyAPI = {
     });
   },
 
+  updatePanel: async (guildId: string, panelId: string, panel: Omit<TicketPanel, 'id' | 'guildId'>): Promise<TicketPanel> => {
+    if (isDemoMode()) {
+      const updated: TicketPanel = { ...panel, id: panelId, guildId };
+      mockPanels = mockPanels.map(p => p.id === panelId ? updated : p);
+      return updated;
+    }
+    return fetchJSON<TicketPanel>(`/api/v1/guilds/${guildId}/panels/${panelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(panel)
+    });
+  },
+
   deletePanel: async (guildId: string, panelId: string): Promise<void> => {
     if (isDemoMode()) {
       mockPanels = mockPanels.filter(p => p.id !== panelId);
@@ -532,6 +544,20 @@ export const ShrimpyAPI = {
     }
     return fetchJSON<TicketCategory>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories`, {
       method: 'POST',
+      body: JSON.stringify(cat)
+    });
+  },
+
+  updateCategory: async (guildId: string, panelId: string, catId: string, cat: Omit<TicketCategory, 'id' | 'panelId'>): Promise<TicketCategory> => {
+    if (isDemoMode()) {
+      const updated: TicketCategory = { ...cat, id: catId, panelId };
+      if (mockCategories[panelId]) {
+        mockCategories[panelId] = mockCategories[panelId].map(c => c.id === catId ? updated : c);
+      }
+      return updated;
+    }
+    return fetchJSON<TicketCategory>(`/api/v1/guilds/${guildId}/panels/${panelId}/categories/${catId}`, {
+      method: 'PATCH',
       body: JSON.stringify(cat)
     });
   },

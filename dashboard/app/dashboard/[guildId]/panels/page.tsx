@@ -7,6 +7,7 @@ import {
   Layers,
   Plus,
   Trash2,
+  Pencil,
   Eye,
   Ticket,
   Users
@@ -84,6 +85,41 @@ export default function PanelsPage() {
   const isCreatingPanel = useRef(false);
   const isCreatingCategory = useRef(false);
 
+  const [editingPanelId, setEditingPanelId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  // Holds fields the category form doesn't expose (buttonOrder, ticketNameTemplate,
+  // maxTicketsPerUser, autoCloseHours, transcriptChannelId, allowUserClose) so an
+  // edit submission doesn't clobber them with create-time defaults.
+  const [editingCategoryOriginal, setEditingCategoryOriginal] = useState<TicketCategory | null>(null);
+
+  const resetPanelForm = () => {
+    setNewName("Main Support Desk");
+    setNewChannelId(channels.length > 0 ? channels[0].id : "");
+    setNewContent("");
+    setNewEmbedTitle("Contact Support Services");
+    setNewEmbedDesc("Click a button below to open a private ticket.");
+    setNewEmbedColor('#5865F2');
+    setNewAuthorName("");
+    setNewAuthorIconUrl("");
+    setNewThumbnailUrl("");
+    setNewImageUrl("");
+    setNewFooterText("");
+    setNewFooterIconUrl("");
+    setNewPanelStyle('buttons');
+  };
+
+  const resetCategoryForm = () => {
+    setNewCatName("");
+    setNewCatButtonLabel("");
+    setNewCatButtonStyle('primary');
+    setNewCatEmoji("");
+    setNewCatDestination('thread');
+    setNewCatOpenContent("");
+    setNewCatOpenTitle("");
+    setNewCatOpenDesc("");
+    setNewCatOpenColor('#5865F2');
+  };
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -104,9 +140,11 @@ export default function PanelsPage() {
           setSelectedCategoryHandlerRole(rolesData[0].id);
         }
 
-        if (panelsData.length > 0) {
-          setSelectedPanel(panelsData[0]);
-        }
+        setSelectedPanel(panelsData.length > 0 ? panelsData[0] : null);
+        setSelectedCategory(null);
+        setEditingPanelId(null);
+        setEditingCategoryId(null);
+        setEditingCategoryOriginal(null);
       } catch (err) {
         console.error(err);
       }
@@ -114,18 +152,29 @@ export default function PanelsPage() {
     loadData();
   }, [guildId]);
 
+  // Switches the selected panel and resets all state scoped to "the panel
+  // currently being viewed" in one synchronous step, so the change happens
+  // in the event handler that causes it rather than being inferred later in
+  // an effect (see https://react.dev/learn/you-might-not-need-an-effect).
+  const selectPanel = (p: TicketPanel | null) => {
+    setSelectedPanel(p);
+    setSelectedCategory(null);
+    setEditingCategoryId(null);
+    setEditingCategoryOriginal(null);
+    resetCategoryForm();
+    setEditingPanelId(null);
+    resetPanelForm();
+    if (!p) {
+      setCategories([]);
+      setHandlerRoles([]);
+    }
+  };
+
   useEffect(() => {
     if (selectedPanel) {
       ShrimpyAPI.listCategories(guildId, selectedPanel.id).then(setCategories);
       ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id).then(setHandlerRoles);
-    } else {
-      const timer = setTimeout(() => {
-        setCategories([]);
-        setHandlerRoles([]);
-      }, 0);
-      return () => clearTimeout(timer);
     }
-    setSelectedCategory(null);
   }, [selectedPanel, guildId]);
 
   useEffect(() => {
@@ -138,6 +187,28 @@ export default function PanelsPage() {
       return () => clearTimeout(timer);
     }
   }, [selectedPanel, selectedCategory, guildId]);
+
+  const handleEditPanelClick = (p: TicketPanel) => {
+    setEditingPanelId(p.id);
+    setNewName(p.name);
+    setNewChannelId(p.channelId);
+    setNewPanelStyle(p.panelStyle);
+    setNewContent(p.content || "");
+    setNewEmbedTitle(p.embedTitle || "");
+    setNewEmbedDesc(p.embedDescription || "");
+    setNewEmbedColor(colorToHex(p.embedColor));
+    setNewAuthorName(p.embedMedia?.author?.name || "");
+    setNewAuthorIconUrl(p.embedMedia?.author?.iconUrl || "");
+    setNewThumbnailUrl(p.embedMedia?.thumbnail?.url || "");
+    setNewImageUrl(p.embedMedia?.image?.url || "");
+    setNewFooterText(p.embedMedia?.footer?.text || "");
+    setNewFooterIconUrl(p.embedMedia?.footer?.iconUrl || "");
+  };
+
+  const handleCancelEditPanel = () => {
+    setEditingPanelId(null);
+    resetPanelForm();
+  };
 
   const handleCreatePanel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,21 +232,27 @@ export default function PanelsPage() {
       } : undefined,
     };
 
+    const editId = editingPanelId;
+
     // Reset the form immediately so the user can start the next panel
     // without waiting for this one's Discord round-trip to finish.
-    setNewName("Main Support Desk");
-    setNewContent("");
-    setNewEmbedTitle("Contact Support Services");
-    setNewEmbedDesc("Click a button below to open a private ticket.");
-    setNewEmbedColor('#5865F2');
-    setNewAuthorName("");
-    setNewAuthorIconUrl("");
-    setNewThumbnailUrl("");
-    setNewImageUrl("");
-    setNewFooterText("");
-    setNewFooterIconUrl("");
-    setNewPanelStyle('buttons');
+    setEditingPanelId(null);
+    resetPanelForm();
     isCreatingPanel.current = false;
+
+    if (editId) {
+      const toastId = showToast(`Updating "${payload.name}"…`, "loading");
+      try {
+        const p = await ShrimpyAPI.updatePanel(guildId, editId, payload);
+        setPanels(prev => prev.map(existing => existing.id === editId ? p : existing));
+        setSelectedPanel(prev => prev?.id === editId ? p : prev);
+        updateToast(toastId, `"${p.name}" updated.`, "success");
+      } catch (err) {
+        console.error(err);
+        updateToast(toastId, `Failed to update "${payload.name}".`, "error");
+      }
+      return;
+    }
 
     const toastId = showToast(`Deploying "${payload.name}"…`, "loading");
     try {
@@ -194,7 +271,7 @@ export default function PanelsPage() {
       await ShrimpyAPI.deletePanel(guildId, panelId);
       setPanels(prev => prev.filter(p => p.id !== panelId));
       if (selectedPanel?.id === panelId) {
-        setSelectedPanel(null);
+        selectPanel(null);
       }
       showToast("Panel deleted.", "success");
     } catch (err) {
@@ -203,10 +280,30 @@ export default function PanelsPage() {
     }
   };
 
+  const handleEditCategoryClick = (c: TicketCategory) => {
+    setEditingCategoryId(c.id);
+    setEditingCategoryOriginal(c);
+    setNewCatName(c.name);
+    setNewCatButtonLabel(c.buttonLabel);
+    setNewCatButtonStyle(c.buttonStyle);
+    setNewCatEmoji(c.emoji || "");
+    setNewCatDestination(c.ticketDestination);
+    setNewCatOpenContent(c.ticketOpenContent || "");
+    setNewCatOpenTitle(c.ticketOpenTitle || "");
+    setNewCatOpenDesc(c.ticketOpenMessage || "");
+    setNewCatOpenColor(colorToHex(c.ticketOpenColor));
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryOriginal(null);
+    resetCategoryForm();
+  };
+
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPanel || !newCatName || !newCatButtonLabel) return;
-    if (selectedPanel.panelStyle === 'buttons' && categories.length >= 3) {
+    if (!editingCategoryId && selectedPanel.panelStyle === 'buttons' && categories.length >= 3) {
       showToast("Button layout supports up to 3 categories. Switch to Select Menu for more.", "warning");
       return;
     }
@@ -214,35 +311,47 @@ export default function PanelsPage() {
     isCreatingCategory.current = true;
 
     const panelId = selectedPanel.id;
-    const buttonOrder = categories.length;
+    const editId = editingCategoryId;
+    const original = editingCategoryOriginal;
     const payload = {
       name: newCatName,
       buttonLabel: newCatButtonLabel,
       buttonStyle: newCatButtonStyle,
       emoji: newCatEmoji || undefined,
-      buttonOrder,
+      buttonOrder: original?.buttonOrder ?? categories.length,
       ticketDestination: newCatDestination,
-      ticketNameTemplate: '{category}-{number}',
+      ticketNameTemplate: original?.ticketNameTemplate ?? '{category}-{number}',
       ticketOpenContent: newCatOpenContent || undefined,
       ticketOpenTitle: newCatOpenTitle || undefined,
       ticketOpenMessage: newCatOpenDesc || undefined,
       ticketOpenColor: (newCatOpenTitle || newCatOpenDesc) ? hexToColor(newCatOpenColor) : undefined,
-      maxTicketsPerUser: 1,
-      allowUserClose: true,
+      maxTicketsPerUser: original?.maxTicketsPerUser ?? 1,
+      autoCloseHours: original?.autoCloseHours,
+      transcriptChannelId: original?.transcriptChannelId,
+      allowUserClose: original?.allowUserClose ?? true,
     };
 
     // Reset the category form immediately so the user can start the next
     // category without waiting for this one's Discord round-trip to finish.
-    setNewCatName("");
-    setNewCatButtonLabel("");
-    setNewCatButtonStyle('primary');
-    setNewCatEmoji("");
-    setNewCatDestination('thread');
-    setNewCatOpenContent("");
-    setNewCatOpenTitle("");
-    setNewCatOpenDesc("");
-    setNewCatOpenColor('#5865F2');
+    setEditingCategoryId(null);
+    setEditingCategoryOriginal(null);
+    resetCategoryForm();
     isCreatingCategory.current = false;
+
+    if (editId) {
+      const toastId = showToast(`Updating category "${payload.name}"…`, "loading");
+      try {
+        const c = await ShrimpyAPI.updateCategory(guildId, panelId, editId, payload);
+        if (selectedPanelIdRef.current === panelId) {
+          setCategories(prev => prev.map(existing => existing.id === editId ? c : existing));
+        }
+        updateToast(toastId, `Category "${c.name}" updated.`, "success");
+      } catch (err) {
+        console.error(err);
+        updateToast(toastId, `Failed to update category "${payload.name}".`, "error");
+      }
+      return;
+    }
 
     const toastId = showToast(`Adding category "${payload.name}"…`, "loading");
     try {
@@ -267,6 +376,9 @@ export default function PanelsPage() {
         if (selectedCategory?.id === catId) {
           setSelectedCategory(null);
         }
+      }
+      if (editingCategoryId === catId) {
+        handleCancelEditCategory();
       }
       showToast("Category deleted.", "success");
     } catch (err) {
@@ -333,16 +445,17 @@ export default function PanelsPage() {
     }
   };
 
-  const previewContent = selectedPanel ? selectedPanel.content : newContent;
-  const previewEmbedTitle = selectedPanel ? selectedPanel.embedTitle : newEmbedTitle;
-  const previewEmbedDesc = selectedPanel ? selectedPanel.embedDescription : newEmbedDesc;
-  const previewEmbedColor = colorToHex(selectedPanel ? selectedPanel.embedColor : hexToColor(newEmbedColor));
-  const previewMedia = selectedPanel ? selectedPanel.embedMedia : (newAuthorName || newThumbnailUrl || newImageUrl || newFooterText) ? {
+  const showFormPreview = !!editingPanelId || !selectedPanel;
+  const previewContent = showFormPreview ? newContent : selectedPanel!.content;
+  const previewEmbedTitle = showFormPreview ? newEmbedTitle : selectedPanel!.embedTitle;
+  const previewEmbedDesc = showFormPreview ? newEmbedDesc : selectedPanel!.embedDescription;
+  const previewEmbedColor = colorToHex(showFormPreview ? hexToColor(newEmbedColor) : selectedPanel!.embedColor);
+  const previewMedia = showFormPreview ? ((newAuthorName || newThumbnailUrl || newImageUrl || newFooterText) ? {
     author: newAuthorName ? { name: newAuthorName, iconUrl: newAuthorIconUrl || undefined } : undefined,
     thumbnail: newThumbnailUrl ? { url: newThumbnailUrl } : undefined,
     image: newImageUrl ? { url: newImageUrl } : undefined,
     footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
-  } : undefined;
+  } : undefined) : selectedPanel!.embedMedia;
   const hasPreviewEmbed = !!(previewEmbedTitle || previewEmbedDesc || previewMedia);
   const previewCategories = selectedPanel ? categories : [];
 
@@ -359,9 +472,9 @@ export default function PanelsPage() {
 
           {/* Active Panels List */}
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Active Support Desks</h3>
+            <h3 className={styles.cardTitle}>Your Ticket Panels</h3>
             {panels.length === 0 ? (
-              <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>No active panels found. Use the creator below to build one.</div>
+              <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>No ticket panels yet. Use the creator below to build one.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {panels.map(p => (
@@ -373,28 +486,36 @@ export default function PanelsPage() {
                       borderColor: selectedPanel?.id === p.id ? 'var(--color-primary)' : '',
                       background: selectedPanel?.id === p.id ? 'var(--primary-muted)' : '',
                     }}
-                    onClick={() => setSelectedPanel(p)}
+                    onClick={() => selectPanel(p)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Layers size={14} style={{ color: 'var(--color-primary)' }} />
                       <span style={{ fontWeight: 'bold' }}>{p.name}</span>
                       <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>in #{channels.find(c => c.id === p.channelId)?.name || p.channelId}</span>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeletePanel(p.id); }}
-                      style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditPanelClick(p); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeletePanel(p.id); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Panel Creator Form */}
+          {/* Panel Creator / Editor Form */}
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Create New Ticket Panel</h3>
+            <h3 className={styles.cardTitle}>{editingPanelId ? 'Edit Ticket Panel' : 'Create New Ticket Panel'}</h3>
             <form onSubmit={handleCreatePanel} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
@@ -483,10 +604,17 @@ export default function PanelsPage() {
                 />
               </div>
 
-              <button type="submit" className={styles.submitBtn}>
-                <Plus size={16} />
-                <span>Deploy Panel Desk</span>
-              </button>
+              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                <button type="submit" className={styles.submitBtn} style={{ flex: 1 }}>
+                  <Plus size={16} />
+                  <span>{editingPanelId ? 'Save Changes' : 'Deploy Panel Desk'}</span>
+                </button>
+                {editingPanelId && (
+                  <button type="button" className={styles.actionBtn} onClick={handleCancelEditPanel}>
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -586,7 +714,7 @@ export default function PanelsPage() {
           {/* Categories inside Selected Panel */}
           {selectedPanel && (
             <div className={styles.card}>
-              <h3 className={styles.cardTitle}>Support Categories</h3>
+              <h3 className={styles.cardTitle}>Ticket Categories</h3>
               <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
                 Each category becomes one button on the panel. Click a category to manage its ticket handler roles.
               </p>
@@ -609,17 +737,25 @@ export default function PanelsPage() {
                         opens a {c.ticketDestination}
                       </span>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }}
-                      style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditCategoryClick(c); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {selectedPanel.panelStyle === 'buttons' && categories.length >= 3 ? (
+              {!editingCategoryId && selectedPanel.panelStyle === 'buttons' && categories.length >= 3 ? (
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
                   This panel uses Button layout, which supports up to 3 categories. Delete a category to add another, or create a new panel with Select Menu layout to support more.
                 </div>
@@ -717,10 +853,17 @@ export default function PanelsPage() {
                   </div>
                 )}
 
-                <button type="submit" className={styles.submitBtn} style={{ padding: '10px' }}>
-                  <Plus size={14} />
-                  <span>Add Category</span>
-                </button>
+                <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                  <button type="submit" className={styles.submitBtn} style={{ padding: '10px', flex: 1 }}>
+                    <Plus size={14} />
+                    <span>{editingCategoryId ? 'Save Changes' : 'Add Category'}</span>
+                  </button>
+                  {editingCategoryId && (
+                    <button type="button" className={styles.actionBtn} onClick={handleCancelEditCategory}>
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
               )}
             </div>
