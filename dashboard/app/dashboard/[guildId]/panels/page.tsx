@@ -7,7 +7,6 @@ import {
   Layers,
   Plus,
   Trash2,
-  Pencil,
   Eye,
   Ticket,
   Users
@@ -86,7 +85,12 @@ export default function PanelsPage() {
   const isCreatingCategory = useRef(false);
 
   const [editingPanelId, setEditingPanelId] = useState<string | null>(null);
+  // Whether the Create form is open (distinct from editingPanelId, which means Edit mode).
+  const [creatingNew, setCreatingNew] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  // Whether the category Create form is open (distinct from editingCategoryId, which
+  // means Edit mode).
+  const [creatingNewCategory, setCreatingNewCategory] = useState(false);
   // Holds fields the category form doesn't expose (buttonOrder, ticketNameTemplate,
   // maxTicketsPerUser, autoCloseHours, transcriptChannelId, allowUserClose) so an
   // edit submission doesn't clobber them with create-time defaults.
@@ -140,9 +144,12 @@ export default function PanelsPage() {
           setSelectedCategoryHandlerRole(rolesData[0].id);
         }
 
-        setSelectedPanel(panelsData.length > 0 ? panelsData[0] : null);
+        // Start with nothing selected; default to the Create form when panels exist
+        // so the user lands on creation rather than an arbitrary panel's edit screen.
+        setSelectedPanel(null);
         setSelectedCategory(null);
         setEditingPanelId(null);
+        setCreatingNew(panelsData.length > 0);
         setEditingCategoryId(null);
         setEditingCategoryOriginal(null);
       } catch (err) {
@@ -161,6 +168,7 @@ export default function PanelsPage() {
     setSelectedCategory(null);
     setEditingCategoryId(null);
     setEditingCategoryOriginal(null);
+    setCreatingNewCategory(false);
     resetCategoryForm();
     setEditingPanelId(null);
     resetPanelForm();
@@ -172,7 +180,13 @@ export default function PanelsPage() {
 
   useEffect(() => {
     if (selectedPanel) {
-      ShrimpyAPI.listCategories(guildId, selectedPanel.id).then(setCategories);
+      ShrimpyAPI.listCategories(guildId, selectedPanel.id).then(cats => {
+        setCategories(cats);
+        // Default to the Create form when there's room for another category;
+        // at the button-layout cap, leave it closed behind the limit note.
+        const atLimit = selectedPanel.panelStyle === 'buttons' && cats.length >= 3;
+        setCreatingNewCategory(cats.length > 0 && !atLimit);
+      });
       ShrimpyAPI.listPanelHandlerRoles(guildId, selectedPanel.id).then(setHandlerRoles);
     }
   }, [selectedPanel, guildId]);
@@ -187,6 +201,25 @@ export default function PanelsPage() {
       return () => clearTimeout(timer);
     }
   }, [selectedPanel, selectedCategory, guildId]);
+
+  // Clicking a panel row both selects it and opens it for editing in one step,
+  // so there's no separate "edit" affordance to hunt for.
+  const handleSelectPanelForEdit = (p: TicketPanel) => {
+    setCreatingNew(false);
+    setSelectedPanel(p);
+    setSelectedCategory(null);
+    setEditingCategoryId(null);
+    setEditingCategoryOriginal(null);
+    resetCategoryForm();
+    handleEditPanelClick(p);
+  };
+
+  // The "+ New Panel" affordance: clear any selection/edit state and open a fresh
+  // Create form.
+  const handleNewPanelClick = () => {
+    selectPanel(null);
+    setCreatingNew(true);
+  };
 
   const handleEditPanelClick = (p: TicketPanel) => {
     setEditingPanelId(p.id);
@@ -207,6 +240,7 @@ export default function PanelsPage() {
 
   const handleCancelEditPanel = () => {
     setEditingPanelId(null);
+    setCreatingNew(false);
     resetPanelForm();
   };
 
@@ -233,14 +267,11 @@ export default function PanelsPage() {
     };
 
     const editId = editingPanelId;
-
-    // Reset the form immediately so the user can start the next panel
-    // without waiting for this one's Discord round-trip to finish.
-    setEditingPanelId(null);
-    resetPanelForm();
     isCreatingPanel.current = false;
 
     if (editId) {
+      // Editing: keep the panel open in Edit mode after saving (the form already
+      // reflects the edited values), so the user can keep refining it.
       const toastId = showToast(`Updating "${payload.name}"…`, "loading");
       try {
         const p = await ShrimpyAPI.updatePanel(guildId, editId, payload);
@@ -254,11 +285,14 @@ export default function PanelsPage() {
       return;
     }
 
+    // Creating: reset the form immediately so the user can start the next panel
+    // without waiting for this one's Discord round-trip, staying in Create mode.
+    resetPanelForm();
+
     const toastId = showToast(`Deploying "${payload.name}"…`, "loading");
     try {
       const p = await ShrimpyAPI.createPanel(guildId, payload);
       setPanels(prev => [...prev, p]);
-      setSelectedPanel(prev => prev ?? p);
       updateToast(toastId, `"${p.name}" deployed!`, "success");
     } catch (err) {
       console.error(err);
@@ -269,9 +303,13 @@ export default function PanelsPage() {
   const handleDeletePanel = async (panelId: string) => {
     try {
       await ShrimpyAPI.deletePanel(guildId, panelId);
-      setPanels(prev => prev.filter(p => p.id !== panelId));
-      if (selectedPanel?.id === panelId) {
+      const remaining = panels.filter(p => p.id !== panelId);
+      setPanels(remaining);
+      if (selectedPanel?.id === panelId || editingPanelId === panelId) {
+        // Deleting the open panel: fall back to the Create form if others remain,
+        // or the empty state (no form) if this was the last one.
         selectPanel(null);
+        setCreatingNew(remaining.length > 0);
       }
       showToast("Panel deleted.", "success");
     } catch (err) {
@@ -294,9 +332,28 @@ export default function PanelsPage() {
     setNewCatOpenColor(colorToHex(c.ticketOpenColor));
   };
 
+  // Clicking a category row both selects it (so its handler-roles card shows)
+  // and opens it for editing in one step, mirroring handleSelectPanelForEdit.
+  const handleSelectCategoryForEdit = (c: TicketCategory) => {
+    setCreatingNewCategory(false);
+    setSelectedCategory(c);
+    handleEditCategoryClick(c);
+  };
+
+  // The "+ New Category" affordance: clear any selection/edit state and open
+  // a fresh Create form.
+  const handleNewCategoryClick = () => {
+    setSelectedCategory(null);
+    setEditingCategoryId(null);
+    setEditingCategoryOriginal(null);
+    resetCategoryForm();
+    setCreatingNewCategory(true);
+  };
+
   const handleCancelEditCategory = () => {
     setEditingCategoryId(null);
     setEditingCategoryOriginal(null);
+    setCreatingNewCategory(false);
     resetCategoryForm();
   };
 
@@ -331,20 +388,19 @@ export default function PanelsPage() {
       allowUserClose: original?.allowUserClose ?? true,
     };
 
-    // Reset the category form immediately so the user can start the next
-    // category without waiting for this one's Discord round-trip to finish.
-    setEditingCategoryId(null);
-    setEditingCategoryOriginal(null);
-    resetCategoryForm();
     isCreatingCategory.current = false;
 
     if (editId) {
+      // Editing: keep the category open in Edit mode after saving so the
+      // user can keep refining it, matching the panel edit branch.
       const toastId = showToast(`Updating category "${payload.name}"…`, "loading");
       try {
         const c = await ShrimpyAPI.updateCategory(guildId, panelId, editId, payload);
         if (selectedPanelIdRef.current === panelId) {
           setCategories(prev => prev.map(existing => existing.id === editId ? c : existing));
         }
+        setSelectedCategory(prev => prev?.id === editId ? c : prev);
+        setEditingCategoryOriginal(c);
         updateToast(toastId, `Category "${c.name}" updated.`, "success");
       } catch (err) {
         console.error(err);
@@ -353,11 +409,20 @@ export default function PanelsPage() {
       return;
     }
 
+    // Creating: reset the form immediately so the user can start the next
+    // category without waiting for this one's Discord round-trip, staying
+    // in Create mode.
+    resetCategoryForm();
+
     const toastId = showToast(`Adding category "${payload.name}"…`, "loading");
     try {
       const c = await ShrimpyAPI.createCategory(guildId, panelId, payload);
       if (selectedPanelIdRef.current === panelId) {
         setCategories(prev => [...prev, c]);
+        // Hide the Create form once a button-layout panel hits its 3-category cap.
+        if (selectedPanel.panelStyle === 'buttons' && categories.length + 1 >= 3) {
+          setCreatingNewCategory(false);
+        }
       }
       updateToast(toastId, `Category "${c.name}" added.`, "success");
     } catch (err) {
@@ -371,14 +436,23 @@ export default function PanelsPage() {
     const panelId = selectedPanel.id;
     try {
       await ShrimpyAPI.deleteCategory(guildId, panelId, catId);
+      const wasEditingDeleted = editingCategoryId === catId;
       if (selectedPanelIdRef.current === panelId) {
         setCategories(prev => prev.filter(c => c.id !== catId));
         if (selectedCategory?.id === catId) {
           setSelectedCategory(null);
         }
+        // Dropping below the button-layout cap reopens the Create form,
+        // unless another category is currently being edited.
+        const underCap = selectedPanel.panelStyle !== 'buttons' || categories.length - 1 < 3;
+        if (underCap && (!editingCategoryId || wasEditingDeleted)) {
+          setCreatingNewCategory(true);
+        }
       }
-      if (editingCategoryId === catId) {
-        handleCancelEditCategory();
+      if (wasEditingDeleted) {
+        setEditingCategoryId(null);
+        setEditingCategoryOriginal(null);
+        resetCategoryForm();
       }
       showToast("Category deleted.", "success");
     } catch (err) {
@@ -445,7 +519,7 @@ export default function PanelsPage() {
     }
   };
 
-  const showFormPreview = !!editingPanelId || !selectedPanel;
+  const showFormPreview = creatingNew || !!editingPanelId || !selectedPanel;
   const previewContent = showFormPreview ? newContent : selectedPanel!.content;
   const previewEmbedTitle = showFormPreview ? newEmbedTitle : selectedPanel!.embedTitle;
   const previewEmbedDesc = showFormPreview ? newEmbedDesc : selectedPanel!.embedDescription;
@@ -457,6 +531,8 @@ export default function PanelsPage() {
     footer: newFooterText ? { text: newFooterText, iconUrl: newFooterIconUrl || undefined } : undefined,
   } : undefined) : selectedPanel!.embedMedia;
   const hasPreviewEmbed = !!(previewEmbedTitle || previewEmbedDesc || previewMedia);
+  const atCategoryLimit = !!selectedPanel && selectedPanel.panelStyle === 'buttons' && categories.length >= 3;
+  const showCategoryForm = (creatingNewCategory || !!editingCategoryId) && !(!editingCategoryId && atCategoryLimit);
   const previewCategories = selectedPanel ? categories : [];
 
   return (
@@ -472,34 +548,48 @@ export default function PanelsPage() {
 
           {/* Active Panels List */}
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Your Ticket Panels</h3>
             {panels.length === 0 ? (
-              <div style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>No ticket panels yet. Use the creator below to build one.</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
+                <h3 className={styles.cardTitle}>No ticket panels yet</h3>
+                <p className={styles.sectionDesc} style={{ fontSize: '13px', margin: 0 }}>
+                  Create one to start collecting tickets from your members.
+                </p>
+                <button onClick={handleNewPanelClick} className={styles.submitBtn} style={{ marginTop: 'var(--space-2)' }}>
+                  <Plus size={16} />
+                  <span>New Panel</span>
+                </button>
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {panels.map(p => (
-                  <div
-                    key={p.id}
-                    className={`${styles.actionBtn}`}
-                    style={{
-                      justifyContent: 'space-between',
-                      borderColor: selectedPanel?.id === p.id ? 'var(--color-primary)' : '',
-                      background: selectedPanel?.id === p.id ? 'var(--primary-muted)' : '',
-                    }}
-                    onClick={() => selectPanel(p)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Layers size={14} style={{ color: 'var(--color-primary)' }} />
-                      <span style={{ fontWeight: 'bold' }}>{p.name}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>in #{channels.find(c => c.id === p.channelId)?.name || p.channelId}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEditPanelClick(p); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-                      >
-                        <Pencil size={14} />
-                      </button>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-4)' }}>
+                  <div>
+                    <h3 className={styles.cardTitle}>Your Ticket Panels</h3>
+                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                      Each panel is a message posted to a channel where members open tickets. Click one to edit it.
+                    </p>
+                  </div>
+                  <button onClick={handleNewPanelClick} className={styles.actionBtn} style={{ flexShrink: 0 }}>
+                    <Plus size={14} />
+                    <span>New Panel</span>
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {panels.map(p => (
+                    <div
+                      key={p.id}
+                      className={`${styles.actionBtn}`}
+                      style={{
+                        justifyContent: 'space-between',
+                        borderColor: selectedPanel?.id === p.id ? 'var(--color-primary)' : '',
+                        background: selectedPanel?.id === p.id ? 'var(--primary-muted)' : '',
+                      }}
+                      onClick={() => handleSelectPanelForEdit(p)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Layers size={14} style={{ color: 'var(--color-primary)' }} />
+                        <span style={{ fontWeight: 'bold' }}>{p.name}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>in #{channels.find(c => c.id === p.channelId)?.name || p.channelId}</span>
+                      </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeletePanel(p.id); }}
                         style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
@@ -507,15 +597,21 @@ export default function PanelsPage() {
                         <Trash2 size={14} />
                       </button>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
           {/* Panel Creator / Editor Form */}
+          {(creatingNew || editingPanelId) && (
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>{editingPanelId ? 'Edit Ticket Panel' : 'Create New Ticket Panel'}</h3>
+            <div>
+              <h3 className={styles.cardTitle}>{editingPanelId ? 'Edit Ticket Panel' : 'Create New Ticket Panel'}</h3>
+              <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                Configure the message members see and the channel it&apos;s posted to.
+              </p>
+            </div>
             <form onSubmit={handleCreatePanel} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
@@ -609,7 +705,7 @@ export default function PanelsPage() {
                   <Plus size={16} />
                   <span>{editingPanelId ? 'Save Changes' : 'Deploy Panel Desk'}</span>
                 </button>
-                {editingPanelId && (
+                {(editingPanelId || creatingNew) && (
                   <button type="button" className={styles.actionBtn} onClick={handleCancelEditPanel}>
                     Cancel
                   </button>
@@ -617,6 +713,7 @@ export default function PanelsPage() {
               </div>
             </form>
           </div>
+          )}
 
         </div>
 
@@ -714,53 +811,84 @@ export default function PanelsPage() {
           {/* Categories inside Selected Panel */}
           {selectedPanel && (
             <div className={styles.card}>
-              <h3 className={styles.cardTitle}>Ticket Categories</h3>
-              <p className={styles.sectionDesc} style={{ fontSize: '12px' }}>
-                Each category becomes one button on the panel. Click a category to manage its ticket handler roles.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
-                {categories.map(c => (
-                  <div
-                    key={c.id}
-                    className={styles.actionBtn}
-                    style={{
-                      justifyContent: 'space-between',
-                      borderColor: selectedCategory?.id === c.id ? 'var(--color-primary)' : '',
-                      background: selectedCategory?.id === c.id ? 'var(--primary-muted)' : '',
-                    }}
-                    onClick={() => setSelectedCategory(c)}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 'bold' }}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
-                        opens a {c.ticketDestination}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEditCategoryClick(c); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {!editingCategoryId && selectedPanel.panelStyle === 'buttons' && categories.length >= 3 ? (
-                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                  This panel uses Button layout, which supports up to 3 categories. Delete a category to add another, or create a new panel with Select Menu layout to support more.
+              {categories.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) var(--space-4)' }}>
+                  <h3 className={styles.cardTitle}>No categories yet</h3>
+                  <p className={styles.sectionDesc} style={{ fontSize: '13px', margin: 0 }}>
+                    Add one so members have a button to open a ticket.
+                  </p>
+                  <button onClick={handleNewCategoryClick} className={styles.submitBtn} style={{ marginTop: 'var(--space-2)' }}>
+                    <Plus size={16} />
+                    <span>New Category</span>
+                  </button>
                 </div>
               ) : (
-              <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-4)' }}>
+                    <div>
+                      <h3 className={styles.cardTitle}>Ticket Categories</h3>
+                      <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                        Each category becomes one button on the panel. Click one to edit it.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleNewCategoryClick}
+                      className={styles.actionBtn}
+                      style={{ flexShrink: 0 }}
+                      disabled={atCategoryLimit}
+                      title={atCategoryLimit ? "Button layout supports up to 3 categories." : undefined}
+                    >
+                      <Plus size={14} />
+                      <span>New Category</span>
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '8px 0' }}>
+                    {categories.map(c => (
+                      <div
+                        key={c.id}
+                        className={styles.actionBtn}
+                        style={{
+                          justifyContent: 'space-between',
+                          borderColor: selectedCategory?.id === c.id ? 'var(--color-primary)' : '',
+                          background: selectedCategory?.id === c.id ? 'var(--primary-muted)' : '',
+                        }}
+                        onClick={() => handleSelectCategoryForEdit(c)}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 'bold' }}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
+                            opens a {c.ticketDestination}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {atCategoryLimit && (
+                    <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                      This panel uses Button layout, which supports up to 3 categories. Delete a category to add another, or create a new panel with Select Menu layout to support more.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {selectedPanel && showCategoryForm && (
+            <div className={styles.card}>
+              <div>
+                <h3 className={styles.cardTitle}>{editingCategoryId ? 'Edit Category' : 'New Category'}</h3>
+                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                  Each category becomes one button on the panel.
+                </p>
+              </div>
+              <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Category Name</label>
                   <input
@@ -858,14 +986,13 @@ export default function PanelsPage() {
                     <Plus size={14} />
                     <span>{editingCategoryId ? 'Save Changes' : 'Add Category'}</span>
                   </button>
-                  {editingCategoryId && (
+                  {(editingCategoryId || creatingNewCategory) && (
                     <button type="button" className={styles.actionBtn} onClick={handleCancelEditCategory}>
                       Cancel
                     </button>
                   )}
                 </div>
               </form>
-              )}
             </div>
           )}
 
