@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ShrimpyAPI, Guild, DiscordUser, PublicConfig } from "@/lib/api";
 import { LogOut, Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
 
@@ -124,7 +125,7 @@ export default function ServersPage() {
           {user && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "6px 14px", borderRadius: "100px", backgroundColor: "var(--bg-surface-hover)", border: "1px solid var(--color-border)" }}>
               {user.avatar ? (
-                <img src={user.avatar} alt={user.username} style={{ width: "28px", height: "28px", borderRadius: "50%" }} />
+                <Image src={user.avatar} alt={user.username} width={28} height={28} style={{ borderRadius: "50%" }} />
               ) : (
                 <div style={{ width: "28px", height: "28px", borderRadius: "50%", backgroundColor: "var(--color-primary)", display: "flex", justifyContent: "center", alignItems: "center", fontSize: "12px" }}>👤</div>
               )}
@@ -219,7 +220,7 @@ export default function ServersPage() {
                       {g.icon ? (
                         <div style={{ width: "52px", height: "52px", borderRadius: "12px", overflow: "hidden", display: "flex", justifyContent: "center", alignItems: "center", border: "1px solid var(--color-border)" }}>
                           {g.icon.length > 4 ? (
-                            <img src={g.icon} alt={g.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <Image src={g.icon} alt={g.name} width={52} height={52} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           ) : (
                             <span style={{ fontSize: "22px" }}>{g.icon}</span>
                           )}
