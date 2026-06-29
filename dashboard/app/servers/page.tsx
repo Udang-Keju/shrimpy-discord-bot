@@ -53,7 +53,11 @@ export default function ServersPage() {
   }, []);
 
   useEffect(() => {
-    loadData({ syncSession: true }).then(() => setLoading(false));
+    async function load() {
+      await loadData({ syncSession: true });
+      setLoading(false);
+    }
+    load();
   }, [loadData]);
 
   const handleRefresh = async () => {
