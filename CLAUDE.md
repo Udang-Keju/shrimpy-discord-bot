@@ -18,6 +18,7 @@ Authoritative specs live in `docs/`. **Consult the relevant doc before implement
 | [docs/v1/DESIGN_SYSTEM.md](docs/v1/DESIGN_SYSTEM.md) | Visual identity: color tokens (dark/light), typography, spacing, component tokens, theming |
 | [docs/v1/COMMAND_REFERENCE.md](docs/v1/COMMAND_REFERENCE.md) | Discord slash/prefix command parameters and permission levels |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Running log of spec/architecture changes |
+| [dashboard/CLAUDE.md](dashboard/CLAUDE.md) | Dashboard-specific frontend conventions (Next.js breaking changes, toast/async mutation patterns) |
 
 > Dashboard/frontend work is primarily governed by **USER_JOURNEY.md** + **DESIGN_SYSTEM.md**. Backend work is primarily governed by **TECHNICAL_SPEC.md** + **PRD.md**.
 
