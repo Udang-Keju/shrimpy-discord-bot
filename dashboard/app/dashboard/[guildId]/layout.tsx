@@ -15,10 +15,14 @@ import {
 } from "lucide-react";
 import styles from "./dashboard.module.css";
 import { getNavigationGroups } from "./navConfig";
-import { ShrimpyAPI, Guild, DiscordUser, isDemoMode } from "@/lib/api";
+import { ShrimpyAPI, Guild, DiscordUser, PublicConfig, isDemoMode } from "@/lib/api";
 import { getSavedTheme, applyTheme, Theme } from "@/lib/theme";
 import DemoBanner from "@/components/DemoBanner";
 import Dropdown from "@/components/Dropdown";
+import InviteGate from "@/components/InviteGate";
+
+// Scoped invite permissions — kept in sync with the servers page (USER_JOURNEY §14.6).
+const INVITE_PERMISSIONS = "17448660048";
 
 export default function DashboardLayout({
   children,
@@ -36,6 +40,7 @@ export default function DashboardLayout({
   const [user, setUser] = useState<DiscordUser | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [activeGuild, setActiveGuild] = useState<Guild | null>(null);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
 
   // Fetch guilds and user info
   useEffect(() => {
@@ -46,12 +51,14 @@ export default function DashboardLayout({
 
     async function loadData() {
       try {
-        const [userData, guildList] = await Promise.all([
+        const [userData, guildList, configData] = await Promise.all([
           ShrimpyAPI.getCurrentUser(),
-          ShrimpyAPI.listGuilds()
+          ShrimpyAPI.listGuilds(),
+          ShrimpyAPI.getPublicConfig()
         ]);
         setUser(userData);
         setGuilds(guildList);
+        setConfig(configData);
         const current = guildList.find(g => g.id === guildId) || guildList[0];
         setActiveGuild(current || null);
       } catch (err) {
@@ -80,6 +87,13 @@ export default function DashboardLayout({
 
   const isIconUrl = (icon?: string) => !!icon && icon.startsWith("http");
 
+  // Returns null (rather than a fake link) when config hasn't loaded, so we never
+  // send users to Discord's "Unknown Application" error with a bogus client_id.
+  const getInviteUrl = (targetGuildId: string): string | null => {
+    if (!config?.client_id) return null;
+    return `https://discord.com/api/oauth2/authorize?client_id=${config.client_id}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands&guild_id=${targetGuildId}`;
+  };
+
   const handleLogout = async () => {
     if (isDemoMode()) {
       ShrimpyAPI.exitDemoMode();
@@ -96,6 +110,12 @@ export default function DashboardLayout({
 
   const navigationGroups = getNavigationGroups(guildId);
   const navigationItems = navigationGroups.flatMap(g => g.items);
+
+  // Gate the config pages when the bot isn't in this guild. The Discord-backed
+  // config endpoints would otherwise return nothing and the pages render empty.
+  // Only block on an explicit `false` so demo guilds (bot_joined undefined) pass through.
+  const currentGuild = guilds.find(g => g.id === guildId);
+  const needsInvite = currentGuild?.bot_joined === false;
 
   const getPageTitle = () => {
     if (pathname === `/dashboard/${guildId}`) return "Overview";
@@ -201,7 +221,14 @@ export default function DashboardLayout({
 
         {/* DASHBOARD PAGE PANEL BODY */}
         <main className={styles.contentBody}>
-          {children}
+          {needsInvite ? (
+            <InviteGate
+              guildName={currentGuild?.name || "this server"}
+              inviteUrl={getInviteUrl(guildId)}
+            />
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>
