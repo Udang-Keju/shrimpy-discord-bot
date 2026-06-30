@@ -107,7 +107,7 @@ func (s *GuildService) UpdateConfig(ctx context.Context, guildID int64, updates 
 	if err != nil {
 		return nil, err
 	}
-	s.cache.Set(guildID, cfg)
+	s.cache.Invalidate(guildID)
 	return cfg, nil
 }
 
