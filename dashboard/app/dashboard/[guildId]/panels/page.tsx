@@ -780,6 +780,12 @@ export default function PanelsPage() {
                 <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
                   The message posted in the channel. Leave the embed title &amp; description empty to send plain text only.
                 </p>
+                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
+                  The <strong>Plain Text Message</strong> and <strong>Embed Description</strong> support Discord
+                  markdown (<code>**bold**</code>, <code>*italic*</code>, <code>`code`</code>, lists, and masked
+                  links <code>[text](url)</code>). The embed <strong>title</strong>, <strong>author</strong>, and
+                  <strong> footer</strong> are plain text only.
+                </p>
 
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Plain Text Message (optional)</label>
@@ -1230,6 +1236,12 @@ export default function PanelsPage() {
                   <p className={styles.fieldGroupTitle}>Greeting</p>
                   <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
                     Sent inside the opened ticket. Leave the embed title &amp; description empty to send plain text only.
+                  </p>
+                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
+                    The <strong>Plain Text Greeting</strong> and <strong>Embed Description</strong> support Discord
+                    markdown (<code>**bold**</code>, <code>*italic*</code>, <code>`code`</code>, lists, and masked
+                    links <code>[text](url)</code>). The embed <strong>title</strong>, <strong>author</strong>, and
+                    <strong> footer</strong> are plain text only.
                   </p>
 
                   <details className={styles.placeholderDropdown}>
