@@ -1,6 +1,7 @@
 // dashboard/components/Footer.tsx
 "use client";
 
+import Link from "next/link";
 import { Heart } from "lucide-react";
 import styles from "@/app/page.module.css";
 
@@ -39,8 +40,8 @@ export default function Footer() {
         <div className={styles.footerCol}>
           <span className={styles.footerTitle}>Legal</span>
           <ul className={styles.footerLinks}>
-            <li><a href="#" className={styles.footerLink}>Privacy Policy</a></li>
-            <li><a href="#" className={styles.footerLink}>Terms of Service</a></li>
+            <li><Link href="/privacy" className={styles.footerLink}>Privacy Policy</Link></li>
+            <li><Link href="/terms" className={styles.footerLink}>Terms of Service</Link></li>
           </ul>
         </div>
       </div>
