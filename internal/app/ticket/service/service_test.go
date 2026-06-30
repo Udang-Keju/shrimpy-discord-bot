@@ -643,15 +643,19 @@ func TestTicketService_Open(t *testing.T) {
 				assert.Contains(t, msgPayload, "Welcome to billing")
 				assert.Contains(t, msgPayload, "Hello \\u003c@67890\\u003e")
 			case "Success - plain text and embed both set":
-				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e\\nHi there!")
+				// The configured plain text is the message content verbatim; no hardcoded
+				// "Welcome" line is prepended anymore.
+				assert.Contains(t, msgPayload, `"content":"Hi there!"`)
 				assert.Contains(t, msgPayload, "Welcome to billing")
 			case "Success - plain text only, no embed fields":
-				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e\\nPlain greeting only")
+				assert.Contains(t, msgPayload, `"content":"Plain greeting only"`)
 				assert.Contains(t, msgPayload, `"embeds":null`)
 			case "Success - nothing configured at all (legacy fallback)":
+				// Legacy fallback keeps the default embed; content is the resolved {ping},
+				// which is empty here since this category has no handler roles.
 				assert.Contains(t, msgPayload, "Support Ticket Created")
 				assert.Contains(t, msgPayload, "Support staff will be with you shortly")
-				assert.Contains(t, msgPayload, "Welcome \\u003c@67890\\u003e")
+				assert.NotContains(t, msgPayload, "Welcome \\u003c@67890\\u003e")
 			}
 		})
 	}

@@ -89,9 +89,9 @@ export default function PanelsPage() {
   const [newCatChannelGroupId, setNewCatChannelGroupId] = useState("");
   // Template for the opened channel/thread name; supports {user.name}, {user.id}, {category}, {number}.
   const [newCatNameTemplate, setNewCatNameTemplate] = useState('{category}-{number}');
-  const [newCatOpenContent, setNewCatOpenContent] = useState("");
+  const [newCatOpenContent, setNewCatOpenContent] = useState("{ping}");
   const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
-  const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
+  const [newCatOpenDesc, setNewCatOpenDesc] = useState("Welcome {mention}!");
   const [newCatOpenColor, setNewCatOpenColor] = useState<string>('#5865F2');
   const [newCatOpenAuthorName, setNewCatOpenAuthorName] = useState("");
   const [newCatOpenAuthorIconUrl, setNewCatOpenAuthorIconUrl] = useState("");
@@ -148,9 +148,9 @@ export default function PanelsPage() {
     setNewCatThreadParentId("");
     setNewCatChannelGroupId("");
     setNewCatNameTemplate('{category}-{number}');
-    setNewCatOpenContent("");
+    setNewCatOpenContent("{ping}");
     setNewCatOpenTitle("");
-    setNewCatOpenDesc("");
+    setNewCatOpenDesc("Welcome {mention}!");
     setNewCatOpenColor('#5865F2');
     setNewCatOpenAuthorName("");
     setNewCatOpenAuthorIconUrl("");
@@ -287,6 +287,10 @@ export default function PanelsPage() {
 
   const handleCreatePanel = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newName.trim() && !newEmbedTitle.trim() && !newEmbedDesc.trim() && !newContent.trim()) {
+      showToast("Add at least a title or description to the panel before saving.", "error");
+      return;
+    }
     if (isCreatingPanel.current) return;
     isCreatingPanel.current = true;
 
@@ -413,6 +417,18 @@ export default function PanelsPage() {
     if (!selectedPanel || !newCatName || !newCatButtonLabel) return;
     if (!editingCategoryId && selectedPanel.panelStyle === 'buttons' && categories.length >= 3) {
       showToast("Button layout supports up to 3 categories. Switch to Select Menu for more.", "warning");
+      return;
+    }
+    const hasGreeting =
+      newCatOpenContent.trim() !== "" ||
+      newCatOpenTitle.trim() !== "" ||
+      newCatOpenDesc.trim() !== "" ||
+      newCatOpenAuthorName.trim() !== "" ||
+      newCatOpenThumbnailUrl.trim() !== "" ||
+      newCatOpenImageUrl.trim() !== "" ||
+      newCatOpenFooterText.trim() !== "";
+    if (!hasGreeting) {
+      showToast("Add at least a plain text or embed greeting before saving.", "error");
       return;
     }
     if (isCreatingCategory.current) return;
@@ -575,6 +591,7 @@ export default function PanelsPage() {
 
   // Resolves greeting placeholder tokens with fixed example values for the live preview.
   const catPreviewResolve = (text: string) => text
+    .replace(/\{ping\}/g, '@HandlerRole')
     .replace(/\{user\.name\}/g, 'UserName')
     .replace(/\{user\.id\}/g, '123456789')
     .replace(/\{user\}/g, '@UserName')
@@ -678,23 +695,37 @@ export default function PanelsPage() {
               </p>
             </div>
             <form onSubmit={handleCreatePanel} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Panel Name (internal)</label>
-                  <input className={styles.input} type="text" value={newName} onChange={e => setNewName(e.target.value)} required />
+              <div className={styles.fieldGroup}>
+                <p className={styles.fieldGroupTitle}>Panel Setup</p>
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Panel Name (internal)</label>
+                    <input className={styles.input} type="text" value={newName} onChange={e => setNewName(e.target.value)} required />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Destination Channel</label>
+                    <Dropdown
+                      value={newChannelId}
+                      onChange={setNewChannelId}
+                      options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                    />
+                  </div>
                 </div>
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Destination Channel</label>
+                  <label className={styles.label}>Button Layout</label>
                   <Dropdown
-                    value={newChannelId}
-                    onChange={setNewChannelId}
-                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                    value={newPanelStyle}
+                    onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
+                    options={[
+                      { value: "buttons", label: "Buttons (up to 3 categories)" },
+                      { value: "select_menu", label: "Select Menu (up to 25 categories)" },
+                    ]}
                   />
                 </div>
               </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Ticket Handler Roles</label>
+              <div className={styles.fieldGroup}>
+                <p className={styles.fieldGroupTitle}>Handler Roles</p>
                 <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
                   Tickets always include your server&apos;s staff roles. Roles added here apply to every category on this panel, in addition to staff roles. This does not grant dashboard access.
                 </p>
@@ -740,45 +771,47 @@ export default function PanelsPage() {
                 </div>
               </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Plain Text Message (optional)</label>
-                <textarea className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
-              </div>
+              <div className={styles.fieldGroup}>
+                <p className={styles.fieldGroupTitle}>Message</p>
+                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
+                  The message posted in the channel. Leave the embed title &amp; description empty to send plain text only.
+                </p>
 
-              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
-                Embed (optional — leave title &amp; description empty to send plain text only)
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Embed Title</label>
-                <input className={styles.input} type="text" value={newEmbedTitle} onChange={e => setNewEmbedTitle(e.target.value)} />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Embed Description</label>
-                <textarea className={styles.textarea} rows={3} value={newEmbedDesc} onChange={e => setNewEmbedDesc(e.target.value)} />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Embed Color</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input type="color" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
-                  <input className={styles.input} type="text" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ flex: 1 }} />
-                </div>
-              </div>
-
-              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Author Name</label>
-                  <input className={styles.input} type="text" value={newAuthorName} onChange={e => setNewAuthorName(e.target.value)} />
+                  <label className={styles.label}>Plain Text Message (optional)</label>
+                  <textarea className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
                 </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Author Icon URL</label>
-                  <input className={styles.input} type="text" value={newAuthorIconUrl} onChange={e => setNewAuthorIconUrl(e.target.value)} />
-                </div>
-              </div>
 
-              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Embed Title</label>
+                  <input className={styles.input} type="text" value={newEmbedTitle} onChange={e => setNewEmbedTitle(e.target.value)} />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Embed Description</label>
+                  <textarea className={styles.textarea} rows={3} value={newEmbedDesc} onChange={e => setNewEmbedDesc(e.target.value)} />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Embed Color</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="color" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
+                    <input className={styles.input} type="text" value={newEmbedColor} onChange={e => setNewEmbedColor(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Author Name</label>
+                    <input className={styles.input} type="text" value={newAuthorName} onChange={e => setNewAuthorName(e.target.value)} />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Author Icon URL</label>
+                    <input className={styles.input} type="text" value={newAuthorIconUrl} onChange={e => setNewAuthorIconUrl(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Thumbnail URL</label>
                   <input className={styles.input} type="text" value={newThumbnailUrl} onChange={e => setNewThumbnailUrl(e.target.value)} />
@@ -789,27 +822,16 @@ export default function PanelsPage() {
                 </div>
               </div>
 
-              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Footer Text</label>
-                  <input className={styles.input} type="text" value={newFooterText} onChange={e => setNewFooterText(e.target.value)} />
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Footer Text</label>
+                    <input className={styles.input} type="text" value={newFooterText} onChange={e => setNewFooterText(e.target.value)} />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Footer Icon URL</label>
+                    <input className={styles.input} type="text" value={newFooterIconUrl} onChange={e => setNewFooterIconUrl(e.target.value)} />
+                  </div>
                 </div>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Footer Icon URL</label>
-                  <input className={styles.input} type="text" value={newFooterIconUrl} onChange={e => setNewFooterIconUrl(e.target.value)} />
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Button Layout</label>
-                <Dropdown
-                  value={newPanelStyle}
-                  onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
-                  options={[
-                    { value: "buttons", label: "Buttons (up to 3 categories)" },
-                    { value: "select_menu", label: "Select Menu (up to 25 categories)" },
-                  ]}
-                />
               </div>
 
               <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
@@ -998,43 +1020,44 @@ export default function PanelsPage() {
                 </p>
               </div>
               <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Category Name</label>
-                  <input
-                    className={styles.input}
-                    type="text"
-                    placeholder="e.g. Billing Assistance"
-                    value={newCatName}
-                    onChange={e => setNewCatName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div className={styles.fieldGroup}>
+                  <p className={styles.fieldGroupTitle}>Button</p>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Button Label</label>
+                    <label className={styles.label}>Category Name</label>
                     <input
                       className={styles.input}
                       type="text"
-                      placeholder="e.g. Billing Help"
-                      value={newCatButtonLabel}
-                      onChange={e => setNewCatButtonLabel(e.target.value)}
+                      placeholder="e.g. Billing Assistance"
+                      value={newCatName}
+                      onChange={e => setNewCatName(e.target.value)}
                       required
                     />
                   </div>
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Button Emoji (optional)</label>
-                    <input
-                      className={styles.input}
-                      type="text"
-                      placeholder="🎫"
-                      value={newCatEmoji}
-                      onChange={e => setNewCatEmoji(e.target.value)}
-                    />
-                  </div>
-                </div>
 
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Button Label</label>
+                      <input
+                        className={styles.input}
+                        type="text"
+                        placeholder="e.g. Billing Help"
+                        value={newCatButtonLabel}
+                        onChange={e => setNewCatButtonLabel(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Button Emoji (optional)</label>
+                      <input
+                        className={styles.input}
+                        type="text"
+                        placeholder="🎫"
+                        value={newCatEmoji}
+                        onChange={e => setNewCatEmoji(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   <div className={styles.formGroup}>
                     <label className={styles.label}>Button Style</label>
                     <Dropdown
@@ -1048,6 +1071,10 @@ export default function PanelsPage() {
                       ]}
                     />
                   </div>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <p className={styles.fieldGroupTitle}>Ticket Destination</p>
                   <div className={styles.formGroup}>
                     <label className={styles.label}>Opens As</label>
                     <Dropdown
@@ -1059,50 +1086,50 @@ export default function PanelsPage() {
                       ]}
                     />
                   </div>
+
+                  {newCatDestination === 'thread' ? (
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Thread Parent Channel (optional)</label>
+                      <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                        The channel private threads are started in. Leave as the default to use this panel&apos;s channel.
+                      </p>
+                      <Dropdown
+                        value={newCatThreadParentId}
+                        onChange={setNewCatThreadParentId}
+                        options={[
+                          { value: "", label: "Use panel's channel" },
+                          ...channels.map(c => ({ value: c.id, label: `#${c.name}` })),
+                        ]}
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Channel Group (optional)</label>
+                      <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                        The category the dedicated channel is placed under. Choose &quot;No group&quot; to create it at the server root.
+                      </p>
+                      <Dropdown
+                        value={newCatChannelGroupId}
+                        onChange={setNewCatChannelGroupId}
+                        options={[
+                          { value: "", label: "No group" },
+                          ...channelGroups.map(g => ({ value: g.id, label: g.name })),
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Ticket Name</label>
+                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                      Name of the opened channel/thread. Placeholders: {'{user.name}'}, {'{user.id}'}, {'{category}'}, {'{number}'}. Discord lowercases and hyphenates dedicated-channel names automatically.
+                    </p>
+                    <input className={styles.input} type="text" value={newCatNameTemplate} onChange={e => setNewCatNameTemplate(e.target.value)} placeholder="{category}-{number}" />
+                  </div>
                 </div>
 
-                {newCatDestination === 'thread' ? (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Thread Parent Channel (optional)</label>
-                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
-                      The channel private threads are started in. Leave as the default to use this panel&apos;s channel.
-                    </p>
-                    <Dropdown
-                      value={newCatThreadParentId}
-                      onChange={setNewCatThreadParentId}
-                      options={[
-                        { value: "", label: "Use panel's channel" },
-                        ...channels.map(c => ({ value: c.id, label: `#${c.name}` })),
-                      ]}
-                    />
-                  </div>
-                ) : (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Channel Group (optional)</label>
-                    <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
-                      The category the dedicated channel is placed under. Choose &quot;No group&quot; to create it at the server root.
-                    </p>
-                    <Dropdown
-                      value={newCatChannelGroupId}
-                      onChange={setNewCatChannelGroupId}
-                      options={[
-                        { value: "", label: "No group" },
-                        ...channelGroups.map(g => ({ value: g.id, label: g.name })),
-                      ]}
-                    />
-                  </div>
-                )}
-
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Ticket Name</label>
-                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
-                    Name of the opened channel/thread. Placeholders: {'{user.name}'}, {'{user.id}'}, {'{category}'}, {'{number}'}. Discord lowercases and hyphenates dedicated-channel names automatically.
-                  </p>
-                  <input className={styles.input} type="text" value={newCatNameTemplate} onChange={e => setNewCatNameTemplate(e.target.value)} placeholder="{category}-{number}" />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Category Handler Roles</label>
+                <div className={styles.fieldGroup}>
+                  <p className={styles.fieldGroupTitle}>Handler Roles</p>
                   <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
                     Tickets always include your server&apos;s staff roles and this panel&apos;s handler roles. Roles added here apply only to tickets opened from this category. This does not grant dashboard access.
                   </p>
@@ -1159,66 +1186,80 @@ export default function PanelsPage() {
                   </div>
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
-                  Ticket greeting (sent inside the opened ticket)
-                </div>
-                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0' }}>
-                  Placeholders for the text and embed below: {'{user}'} (mention), {'{user.name}'}, {'{user.id}'}, {'{category}'}, {'{id}'}.
-                </p>
+                <div className={styles.fieldGroup}>
+                  <p className={styles.fieldGroupTitle}>Greeting</p>
+                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 4px' }}>
+                    Sent inside the opened ticket. Leave the embed title &amp; description empty to send plain text only.
+                  </p>
 
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Plain Text Greeting (optional)</label>
-                  <textarea className={styles.textarea} rows={2} value={newCatOpenContent} onChange={e => setNewCatOpenContent(e.target.value)} placeholder="Sent below the automatic &quot;Welcome @user&quot; line." />
-                </div>
+                  <details className={styles.placeholderDropdown}>
+                    <summary>Placeholders</summary>
+                    <table className={styles.placeholderTable}>
+                      <tbody>
+                        <tr><td><code>{'{ping}'}</code></td><td>Handler role @mentions. Only notifies staff &amp; auto-adds them to private threads when used in the <strong>plain text</strong> greeting (Discord doesn&apos;t send notifications for mentions inside an embed).</td></tr>
+                        <tr><td><code>{'{mention}'}</code></td><td>@mentions the ticket opener</td></tr>
+                        <tr><td><code>{'{user.name}'}</code></td><td>Opener&apos;s display name (server nick or username)</td></tr>
+                        <tr><td><code>{'{user.id}'}</code></td><td>Opener&apos;s Discord user ID</td></tr>
+                        <tr><td><code>{'{category}'}</code></td><td>This category&apos;s name</td></tr>
+                        <tr><td><code>{'{id}'}</code></td><td>Ticket&apos;s unique ID</td></tr>
+                      </tbody>
+                    </table>
+                  </details>
 
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Greeting Embed Title (optional)</label>
-                  <input className={styles.input} type="text" value={newCatOpenTitle} onChange={e => setNewCatOpenTitle(e.target.value)} />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Greeting Embed Description (optional)</label>
-                  <textarea className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Greeting Embed Color</label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input type="color" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
-                    <input className={styles.input} type="text" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ flex: 1 }} />
-                  </div>
-                </div>
-
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Author Name</label>
-                    <input className={styles.input} type="text" value={newCatOpenAuthorName} onChange={e => setNewCatOpenAuthorName(e.target.value)} />
+                    <label className={styles.label}>Plain Text Greeting (optional)</label>
+                    <textarea className={styles.textarea} rows={2} value={newCatOpenContent} onChange={e => setNewCatOpenContent(e.target.value)} placeholder="e.g. {ping} a new ticket from {mention}" />
                   </div>
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Author Icon URL</label>
-                    <input className={styles.input} type="text" value={newCatOpenAuthorIconUrl} onChange={e => setNewCatOpenAuthorIconUrl(e.target.value)} />
-                  </div>
-                </div>
 
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Thumbnail URL</label>
-                    <input className={styles.input} type="text" value={newCatOpenThumbnailUrl} onChange={e => setNewCatOpenThumbnailUrl(e.target.value)} />
+                    <label className={styles.label}>Greeting Embed Title (optional)</label>
+                    <input className={styles.input} type="text" value={newCatOpenTitle} onChange={e => setNewCatOpenTitle(e.target.value)} />
                   </div>
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Main Image URL</label>
-                    <input className={styles.input} type="text" value={newCatOpenImageUrl} onChange={e => setNewCatOpenImageUrl(e.target.value)} />
-                  </div>
-                </div>
 
-                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Footer Text</label>
-                    <input className={styles.input} type="text" value={newCatOpenFooterText} onChange={e => setNewCatOpenFooterText(e.target.value)} />
+                    <label className={styles.label}>Greeting Embed Description (optional)</label>
+                    <textarea className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
                   </div>
+
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Footer Icon URL</label>
-                    <input className={styles.input} type="text" value={newCatOpenFooterIconUrl} onChange={e => setNewCatOpenFooterIconUrl(e.target.value)} />
+                    <label className={styles.label}>Greeting Embed Color</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="color" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
+                      <input className={styles.input} type="text" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ flex: 1 }} />
+                    </div>
+                  </div>
+
+                  <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Author Name</label>
+                      <input className={styles.input} type="text" value={newCatOpenAuthorName} onChange={e => setNewCatOpenAuthorName(e.target.value)} />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Author Icon URL</label>
+                      <input className={styles.input} type="text" value={newCatOpenAuthorIconUrl} onChange={e => setNewCatOpenAuthorIconUrl(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Thumbnail URL</label>
+                      <input className={styles.input} type="text" value={newCatOpenThumbnailUrl} onChange={e => setNewCatOpenThumbnailUrl(e.target.value)} />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Main Image URL</label>
+                      <input className={styles.input} type="text" value={newCatOpenImageUrl} onChange={e => setNewCatOpenImageUrl(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Footer Text</label>
+                      <input className={styles.input} type="text" value={newCatOpenFooterText} onChange={e => setNewCatOpenFooterText(e.target.value)} />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label className={styles.label}>Footer Icon URL</label>
+                      <input className={styles.input} type="text" value={newCatOpenFooterIconUrl} onChange={e => setNewCatOpenFooterIconUrl(e.target.value)} />
+                    </div>
                   </div>
                 </div>
 

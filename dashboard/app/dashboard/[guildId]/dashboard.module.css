@@ -313,6 +313,67 @@
   padding: var(--space-2) 0;
 }
 
+/* Groups related form fields into a labeled section, separated by a top divider.
+   The first group in a form drops its divider/top padding via :first-child. */
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.fieldGroup:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.fieldGroupTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* Collapsible placeholder reference shown above the greeting fields. */
+.placeholderDropdown {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.placeholderDropdown summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.placeholderDropdown summary:hover {
+  text-decoration: underline;
+}
+
+.placeholderTable {
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+}
+
+.placeholderTable td {
+  font-size: var(--text-xs);
+  vertical-align: top;
+  padding: 2px 6px;
+}
+
+.placeholderTable td:first-child {
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  padding-right: var(--space-3);
+  color: var(--color-text);
+}
+
 .label {
   font-size: var(--text-xs);
   font-weight: 700;

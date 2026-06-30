@@ -626,8 +626,19 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	}
 
 	openerMention := fmt.Sprintf("<@%d>", userID)
+
+	// Collect every handler/staff role mention for the {ping} placeholder. Only meaningful
+	// in plain-text content — a mention inside an embed renders as text but doesn't notify,
+	// and only a content ping makes Discord auto-add the roles to a private thread.
+	var pingParts []string
+	for roleID := range addedRoleIDs {
+		pingParts = append(pingParts, fmt.Sprintf("<@&%d>", roleID))
+	}
+	pingStr := strings.Join(pingParts, " ")
+
 	replaceVars := func(text string) string {
 		r := strings.NewReplacer(
+			"{ping}", pingStr,
 			"{user.name}", displayName,
 			"{user.id}", userIDStr,
 			"{user}", openerMention,
@@ -653,29 +664,18 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 
 	// Preserve the legacy hardcoded greeting only when the admin has configured
 	// nothing at all (no plain text, no embed fields), so pre-existing/unconfigured
-	// categories keep behaving exactly as before after upgrade.
+	// categories keep behaving exactly as before after upgrade. {ping} as the plain-text
+	// content keeps the private-thread auto-add working for those legacy rows.
 	if (plainText == nil || *plainText == "") && !embedFields.HasContent() {
+		legacyContent := "{ping}"
+		plainText = &legacyContent
 		embedFields.Title = &legacyTitle
 		embedFields.Description = &legacyDesc
 	}
 
-	content, embed := discordutil.BuildContentAndEmbed(plainText, embedFields, replaceVars)
-
-	// Keep the bot's own "Welcome {mention}" ping; the configurable plain text,
-	// if any, is appended below it rather than replacing it.
-	fullContent := fmt.Sprintf("Welcome %s", openerMention)
-	// Private threads can't carry per-role permission overwrites, so ping the handler/staff
-	// roles (gathered into addedRoleIDs above) to make Discord auto-add those members.
-	if cat.TicketDestination == "thread" && len(addedRoleIDs) > 0 {
-		mentions := make([]string, 0, len(addedRoleIDs))
-		for roleID := range addedRoleIDs {
-			mentions = append(mentions, fmt.Sprintf("<@&%d>", roleID))
-		}
-		fullContent = strings.Join(mentions, " ") + "\n" + fullContent
-	}
-	if content != "" {
-		fullContent = fullContent + "\n" + content
-	}
+	// {ping}/{mention} in the configured content are already resolved by replaceVars; the
+	// content (plain-text role pings) is what makes Discord auto-add staff to private threads.
+	fullContent, embed := discordutil.BuildContentAndEmbed(plainText, embedFields, replaceVars)
 
 	buttons := discordgo.ActionsRow{
 		Components: []discordgo.MessageComponent{
