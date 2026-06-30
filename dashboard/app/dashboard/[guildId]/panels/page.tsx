@@ -8,7 +8,8 @@ import {
   Plus,
   Trash2,
   Eye,
-  Ticket
+  Ticket,
+  ChevronDown
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
@@ -712,7 +713,7 @@ export default function PanelsPage() {
                   </div>
                 </div>
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Button Layout</label>
+                  <label className={styles.label}>Category Layout</label>
                   <Dropdown
                     value={newPanelStyle}
                     onChange={val => setNewPanelStyle(val as 'buttons' | 'select_menu')}
@@ -905,34 +906,70 @@ export default function PanelsPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
-                {previewCategories.length > 0 ? (
-                  previewCategories.map(c => (
+              {newPanelStyle === 'select_menu' ? (
+                <div style={{ marginTop: '14px' }}>
+                  <div style={{ background: '#1e1f22', border: '1px solid #4f545c', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#72767d', fontSize: '14px' }}>
+                      <span>Select an option</span>
+                      <ChevronDown size={16} color="#b9bbbe" />
+                    </div>
+                    <div style={{ borderTop: '1px solid #4f545c' }}>
+                      {previewCategories.length > 0 ? (
+                        previewCategories.map((c, i) => (
+                          <div
+                            key={c.id}
+                            style={{
+                              padding: '8px 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              color: '#dcddde',
+                              fontSize: '14px',
+                              borderBottom: i < previewCategories.length - 1 ? '1px solid #3a3d44' : 'none',
+                            }}
+                          >
+                            {c.emoji && <span>{c.emoji}</span>}
+                            <span>{c.buttonLabel}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '8px 12px', color: '#72767d', fontSize: '13px', fontStyle: 'italic' }}>
+                          Add a category to see options
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
+                  {previewCategories.length > 0 ? (
+                    previewCategories.map(c => (
+                      <button
+                        key={c.id}
+                        style={{
+                          backgroundColor: BUTTON_COLORS[c.buttonStyle] || BUTTON_COLORS.primary,
+                          color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px'
+                        }}
+                        disabled
+                      >
+                        <Ticket size={14} />
+                        <span>{c.emoji ? `${c.emoji} ` : ''}{c.buttonLabel}</span>
+                      </button>
+                    ))
+                  ) : (
                     <button
-                      key={c.id}
                       style={{
-                        backgroundColor: BUTTON_COLORS[c.buttonStyle] || BUTTON_COLORS.primary,
-                        color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px'
+                        backgroundColor: BUTTON_COLORS[newCatButtonStyle] || BUTTON_COLORS.primary,
+                        color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.6
                       }}
                       disabled
                     >
                       <Ticket size={14} />
-                      <span>{c.emoji ? `${c.emoji} ` : ''}{c.buttonLabel}</span>
+                      <span>Add a category to see buttons</span>
                     </button>
-                  ))
-                ) : (
-                  <button
-                    style={{
-                      backgroundColor: BUTTON_COLORS[newCatButtonStyle] || BUTTON_COLORS.primary,
-                      color: 'white', border: 'none', padding: '8px 16px', borderRadius: '3px', fontWeight: 500, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.6
-                    }}
-                    disabled
-                  >
-                    <Ticket size={14} />
-                    <span>Add a category to see buttons</span>
-                  </button>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           </div>
