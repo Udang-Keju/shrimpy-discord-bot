@@ -592,6 +592,9 @@ export default function PanelsPage() {
 
   // Resolves greeting placeholder tokens with fixed example values for the live preview.
   const catPreviewResolve = (text: string) => text
+    .replace(/\{ping\.staff\}/g, '@StaffRole')
+    .replace(/\{ping\.panel\}/g, '@PanelRole')
+    .replace(/\{ping\.category\}/g, '@CategoryRole')
     .replace(/\{ping\}/g, '@HandlerRole')
     .replace(/\{user\.name\}/g, 'UserName')
     .replace(/\{user\.id\}/g, '123456789')
@@ -1234,7 +1237,10 @@ export default function PanelsPage() {
                     <table className={styles.placeholderTable}>
                       <tbody>
                         <tr><td><code>{'{ping}'}</code></td><td>Handler role @mentions. Only notifies staff &amp; auto-adds them to private threads when used in the <strong>plain text</strong> greeting (Discord doesn&apos;t send notifications for mentions inside an embed).</td></tr>
-                        <tr><td><code>{'{mention}'}</code></td><td>@mentions the ticket opener</td></tr>
+                        <tr><td><code>{'{ping.staff}'}</code></td><td>Mentions only the server&apos;s staff roles (plain text only)</td></tr>
+                        <tr><td><code>{'{ping.panel}'}</code></td><td>Mentions only this panel&apos;s handler roles (plain text only)</td></tr>
+                        <tr><td><code>{'{ping.category}'}</code></td><td>Mentions only this category&apos;s handler roles (plain text only)</td></tr>
+                        <tr><td><code>{'{mention}'}</code> / <code>{'{user}'}</code></td><td>@mentions the ticket opener</td></tr>
                         <tr><td><code>{'{user.name}'}</code></td><td>Opener&apos;s display name (server nick or username)</td></tr>
                         <tr><td><code>{'{user.id}'}</code></td><td>Opener&apos;s Discord user ID</td></tr>
                         <tr><td><code>{'{category}'}</code></td><td>This category&apos;s name</td></tr>

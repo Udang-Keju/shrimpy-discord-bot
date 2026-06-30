@@ -642,14 +642,35 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	// Collect every handler/staff role mention for the {ping} placeholder. Only meaningful
 	// in plain-text content — a mention inside an embed renders as text but doesn't notify,
 	// and only a content ping makes Discord auto-add the roles to a private thread.
+	mention := func(id int64) string { return fmt.Sprintf("<@&%d>", id) }
+
 	var pingParts []string
 	for roleID := range addedRoleIDs {
-		pingParts = append(pingParts, fmt.Sprintf("<@&%d>", roleID))
+		pingParts = append(pingParts, mention(roleID))
 	}
 	pingStr := strings.Join(pingParts, " ")
 
+	// Granular pings come straight from each source list (no cross-source dedup) so
+	// {ping.panel} lists every panel handler role even if a role is also a staff role.
+	var staffParts, panelParts, categoryParts []string
+	for _, sr := range staffRoles {
+		staffParts = append(staffParts, mention(sr.RoleID))
+	}
+	for _, hr := range panelHandlerRoles {
+		panelParts = append(panelParts, mention(hr.RoleID))
+	}
+	for _, hr := range categoryHandlerRoles {
+		categoryParts = append(categoryParts, mention(hr.RoleID))
+	}
+	staffPing := strings.Join(staffParts, " ")
+	panelPing := strings.Join(panelParts, " ")
+	categoryPing := strings.Join(categoryParts, " ")
+
 	replaceVars := func(text string) string {
 		r := strings.NewReplacer(
+			"{ping.staff}", staffPing,
+			"{ping.panel}", panelPing,
+			"{ping.category}", categoryPing,
 			"{ping}", pingStr,
 			"{user.name}", displayName,
 			"{user.id}", userIDStr,
