@@ -169,17 +169,20 @@ func TestGuildService_GetConfig(t *testing.T) {
 			expectResult: expectedGuild,
 		},
 		{
-			name: "Cache Miss - Record Not Found, Auto-Register",
+			name: "Cache Miss - Record Not Found, Returns Inactive Default",
 			repoSetup: func(repo *MockGuildRepository, called *bool) {
 				repo.GetByIDFunc = func(c context.Context, id int64) (*model.Guild, error) {
+					*called = true
 					return nil, repository.ErrNotFound
 				}
+				// Upsert must NOT be called: reading config for an unregistered guild
+				// must not mark it active (is_active is gateway-event–maintained only).
 				repo.UpsertFunc = func(c context.Context, id int64, appID *string) (*model.Guild, error) {
-					*called = true
-					return expectedGuild, nil
+					t.Fatal("Upsert must not be called on a config read")
+					return nil, nil
 				}
 			},
-			expectResult: expectedGuild,
+			expectResult: &model.Guild{GuildID: guildID, Prefix: "!", Language: "en", IsActive: false},
 		},
 		{
 			name: "Cache Miss - DB Error",
@@ -245,9 +248,10 @@ func TestGuildService_UpdatesAndDeactivation(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, updatedGuild, cfg)
 
-		cachedVal, found := cache.Get(guildID)
-		assert.True(t, found)
-		assert.Equal(t, updatedGuild, cachedVal)
+		// UpdateConfig invalidates rather than writing a snapshot (see commit 1684fb9),
+		// so the stale cached entry must be gone; the next read repopulates from DB.
+		_, found := cache.Get(guildID)
+		assert.False(t, found)
 	})
 
 	t.Run("Deactivate", func(t *testing.T) {

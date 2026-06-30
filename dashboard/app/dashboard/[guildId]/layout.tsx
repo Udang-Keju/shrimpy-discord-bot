@@ -41,6 +41,7 @@ export default function DashboardLayout({
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [activeGuild, setActiveGuild] = useState<Guild | null>(null);
   const [config, setConfig] = useState<PublicConfig | null>(null);
+  const [guildsLoaded, setGuildsLoaded] = useState(false);
 
   // Fetch guilds and user info
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function DashboardLayout({
       setTheme(getSavedTheme());
     }, 0);
 
+    setGuildsLoaded(false);
     async function loadData() {
       try {
         const [userData, guildList, configData] = await Promise.all([
@@ -63,6 +65,8 @@ export default function DashboardLayout({
         setActiveGuild(current || null);
       } catch (err) {
         console.error("Failed to load dashboard resources", err);
+      } finally {
+        setGuildsLoaded(true);
       }
     }
     loadData();
@@ -221,7 +225,13 @@ export default function DashboardLayout({
 
         {/* DASHBOARD PAGE PANEL BODY */}
         <main className={styles.contentBody}>
-          {needsInvite ? (
+          {!guildsLoaded ? (
+            // Hold the body until we know membership, so a child page can't fire its
+            // config fetch (which would otherwise auto-create state) before the gate.
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", color: "var(--color-text-muted)", fontSize: "var(--text-sm)" }}>
+              Loading…
+            </div>
+          ) : needsInvite ? (
             <InviteGate
               guildName={currentGuild?.name || "this server"}
               inviteUrl={getInviteUrl(guildId)}

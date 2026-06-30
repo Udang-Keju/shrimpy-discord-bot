@@ -55,14 +55,15 @@ func (s *GuildService) GetConfig(ctx context.Context, guildID int64) (*model.Gui
 	cfg, err := s.repo.GetByID(ctx, guildID)
 	if err != nil {
 		if err == repository.ErrNotFound {
-			// If not found in DB, auto-register (upsert) the guild.
-			cfg, err = s.repo.Upsert(ctx, guildID, nil)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
+			// No persisted row yet — return an in-memory default WITHOUT writing one.
+			// Persisting here would force is_active=true (see repo.Upsert), which is the
+			// membership flag maintained solely by gateway events (RegisterGuild on
+			// GUILD_CREATE, Deactivate on GUILD_DELETE). A dashboard/bot *read* of an
+			// uninvited guild must not mark it as joined. The default is not cached so
+			// that a later GUILD_CREATE registration is picked up immediately.
+			return &model.Guild{GuildID: guildID, Prefix: "!", Language: "en", IsActive: false}, nil
 		}
+		return nil, err
 	}
 
 	s.cache.Set(guildID, cfg)
