@@ -335,12 +335,24 @@ func (s *TranscriptService) GenerateHTML(ctx context.Context, ticket *model.Tick
         <div class="header">
             <h1><h1>🦐 Shrimpy Support Transcript</h1></h1>
             <div class="metadata-grid">
-                <div class="meta-item"><strong>Ticket ID:</strong> ` + ticket.ID + `</div>
-                <div class="meta-item"><strong>Category:</strong> ` + html.EscapeString(categoryName) + `</div>
-                <div class="meta-item"><strong>Opened By:</strong> ` + html.EscapeString(openerUsername) + `</div>
-                <div class="meta-item"><strong>Opened At:</strong> ` + ticket.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC") + `</div>
-                <div class="meta-item"><strong>Closed By:</strong> ` + html.EscapeString(closedBy) + `</div>
-                <div class="meta-item"><strong>Close Reason:</strong> ` + html.EscapeString(closeReason) + `</div>
+                <div class="meta-item"><strong>Ticket ID:</strong> `)
+	sb.WriteString(ticket.ID)
+	sb.WriteString(`</div>
+                <div class="meta-item"><strong>Category:</strong> `)
+	sb.WriteString(html.EscapeString(categoryName))
+	sb.WriteString(`</div>
+                <div class="meta-item"><strong>Opened By:</strong> `)
+	sb.WriteString(html.EscapeString(openerUsername))
+	sb.WriteString(`</div>
+                <div class="meta-item"><strong>Opened At:</strong> `)
+	sb.WriteString(ticket.CreatedAt.UTC().Format("2006-01-02 15:04:05 UTC"))
+	sb.WriteString(`</div>
+                <div class="meta-item"><strong>Closed By:</strong> `)
+	sb.WriteString(html.EscapeString(closedBy))
+	sb.WriteString(`</div>
+                <div class="meta-item"><strong>Close Reason:</strong> `)
+	sb.WriteString(html.EscapeString(closeReason))
+	sb.WriteString(`</div>
             </div>
         </div>
         <div class="messages-list">`)
