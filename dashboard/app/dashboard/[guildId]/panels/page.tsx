@@ -93,6 +93,12 @@ export default function PanelsPage() {
   const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
   const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
   const [newCatOpenColor, setNewCatOpenColor] = useState<string>('#5865F2');
+  const [newCatOpenAuthorName, setNewCatOpenAuthorName] = useState("");
+  const [newCatOpenAuthorIconUrl, setNewCatOpenAuthorIconUrl] = useState("");
+  const [newCatOpenThumbnailUrl, setNewCatOpenThumbnailUrl] = useState("");
+  const [newCatOpenImageUrl, setNewCatOpenImageUrl] = useState("");
+  const [newCatOpenFooterText, setNewCatOpenFooterText] = useState("");
+  const [newCatOpenFooterIconUrl, setNewCatOpenFooterIconUrl] = useState("");
 
   // Tracks the live selection so async completions can tell whether the
   // panel/category they were issued for is still the one on screen.
@@ -146,6 +152,12 @@ export default function PanelsPage() {
     setNewCatOpenTitle("");
     setNewCatOpenDesc("");
     setNewCatOpenColor('#5865F2');
+    setNewCatOpenAuthorName("");
+    setNewCatOpenAuthorIconUrl("");
+    setNewCatOpenThumbnailUrl("");
+    setNewCatOpenImageUrl("");
+    setNewCatOpenFooterText("");
+    setNewCatOpenFooterIconUrl("");
     setCategoryHandlerRoleIds([]);
   };
 
@@ -363,6 +375,12 @@ export default function PanelsPage() {
     setNewCatOpenTitle(c.ticketOpenTitle || "");
     setNewCatOpenDesc(c.ticketOpenMessage || "");
     setNewCatOpenColor(colorToHex(c.ticketOpenColor));
+    setNewCatOpenAuthorName(c.ticketOpenMedia?.author?.name || "");
+    setNewCatOpenAuthorIconUrl(c.ticketOpenMedia?.author?.iconUrl || "");
+    setNewCatOpenThumbnailUrl(c.ticketOpenMedia?.thumbnail?.url || "");
+    setNewCatOpenImageUrl(c.ticketOpenMedia?.image?.url || "");
+    setNewCatOpenFooterText(c.ticketOpenMedia?.footer?.text || "");
+    setNewCatOpenFooterIconUrl(c.ticketOpenMedia?.footer?.iconUrl || "");
   };
 
   // Clicking a category row both selects it (so its handler-roles card shows)
@@ -417,6 +435,12 @@ export default function PanelsPage() {
       ticketOpenTitle: newCatOpenTitle || undefined,
       ticketOpenMessage: newCatOpenDesc || undefined,
       ticketOpenColor: (newCatOpenTitle || newCatOpenDesc) ? hexToColor(newCatOpenColor) : undefined,
+      ticketOpenMedia: (newCatOpenAuthorName || newCatOpenThumbnailUrl || newCatOpenImageUrl || newCatOpenFooterText) ? {
+        author: newCatOpenAuthorName ? { name: newCatOpenAuthorName, iconUrl: newCatOpenAuthorIconUrl || undefined } : undefined,
+        thumbnail: newCatOpenThumbnailUrl ? { url: newCatOpenThumbnailUrl } : undefined,
+        image: newCatOpenImageUrl ? { url: newCatOpenImageUrl } : undefined,
+        footer: newCatOpenFooterText ? { text: newCatOpenFooterText, iconUrl: newCatOpenFooterIconUrl || undefined } : undefined,
+      } : undefined,
       maxTicketsPerUser: original?.maxTicketsPerUser ?? 1,
       autoCloseHours: original?.autoCloseHours,
       transcriptChannelId: original?.transcriptChannelId,
@@ -548,6 +572,26 @@ export default function PanelsPage() {
   const atCategoryLimit = !!selectedPanel && selectedPanel.panelStyle === 'buttons' && categories.length >= 3;
   const showCategoryForm = (creatingNewCategory || !!editingCategoryId) && !(!editingCategoryId && atCategoryLimit);
   const previewCategories = selectedPanel ? categories : [];
+
+  // Resolves greeting placeholder tokens with fixed example values for the live preview.
+  const catPreviewResolve = (text: string) => text
+    .replace(/\{user\.name\}/g, 'UserName')
+    .replace(/\{user\.id\}/g, '123456789')
+    .replace(/\{user\}/g, '@UserName')
+    .replace(/\{mention\}/g, '@UserName')
+    .replace(/\{category\}/g, newCatName || 'Category')
+    .replace(/\{id\}/g, 'a1b2c3d4-0000-0000-0000-000000000000');
+  const catPreviewContent = catPreviewResolve(newCatOpenContent);
+  const catPreviewTitle = catPreviewResolve(newCatOpenTitle);
+  const catPreviewDesc = catPreviewResolve(newCatOpenDesc);
+  const catPreviewColor = colorToHex(hexToColor(newCatOpenColor));
+  const catPreviewMedia = (newCatOpenAuthorName || newCatOpenThumbnailUrl || newCatOpenImageUrl || newCatOpenFooterText) ? {
+    author: newCatOpenAuthorName ? { name: catPreviewResolve(newCatOpenAuthorName), iconUrl: newCatOpenAuthorIconUrl || undefined } : undefined,
+    thumbnail: newCatOpenThumbnailUrl ? { url: newCatOpenThumbnailUrl } : undefined,
+    image: newCatOpenImageUrl ? { url: newCatOpenImageUrl } : undefined,
+    footer: newCatOpenFooterText ? { text: catPreviewResolve(newCatOpenFooterText), iconUrl: newCatOpenFooterIconUrl || undefined } : undefined,
+  } : undefined;
+  const hasCatPreviewEmbed = !!(catPreviewTitle || catPreviewDesc || catPreviewMedia);
 
   // Handler-role hierarchy: staff roles are always included; panel roles apply to every
   // category on the panel; category roles are additive to just that category. Each role
@@ -945,6 +989,7 @@ export default function PanelsPage() {
             </div>
 
           {showCategoryForm && (
+          <div className={styles.grid} style={{ alignItems: 'start' }}>
             <div className={styles.card}>
               <div>
                 <h3 className={styles.cardTitle}>{editingCategoryId ? 'Edit Category' : 'New Category'}</h3>
@@ -1136,15 +1181,46 @@ export default function PanelsPage() {
                   <textarea className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
                 </div>
 
-                {(newCatOpenTitle || newCatOpenDesc) && (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Greeting Embed Color</label>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="color" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
-                      <input className={styles.input} type="text" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ flex: 1 }} />
-                    </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>Greeting Embed Color</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="color" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ width: '40px', height: '36px', padding: '2px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: 'pointer' }} />
+                    <input className={styles.input} type="text" value={newCatOpenColor} onChange={e => setNewCatOpenColor(e.target.value)} style={{ flex: 1 }} />
                   </div>
-                )}
+                </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Author Name</label>
+                    <input className={styles.input} type="text" value={newCatOpenAuthorName} onChange={e => setNewCatOpenAuthorName(e.target.value)} />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Author Icon URL</label>
+                    <input className={styles.input} type="text" value={newCatOpenAuthorIconUrl} onChange={e => setNewCatOpenAuthorIconUrl(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Thumbnail URL</label>
+                    <input className={styles.input} type="text" value={newCatOpenThumbnailUrl} onChange={e => setNewCatOpenThumbnailUrl(e.target.value)} />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Main Image URL</label>
+                    <input className={styles.input} type="text" value={newCatOpenImageUrl} onChange={e => setNewCatOpenImageUrl(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Footer Text</label>
+                    <input className={styles.input} type="text" value={newCatOpenFooterText} onChange={e => setNewCatOpenFooterText(e.target.value)} />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Footer Icon URL</label>
+                    <input className={styles.input} type="text" value={newCatOpenFooterIconUrl} onChange={e => setNewCatOpenFooterIconUrl(e.target.value)} />
+                  </div>
+                </div>
 
                 <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                   <button type="submit" className={styles.submitBtn} style={{ padding: '10px', flex: 1 }}>
@@ -1159,6 +1235,75 @@ export default function PanelsPage() {
                 </div>
               </form>
             </div>
+
+            {/* Real-time greeting preview */}
+            <div className={styles.card}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Eye size={16} style={{ color: 'var(--color-accent)' }} />
+                <h3 className={styles.cardTitle}>Greeting Preview</h3>
+              </div>
+              <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                Sent inside the opened ticket. Placeholders resolved with example values.
+              </p>
+
+              <div style={{ background: '#36393f', border: '1px solid #202225', padding: '16px', borderRadius: '8px' }}>
+                {catPreviewContent && (
+                  <div style={{ color: '#dcddde', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.4', marginBottom: hasCatPreviewEmbed ? '10px' : 0 }}>
+                    {catPreviewContent}
+                  </div>
+                )}
+
+                {hasCatPreviewEmbed && (
+                  <div style={{ background: '#2f3136', borderLeft: `4px solid ${catPreviewColor}`, borderRadius: '4px', padding: '16px', display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      {catPreviewMedia?.author?.name && (
+                        <div style={{ color: '#ffffff', fontSize: '12px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {isImageUrl(catPreviewMedia.author.iconUrl) && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={catPreviewMedia.author.iconUrl} alt="" style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
+                          )}
+                          <span>{catPreviewMedia.author.name}</span>
+                        </div>
+                      )}
+                      {catPreviewTitle && (
+                        <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '15px', marginBottom: '8px' }}>
+                          {catPreviewTitle}
+                        </div>
+                      )}
+                      {catPreviewDesc && (
+                        <div style={{ color: '#dcddde', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                          {catPreviewDesc}
+                        </div>
+                      )}
+                      {isImageUrl(catPreviewMedia?.image?.url) && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={catPreviewMedia!.image!.url} alt="" style={{ maxWidth: '100%', borderRadius: '4px', marginTop: '10px' }} />
+                      )}
+                      {catPreviewMedia?.footer?.text && (
+                        <div style={{ color: '#72767d', fontSize: '11px', marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {isImageUrl(catPreviewMedia.footer.iconUrl) && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={catPreviewMedia!.footer!.iconUrl} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
+                          )}
+                          <span>{catPreviewMedia.footer.text}</span>
+                        </div>
+                      )}
+                    </div>
+                    {isImageUrl(catPreviewMedia?.thumbnail?.url) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={catPreviewMedia!.thumbnail!.url} alt="" style={{ width: '64px', height: '64px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
+                    )}
+                  </div>
+                )}
+
+                {(!catPreviewContent && !hasCatPreviewEmbed) && (
+                  <div style={{ color: '#72767d', fontSize: '12px', fontStyle: 'italic' }}>
+                    Fill in the greeting fields to see a preview here.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           )}
           </div>
           )}
