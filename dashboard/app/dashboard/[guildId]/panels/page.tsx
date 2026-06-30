@@ -87,6 +87,8 @@ export default function PanelsPage() {
   const [newCatThreadParentId, setNewCatThreadParentId] = useState("");
   // Channel destination: channel group the dedicated channel is placed under ('' ⇒ no group).
   const [newCatChannelGroupId, setNewCatChannelGroupId] = useState("");
+  // Template for the opened channel/thread name; supports {user.name}, {user.id}, {category}, {number}.
+  const [newCatNameTemplate, setNewCatNameTemplate] = useState('{category}-{number}');
   const [newCatOpenContent, setNewCatOpenContent] = useState("");
   const [newCatOpenTitle, setNewCatOpenTitle] = useState("");
   const [newCatOpenDesc, setNewCatOpenDesc] = useState("");
@@ -139,6 +141,7 @@ export default function PanelsPage() {
     setNewCatDestination('thread');
     setNewCatThreadParentId("");
     setNewCatChannelGroupId("");
+    setNewCatNameTemplate('{category}-{number}');
     setNewCatOpenContent("");
     setNewCatOpenTitle("");
     setNewCatOpenDesc("");
@@ -355,6 +358,7 @@ export default function PanelsPage() {
     setNewCatDestination(c.ticketDestination);
     setNewCatThreadParentId(c.threadParentChannelId || "");
     setNewCatChannelGroupId(c.channelCategoryId || "");
+    setNewCatNameTemplate(c.ticketNameTemplate || '{category}-{number}');
     setNewCatOpenContent(c.ticketOpenContent || "");
     setNewCatOpenTitle(c.ticketOpenTitle || "");
     setNewCatOpenDesc(c.ticketOpenMessage || "");
@@ -408,7 +412,7 @@ export default function PanelsPage() {
       ticketDestination: newCatDestination,
       threadParentChannelId: newCatDestination === 'thread' ? (newCatThreadParentId || undefined) : undefined,
       channelCategoryId: newCatDestination === 'channel' ? (newCatChannelGroupId || undefined) : undefined,
-      ticketNameTemplate: original?.ticketNameTemplate ?? '{category}-{number}',
+      ticketNameTemplate: newCatNameTemplate || '{category}-{number}',
       ticketOpenContent: newCatOpenContent || undefined,
       ticketOpenTitle: newCatOpenTitle || undefined,
       ticketOpenMessage: newCatOpenDesc || undefined,
@@ -1045,6 +1049,14 @@ export default function PanelsPage() {
                 )}
 
                 <div className={styles.formGroup}>
+                  <label className={styles.label}>Ticket Name</label>
+                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
+                    Name of the opened channel/thread. Placeholders: {'{user.name}'}, {'{user.id}'}, {'{category}'}, {'{number}'}. Discord lowercases and hyphenates dedicated-channel names automatically.
+                  </p>
+                  <input className={styles.input} type="text" value={newCatNameTemplate} onChange={e => setNewCatNameTemplate(e.target.value)} placeholder="{category}-{number}" />
+                </div>
+
+                <div className={styles.formGroup}>
                   <label className={styles.label}>Category Handler Roles</label>
                   <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0 0 8px' }}>
                     Tickets always include your server&apos;s staff roles and this panel&apos;s handler roles. Roles added here apply only to tickets opened from this category. This does not grant dashboard access.
@@ -1105,6 +1117,9 @@ export default function PanelsPage() {
                 <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)', fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>
                   Ticket greeting (sent inside the opened ticket)
                 </div>
+                <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: '0' }}>
+                  Placeholders for the text and embed below: {'{user}'} (mention), {'{user.name}'}, {'{user.id}'}, {'{category}'}, {'{id}'}.
+                </p>
 
                 <div className={styles.formGroup}>
                   <label className={styles.label}>Plain Text Greeting (optional)</label>

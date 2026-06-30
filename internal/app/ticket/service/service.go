@@ -472,8 +472,17 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	guildIDStr := fmt.Sprintf("%d", guildID)
 	userIDStr := fmt.Sprintf("%d", userID)
 
-	channelName := strings.ReplaceAll(cat.TicketNameTemplate, "{username}", strings.ToLower(userIDStr))
-	channelName = strings.ReplaceAll(channelName, "{category}", strings.ToLower(cat.Name))
+	// Resolve the opener's display name (server nick → global name → username) for use in
+	// the name template and greeting. Fall back to the user ID if the lookup fails so a
+	// transient API error never blocks ticket creation.
+	displayName := userIDStr
+	if member, merr := dg.GuildMember(guildIDStr, userIDStr); merr == nil && member != nil {
+		displayName = member.DisplayName()
+	}
+
+	channelName := strings.ReplaceAll(cat.TicketNameTemplate, "{user.name}", displayName)
+	channelName = strings.ReplaceAll(channelName, "{user.id}", userIDStr)
+	channelName = strings.ReplaceAll(channelName, "{category}", cat.Name)
 	channelName = strings.ReplaceAll(channelName, "{number}", ticket.ID[:8])
 
 	var targetChannelID, targetThreadID *int64
@@ -619,6 +628,8 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 	openerMention := fmt.Sprintf("<@%d>", userID)
 	replaceVars := func(text string) string {
 		r := strings.NewReplacer(
+			"{user.name}", displayName,
+			"{user.id}", userIDStr,
 			"{user}", openerMention,
 			"{mention}", openerMention,
 			"{category}", cat.Name,
