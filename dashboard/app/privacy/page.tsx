@@ -83,6 +83,11 @@ export default function PrivacyPolicyPage() {
               We do not collect message content from your server beyond the ticket
               conversations Shrimpy is explicitly used to manage.
             </p>
+            <p className={legal.paragraph}>
+              As Shrimpy&apos;s features evolve, we may collect additional information
+              necessary to provide new functionality. Any such changes will be reflected in
+              this policy and in its &quot;Last updated&quot; date.
+            </p>
           </section>
 
           <section className={legal.section}>

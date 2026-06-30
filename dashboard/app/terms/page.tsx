@@ -63,7 +63,8 @@ export default function TermsOfServicePage() {
             <p className={legal.paragraph}>
               Shrimpy is a Discord server management and help-desk system that provides
               ticketing, welcome messages, auto-roles, reaction roles, and related
-              configuration tools through a Discord bot and a web dashboard.
+              configuration tools through a Discord bot and a web dashboard. We continually
+              develop Shrimpy, and may add, change, or remove features over time.
             </p>
           </section>
 
