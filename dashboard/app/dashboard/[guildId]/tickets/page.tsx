@@ -10,7 +10,6 @@ import {
   Unlock,
   Trash2,
   Download,
-  Loader2,
   RefreshCw,
   Inbox,
   Layers
@@ -18,6 +17,7 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Ticket } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
+import { Skeleton, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 export default function TicketsPage() {
   const params = useParams();
@@ -127,10 +127,15 @@ export default function TicketsPage() {
           </div>
         </div>
 
-        {/* Loading Spinner */}
+        {/* Loading Skeleton */}
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
-            <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {[...Array(4)].map((_, i) => <Skeleton key={i} height="30px" width="70px" />)}
+            </div>
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} height="48px" style={{ borderRadius: 'var(--radius-sm)' }} />
+            ))}
           </div>
         ) : filteredTickets.length === 0 ? (
           tickets.length === 0 ? (

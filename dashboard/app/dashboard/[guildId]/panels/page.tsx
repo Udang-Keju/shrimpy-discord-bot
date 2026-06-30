@@ -15,6 +15,7 @@ import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
+import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 const BUTTON_COLORS: Record<string, string> = {
   primary: '#5865F2',
@@ -108,6 +109,8 @@ export default function PanelsPage() {
     selectedPanelIdRef.current = selectedPanel?.id ?? null;
   }, [selectedPanel]);
 
+  const [loading, setLoading] = useState(true);
+
   const isCreatingPanel = useRef(false);
   const isCreatingCategory = useRef(false);
 
@@ -164,6 +167,7 @@ export default function PanelsPage() {
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
         const [panelsData, chansData, groupsData, rolesData, guildConfig] = await Promise.all([
           ShrimpyAPI.listPanels(guildId),
@@ -196,6 +200,8 @@ export default function PanelsPage() {
         setEditingCategoryOriginal(null);
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
@@ -621,6 +627,19 @@ export default function PanelsPage() {
   const inheritedCategoryRoleIds = Array.from(new Set([...staffRoleIds, ...handlerRoleIds]));
   const visibleCategoryRoleIds = categoryHandlerRoleIds.filter(id => !inheritedCategoryRoleIds.includes(id));
   const roleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || roleId;
+
+  if (loading) return (
+    <div>
+      <SkeletonHeader />
+      <div className={styles.grid}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          <SkeletonCard fields={3} />
+          <SkeletonCard fields={5} />
+        </div>
+        <SkeletonCard fields={6} />
+      </div>
+    </div>
+  );
 
   return (
     <div>

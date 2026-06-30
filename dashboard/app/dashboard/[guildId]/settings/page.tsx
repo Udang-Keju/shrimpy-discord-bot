@@ -13,6 +13,7 @@ import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Guild, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
+import { Skeleton, SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 export default function SettingsPage() {
   const params = useParams();
@@ -23,12 +24,14 @@ export default function SettingsPage() {
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Local state for adding roles
   const [selectedStaffRole, setSelectedStaffRole] = useState("");
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
         const [configData, chansData, rolesData] = await Promise.all([
           ShrimpyAPI.getGuildConfig(guildId),
@@ -44,6 +47,8 @@ export default function SettingsPage() {
         }
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
@@ -99,6 +104,18 @@ export default function SettingsPage() {
     setConfig(prev => prev ? ({ ...prev, [key]: val }) : null);
   };
 
+  if (loading) return (
+    <div>
+      <SkeletonHeader />
+      <div className={styles.grid}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          <SkeletonCard fields={4} />
+          <Skeleton height="40px" width="180px" />
+        </div>
+        <SkeletonCard fields={4} />
+      </div>
+    </div>
+  );
   if (!config) return null;
 
   return (

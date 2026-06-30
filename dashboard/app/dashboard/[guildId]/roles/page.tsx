@@ -13,6 +13,7 @@ import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, ReactionRole, ReactionRoleMapping, DiscordChannel, DiscordRole } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
+import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 export default function ReactionRolesPage() {
   const params = useParams();
@@ -22,6 +23,7 @@ export default function ReactionRolesPage() {
   const [reactionRoles, setReactionRoles] = useState<ReactionRole[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Form states for new panel
   const [newTitle, setNewTitle] = useState("Select Your Roles");
@@ -35,6 +37,7 @@ export default function ReactionRolesPage() {
 
   useEffect(() => {
     async function loadData() {
+      setLoading(true);
       try {
         const [rrData, chansData, rolesData] = await Promise.all([
           ShrimpyAPI.listReactionRoles(guildId),
@@ -53,6 +56,8 @@ export default function ReactionRolesPage() {
         }
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
@@ -115,6 +120,16 @@ export default function ReactionRolesPage() {
       console.error(err);
     }
   };
+
+  if (loading) return (
+    <div>
+      <SkeletonHeader />
+      <div className={styles.grid}>
+        <SkeletonCard fields={4} />
+        <SkeletonCard fields={3} />
+      </div>
+    </div>
+  );
 
   return (
     <div>
