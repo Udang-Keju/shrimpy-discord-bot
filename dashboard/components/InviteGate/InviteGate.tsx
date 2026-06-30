@@ -2,18 +2,22 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, ExternalLink, ArrowLeft } from "lucide-react";
+import { Bot, ExternalLink, ArrowLeft, RefreshCw } from "lucide-react";
 
 interface InviteGateProps {
   guildName: string;
   inviteUrl: string | null;
+  // Re-checks whether the bot has joined yet (re-syncs from Discord). The gate
+  // disappears automatically once membership is detected.
+  onRecheck: () => void;
+  rechecking: boolean;
 }
 
 // Shown in place of a guild's configuration pages when Shrimpy has not yet been
 // invited to that server. Without the bot in the guild, the Discord-backed config
 // endpoints (channels, roles, etc.) can't resolve, so the underlying pages would
 // render empty. This prompts the user to invite the bot before configuring.
-export default function InviteGate({ guildName, inviteUrl }: InviteGateProps) {
+export default function InviteGate({ guildName, inviteUrl, onRecheck, rechecking }: InviteGateProps) {
   return (
     <div
       style={{
@@ -111,6 +115,46 @@ export default function InviteGate({ guildName, inviteUrl }: InviteGateProps) {
           </p>
         )}
 
+        <button
+          type="button"
+          onClick={onRecheck}
+          disabled={rechecking}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginTop: "var(--space-4)",
+            padding: "10px 20px",
+            borderRadius: "var(--radius-md)",
+            backgroundColor: "transparent",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text)",
+            fontSize: "var(--text-sm)",
+            fontWeight: 600,
+            cursor: rechecking ? "default" : "pointer",
+            transition: "border-color var(--transition-fast), color var(--transition-fast)",
+          }}
+          onMouseEnter={(e) => {
+            if (rechecking) return;
+            e.currentTarget.style.borderColor = "var(--color-primary)";
+            e.currentTarget.style.color = "var(--color-primary)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--color-border)";
+            e.currentTarget.style.color = "var(--color-text)";
+          }}
+        >
+          <RefreshCw
+            size={16}
+            style={rechecking ? { animation: "shrimpy-spin 0.8s linear infinite" } : undefined}
+          />
+          <span>{rechecking ? "Checking…" : "I've invited it — refresh"}</span>
+        </button>
+
+        <p style={{ color: "var(--color-text-muted)", fontSize: "var(--text-xs)", marginTop: "var(--space-3)" }}>
+          This page checks automatically when you return to this tab.
+        </p>
+
         <Link
           href="/servers"
           style={{
@@ -128,6 +172,13 @@ export default function InviteGate({ guildName, inviteUrl }: InviteGateProps) {
           <span>Back to server selection</span>
         </Link>
       </div>
+
+      <style jsx global>{`
+        @keyframes shrimpy-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

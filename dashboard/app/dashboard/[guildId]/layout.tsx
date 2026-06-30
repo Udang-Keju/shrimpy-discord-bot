@@ -1,7 +1,7 @@
 // dashboard/app/dashboard/[guildId]/layout.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   useParams,
   usePathname,
@@ -42,8 +42,36 @@ export default function DashboardLayout({
   const [activeGuild, setActiveGuild] = useState<Guild | null>(null);
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [guildsLoaded, setGuildsLoaded] = useState(false);
+  const [rechecking, setRechecking] = useState(false);
 
-  // Fetch guilds and user info
+  // Fetches user + guilds + app config and resolves the active guild. When `syncSession`
+  // is set, re-syncs the Discord guild list first so a bot that was just invited (in
+  // another tab) is reflected without a full re-login.
+  const loadData = useCallback(async (opts?: { syncSession?: boolean }) => {
+    if (opts?.syncSession) {
+      await ShrimpyAPI.refreshSession().catch((err) => {
+        console.error("Failed to refresh session guild list", err);
+      });
+    }
+    try {
+      const [userData, guildList, configData] = await Promise.all([
+        ShrimpyAPI.getCurrentUser(),
+        ShrimpyAPI.listGuilds(),
+        ShrimpyAPI.getPublicConfig()
+      ]);
+      setUser(userData);
+      setGuilds(guildList);
+      setConfig(configData);
+      const current = guildList.find(g => g.id === guildId) || guildList[0];
+      setActiveGuild(current || null);
+    } catch (err) {
+      console.error("Failed to load dashboard resources", err);
+    } finally {
+      setGuildsLoaded(true);
+    }
+  }, [guildId]);
+
+  // Initial load when the route (guildId) changes.
   useEffect(() => {
     const timer = setTimeout(() => {
       setMounted(true);
@@ -51,28 +79,28 @@ export default function DashboardLayout({
     }, 0);
 
     setGuildsLoaded(false);
-    async function loadData() {
-      try {
-        const [userData, guildList, configData] = await Promise.all([
-          ShrimpyAPI.getCurrentUser(),
-          ShrimpyAPI.listGuilds(),
-          ShrimpyAPI.getPublicConfig()
-        ]);
-        setUser(userData);
-        setGuilds(guildList);
-        setConfig(configData);
-        const current = guildList.find(g => g.id === guildId) || guildList[0];
-        setActiveGuild(current || null);
-      } catch (err) {
-        console.error("Failed to load dashboard resources", err);
-      } finally {
-        setGuildsLoaded(true);
-      }
-    }
     loadData();
 
     return () => clearTimeout(timer);
-  }, [guildId]);
+  }, [loadData]);
+
+  // Re-check membership when the user explicitly clicks refresh on the invite gate.
+  const handleRecheck = useCallback(async () => {
+    setRechecking(true);
+    await loadData({ syncSession: true });
+    setRechecking(false);
+  }, [loadData]);
+
+  // Auto-recheck when the tab regains focus while the invite gate is showing — the
+  // invite opens in another tab, so returning here is a strong signal to re-verify.
+  useEffect(() => {
+    const guildNotJoined = guilds.find(g => g.id === guildId)?.bot_joined === false;
+    if (!guildNotJoined) return;
+
+    const onFocus = () => { handleRecheck(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [guilds, guildId, handleRecheck]);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -235,6 +263,8 @@ export default function DashboardLayout({
             <InviteGate
               guildName={currentGuild?.name || "this server"}
               inviteUrl={getInviteUrl(guildId)}
+              onRecheck={handleRecheck}
+              rechecking={rechecking}
             />
           ) : (
             children
