@@ -951,6 +951,11 @@ func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticket
 		chIDStr := fmt.Sprintf("%d", *ticket.ChannelID)
 		openerStr := fmt.Sprintf("%d", ticket.OpenedBy)
 		_ = dg.ChannelPermissionSet(chIDStr, openerStr, discordgo.PermissionOverwriteTypeMember, 0, discordgo.PermissionSendMessages)
+	} else if ticket.ThreadID != nil {
+		// Private threads can't carry per-member overwrites; lock the thread instead so
+		// only members with Manage Threads (staff) can post or unarchive it.
+		locked := true
+		_, _ = dg.ChannelEditComplex(fmt.Sprintf("%d", *ticket.ThreadID), &discordgo.ChannelEdit{Locked: &locked})
 	}
 
 	ticket, err = s.ticketRepo.UpdateStatus(ctx, ticketID, model.TicketStatusClosed, reason)
@@ -997,8 +1002,14 @@ func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticket
 		}
 	}
 
+	var targetIDStr string
 	if ticket.ChannelID != nil {
-		chIDStr := fmt.Sprintf("%d", *ticket.ChannelID)
+		targetIDStr = fmt.Sprintf("%d", *ticket.ChannelID)
+	} else if ticket.ThreadID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ThreadID)
+	}
+
+	if targetIDStr != "" {
 		reasonStr := "No reason provided"
 		if reason != nil {
 			reasonStr = *reason
@@ -1027,7 +1038,7 @@ func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticket
 			},
 		}
 
-		_, _ = dg.ChannelMessageSendComplex(chIDStr, &discordgo.MessageSend{
+		_, _ = dg.ChannelMessageSendComplex(targetIDStr, &discordgo.MessageSend{
 			Embeds:     []*discordgo.MessageEmbed{embed},
 			Components: []discordgo.MessageComponent{buttons},
 		})
@@ -1052,6 +1063,10 @@ func (s *TicketService) Reopen(ctx context.Context, dg *discordgo.Session, ticke
 		openerStr := fmt.Sprintf("%d", ticket.OpenedBy)
 		_ = dg.ChannelPermissionSet(chIDStr, openerStr, discordgo.PermissionOverwriteTypeMember,
 			discordgo.PermissionReadMessages|discordgo.PermissionSendMessages|discordgo.PermissionEmbedLinks|discordgo.PermissionAttachFiles, 0)
+	} else if ticket.ThreadID != nil {
+		locked := false
+		archived := false
+		_, _ = dg.ChannelEditComplex(fmt.Sprintf("%d", *ticket.ThreadID), &discordgo.ChannelEdit{Locked: &locked, Archived: &archived})
 	}
 
 	ticket, err = s.ticketRepo.UpdateStatus(ctx, ticketID, model.TicketStatusOpen, nil)
@@ -1059,13 +1074,18 @@ func (s *TicketService) Reopen(ctx context.Context, dg *discordgo.Session, ticke
 		return nil, err
 	}
 
+	var targetIDStr string
 	if ticket.ChannelID != nil {
-		chIDStr := fmt.Sprintf("%d", *ticket.ChannelID)
+		targetIDStr = fmt.Sprintf("%d", *ticket.ChannelID)
+	} else if ticket.ThreadID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ThreadID)
+	}
+	if targetIDStr != "" {
 		embed := &discordgo.MessageEmbed{
 			Description: "This ticket has been reopened.",
 			Color:       0x4ecdc4,
 		}
-		_, _ = dg.ChannelMessageSendEmbed(chIDStr, embed)
+		_, _ = dg.ChannelMessageSendEmbed(targetIDStr, embed)
 	}
 
 	return ticket, nil
@@ -1080,6 +1100,8 @@ func (s *TicketService) Archive(ctx context.Context, dg *discordgo.Session, tick
 
 	if ticket.ChannelID != nil {
 		_, _ = dg.ChannelDelete(fmt.Sprintf("%d", *ticket.ChannelID))
+	} else if ticket.ThreadID != nil {
+		_, _ = dg.ChannelDelete(fmt.Sprintf("%d", *ticket.ThreadID))
 	}
 
 	_, err = s.ticketRepo.UpdateStatus(ctx, ticketID, model.TicketStatusArchived, nil)
