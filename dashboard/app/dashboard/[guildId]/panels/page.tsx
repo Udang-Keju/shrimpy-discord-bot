@@ -837,7 +837,7 @@ export default function PanelsPage() {
               <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                 <button type="submit" className={styles.submitBtn} style={{ flex: 1 }}>
                   <Plus size={16} />
-                  <span>{editingPanelId ? 'Save Changes' : 'Deploy Panel Desk'}</span>
+                  <span>{editingPanelId ? 'Save Changes' : 'Create Panel'}</span>
                 </button>
                 {(editingPanelId || creatingNew) && (
                   <button type="button" className={styles.actionBtn} onClick={handleCancelEditPanel}>
