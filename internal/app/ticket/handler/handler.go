@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/repository"
@@ -457,12 +458,81 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve Discord usernames once per distinct user, reusing the guild session.
+	// Falls back to the raw user ID if the session is unavailable or the lookup fails.
+	nameCache := map[int64]string{}
+	dg, _ := h.provider.GetSessionForGuild(r.Context(), guildID)
+	resolveName := func(userID int64) string {
+		if name, ok := nameCache[userID]; ok {
+			return name
+		}
+		name := strconv.FormatInt(userID, 10)
+		if dg != nil {
+			if u, uErr := dg.User(name); uErr == nil && u != nil {
+				if u.GlobalName != "" {
+					name = u.GlobalName
+				} else {
+					name = u.Username
+				}
+			}
+		}
+		nameCache[userID] = name
+		return name
+	}
+
+	dtos := make([]ticketDTO, 0, len(tickets))
+	for i := range tickets {
+		dtos = append(dtos, newTicketDTO(&tickets[i], resolveName))
+	}
+
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{
-		"tickets": tickets,
+		"tickets": dtos,
 		"total":   total,
 		"page":    f.Page,
 		"limit":   f.Limit,
 	})
+}
+
+// ticketDTO is the dashboard-facing shape of a ticket, with camelCase fields and
+// resolved usernames/category name that the Ticket model does not carry directly.
+type ticketDTO struct {
+	ID              string  `json:"id"`
+	GuildID         string  `json:"guildId"`
+	ChannelID       string  `json:"channelId"`
+	CreatorID       string  `json:"creatorId"`
+	CreatorUsername string  `json:"creatorUsername"`
+	Status          string  `json:"status"`
+	AssignedTo      *string `json:"assignedTo,omitempty"`
+	CategoryName    string  `json:"categoryName"`
+	CreatedAt       string  `json:"createdAt"`
+	ClosedAt        *string `json:"closedAt,omitempty"`
+}
+
+func newTicketDTO(t *model.Ticket, resolveName func(int64) string) ticketDTO {
+	dto := ticketDTO{
+		ID:              t.ID,
+		GuildID:         strconv.FormatInt(t.GuildID, 10),
+		CreatorID:       strconv.FormatInt(t.OpenedBy, 10),
+		CreatorUsername: resolveName(t.OpenedBy),
+		Status:          string(t.Status),
+		CategoryName:    t.Category.Name,
+		CreatedAt:       t.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	// Prefer the thread ID for thread tickets, otherwise the channel ID.
+	if t.ThreadID != nil {
+		dto.ChannelID = strconv.FormatInt(*t.ThreadID, 10)
+	} else if t.ChannelID != nil {
+		dto.ChannelID = strconv.FormatInt(*t.ChannelID, 10)
+	}
+	if t.ClaimedBy != nil {
+		name := resolveName(*t.ClaimedBy)
+		dto.AssignedTo = &name
+	}
+	if t.ClosedAt != nil {
+		closed := t.ClosedAt.UTC().Format(time.RFC3339)
+		dto.ClosedAt = &closed
+	}
+	return dto
 }
 
 // Get returns the details of a specific ticket.

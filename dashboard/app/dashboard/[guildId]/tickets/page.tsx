@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Check,
   Lock,
@@ -10,7 +11,9 @@ import {
   Trash2,
   Download,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Inbox,
+  Layers
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Ticket } from "@/lib/api";
@@ -112,10 +115,16 @@ export default function TicketsPage() {
             ))}
           </div>
           
-          <button onClick={loadTickets} className={styles.actionBtn}>
-            <RefreshCw size={14} />
-            <span>Refresh</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href={`/dashboard/${guildId}/panels`} className={styles.actionBtn} style={{ textDecoration: 'none' }}>
+              <Layers size={14} />
+              <span>Manage Panels</span>
+            </Link>
+            <button onClick={loadTickets} className={styles.actionBtn}>
+              <RefreshCw size={14} />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
 
         {/* Loading Spinner */}
@@ -124,9 +133,26 @@ export default function TicketsPage() {
             <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
           </div>
         ) : filteredTickets.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-text-muted)' }}>
-            No tickets match the selected status filter.
-          </div>
+          tickets.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 'var(--space-8)', gap: 'var(--space-3)' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 'var(--radius-md)', background: 'var(--primary-muted)', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Inbox size={24} />
+              </div>
+              <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>No tickets yet</h3>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', maxWidth: 420 }}>
+                Tickets are opened by members from a panel you post in your server. Create a
+                ticket panel and deploy it to a channel so members can start support threads.
+              </p>
+              <Link href={`/dashboard/${guildId}/panels`} className={styles.submitBtn} style={{ marginTop: 'var(--space-2)', textDecoration: 'none' }}>
+                <Layers size={16} />
+                <span>Go to Ticket Panels</span>
+              </Link>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-text-muted)' }}>
+              No tickets match the selected status filter.
+            </div>
+          )
         ) : (
           <div className={styles.tableWrapper}>
             <table className={styles.table}>

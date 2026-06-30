@@ -55,7 +55,7 @@ export function getNavigationGroups(guildId: string): NavGroup[] {
       label: "Tickets",
       items: [
         {
-          name: "Support Tickets",
+          name: "Tickets Manager",
           href: `/dashboard/${guildId}/tickets`,
           icon: Ticket,
           description: "Review active support threads, claim conversations, and save transcripts."

@@ -79,7 +79,7 @@ func (r *TicketRepo) List(ctx context.Context, guildID int64, f model.TicketFilt
 
 	var tickets []model.Ticket
 	offset := (f.Page - 1) * f.Limit
-	result := query.Order("created_at DESC").Limit(f.Limit).Offset(offset).Find(&tickets)
+	result := query.Preload("Category").Order("created_at DESC").Limit(f.Limit).Offset(offset).Find(&tickets)
 	return tickets, total, result.Error
 }
 
