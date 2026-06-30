@@ -44,6 +44,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		button_description TEXT,
 		button_order INTEGER DEFAULT 0,
 		ticket_destination TEXT DEFAULT 'thread',
+		thread_parent_channel_id INTEGER,
+		channel_category_id INTEGER,
 		ticket_name_template TEXT DEFAULT '{category}-{number}',
 		ticket_open_title TEXT,
 		ticket_open_message TEXT,
