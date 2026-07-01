@@ -9,7 +9,8 @@ import {
   Trash2,
   Eye,
   Ticket,
-  ChevronDown
+  ChevronDown,
+  Info
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
@@ -1166,6 +1167,22 @@ export default function PanelsPage() {
                           ...channels.map(c => ({ value: c.id, label: `#${c.name}` })),
                         ]}
                       />
+                      <div
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginTop: '8px', fontSize: '12px', color: 'var(--color-text-muted)' }}
+                      >
+                        <span
+                          style={{ display: 'inline-flex', flexShrink: 0, marginTop: '2px', cursor: 'help' }}
+                          aria-label="How handlers are notified of private threads"
+                          title={"Private threads don't support per-role permissions, so handlers only see and get pulled into the thread when their role is @mentioned in the plain-text greeting. Keep a {ping} placeholder (or {ping.category} / {ping.panel} / {ping.staff}) in the Plain Text Greeting below — without it, no one is notified. Roles with more than ~100 members are notified but not auto-added by Discord."}
+                        >
+                          <Info size={14} style={{ color: 'var(--color-primary)' }} />
+                        </span>
+                        <span>
+                          Handlers are only notified and added to a private thread when their role is{' '}
+                          <strong>@mentioned in the plain-text greeting</strong>. Keep a <code>{'{ping}'}</code>{' '}
+                          placeholder in the greeting below.
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <div className={styles.formGroup}>
