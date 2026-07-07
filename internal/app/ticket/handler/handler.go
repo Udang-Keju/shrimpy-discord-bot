@@ -840,6 +840,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		"tickets": apiutil.JSONResponse{
 			"open":            stats.Open,
 			"claimed":         stats.Claimed,
+			"resolved":        stats.Resolved,
 			"closedThisMonth": stats.ClosedThisMonth,
 			"archivedTotal":   stats.ArchivedTotal,
 		},

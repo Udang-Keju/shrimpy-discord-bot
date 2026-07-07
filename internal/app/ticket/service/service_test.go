@@ -981,6 +981,43 @@ func TestTicketService_Claim_Unclaim(t *testing.T) {
 		assert.True(t, messageSent)
 	})
 
+	t.Run("Claim clears the resolved-ticket auto-close timer", func(t *testing.T) {
+		autoCloseCleared := false
+
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{
+					ID:        ticketID,
+					GuildID:   guildID,
+					ChannelID: &channelID,
+					Status:    model.TicketStatusResolved,
+				}, nil
+			},
+			UpdateClaimFunc: func(c context.Context, id string, claimedBy *int64) (*model.Ticket, error) {
+				return &model.Ticket{
+					ID:        ticketID,
+					GuildID:   guildID,
+					ChannelID: &channelID,
+					Status:    model.TicketStatusClaimed,
+					ClaimedBy: claimedBy,
+				}, nil
+			},
+			ResetAutoCloseFunc: func(c context.Context, id string, autoCloseAt *time.Time) error {
+				autoCloseCleared = autoCloseAt == nil
+				return nil
+			},
+		}
+
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{}
+
+		ticket, err := svc.Claim(ctx, dg, ticketID, staffUserID)
+		assert.NoError(t, err)
+		assert.NotNil(t, ticket)
+		assert.True(t, autoCloseCleared)
+	})
+
 	t.Run("Unclaim", func(t *testing.T) {
 		ticketRepo := &MockTicketRepository{
 			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {

@@ -921,10 +921,17 @@ func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticket
 	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
 		return nil, fmt.Errorf("cannot claim a closed or archived ticket")
 	}
+	wasResolved := ticket.Status == model.TicketStatusResolved
 
 	ticket, err = s.ticketRepo.UpdateClaim(ctx, ticketID, &staffUserID)
 	if err != nil {
 		return nil, err
+	}
+
+	if wasResolved {
+		// Claiming a resolved ticket pulls it back into active work, so the
+		// resolved-auto-close timer no longer applies.
+		_ = s.ticketRepo.ResetAutoClose(ctx, ticketID, nil)
 	}
 
 	if ticket.ChannelID != nil {
