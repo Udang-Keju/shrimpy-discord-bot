@@ -1050,6 +1050,170 @@ func TestTicketService_Claim_Unclaim(t *testing.T) {
 	})
 }
 
+func TestTicketService_Resolve_Unresolve(t *testing.T) {
+	ctx := context.Background()
+	ticketID := "ticket-uuid"
+	guildID := int64(12345)
+	channelID := int64(999888)
+	categoryID := "cat-uuid"
+	staffUserID := int64(55555)
+
+	t.Run("Resolve sets status and starts the auto-close timer", func(t *testing.T) {
+		var updatedStatus model.TicketStatus
+		var resetAutoCloseAt *time.Time
+
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{
+					ID:         ticketID,
+					GuildID:    guildID,
+					CategoryID: categoryID,
+					ChannelID:  &channelID,
+					Status:     model.TicketStatusClaimed,
+				}, nil
+			},
+			UpdateStatusFunc: func(c context.Context, id string, status model.TicketStatus, reason *string) (*model.Ticket, error) {
+				updatedStatus = status
+				return &model.Ticket{
+					ID:         ticketID,
+					GuildID:    guildID,
+					CategoryID: categoryID,
+					ChannelID:  &channelID,
+					Status:     status,
+				}, nil
+			},
+			ResetAutoCloseFunc: func(c context.Context, id string, autoCloseAt *time.Time) error {
+				resetAutoCloseAt = autoCloseAt
+				return nil
+			},
+		}
+		categoryRepo := &MockTicketCategoryRepository{
+			GetCategoryFunc: func(c context.Context, id string) (*model.TicketCategory, error) {
+				hours := 24
+				return &model.TicketCategory{ID: categoryID, AutoCloseHours: &hours}, nil
+			},
+		}
+
+		svc := service.NewTicketService(ticketRepo, categoryRepo, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+
+		messageSent := false
+		dg.Client.Transport = &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.Method == "POST" && req.URL.Path == "/api/v9/channels/999888/messages" {
+					messageSent = true
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"123"}`))}, nil
+				}
+				return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			},
+		}
+
+		ticket, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		assert.NoError(t, err)
+		assert.NotNil(t, ticket)
+		assert.Equal(t, model.TicketStatusResolved, updatedStatus)
+		assert.NotNil(t, resetAutoCloseAt)
+		assert.True(t, messageSent)
+	})
+
+	t.Run("Resolve rejects an already-resolved ticket", func(t *testing.T) {
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{ID: ticketID, Status: model.TicketStatusResolved}, nil
+			},
+		}
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+
+		_, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		assert.Error(t, err)
+	})
+
+	t.Run("Resolve rejects a closed ticket", func(t *testing.T) {
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{ID: ticketID, Status: model.TicketStatusClosed}, nil
+			},
+		}
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+
+		_, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		assert.Error(t, err)
+	})
+
+	t.Run("Unresolve reverts to Claimed when previously claimed", func(t *testing.T) {
+		var updatedStatus model.TicketStatus
+		var autoCloseCleared bool
+
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{
+					ID:        ticketID,
+					GuildID:   guildID,
+					ChannelID: &channelID,
+					Status:    model.TicketStatusResolved,
+					ClaimedBy: &staffUserID,
+				}, nil
+			},
+			UpdateStatusFunc: func(c context.Context, id string, status model.TicketStatus, reason *string) (*model.Ticket, error) {
+				updatedStatus = status
+				return &model.Ticket{ID: ticketID, GuildID: guildID, ChannelID: &channelID, Status: status, ClaimedBy: &staffUserID}, nil
+			},
+			ResetAutoCloseFunc: func(c context.Context, id string, autoCloseAt *time.Time) error {
+				autoCloseCleared = autoCloseAt == nil
+				return nil
+			},
+		}
+
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{}
+
+		ticket, err := svc.Unresolve(ctx, dg, ticketID)
+		assert.NoError(t, err)
+		assert.NotNil(t, ticket)
+		assert.Equal(t, model.TicketStatusClaimed, updatedStatus)
+		assert.True(t, autoCloseCleared)
+	})
+
+	t.Run("Unresolve reverts to Open when never claimed", func(t *testing.T) {
+		var updatedStatus model.TicketStatus
+
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{ID: ticketID, GuildID: guildID, ChannelID: &channelID, Status: model.TicketStatusResolved}, nil
+			},
+			UpdateStatusFunc: func(c context.Context, id string, status model.TicketStatus, reason *string) (*model.Ticket, error) {
+				updatedStatus = status
+				return &model.Ticket{ID: ticketID, GuildID: guildID, ChannelID: &channelID, Status: status}, nil
+			},
+		}
+
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+		dg.Client.Transport = &mockTransport{}
+
+		ticket, err := svc.Unresolve(ctx, dg, ticketID)
+		assert.NoError(t, err)
+		assert.NotNil(t, ticket)
+		assert.Equal(t, model.TicketStatusOpen, updatedStatus)
+	})
+
+	t.Run("Unresolve rejects a ticket that isn't resolved", func(t *testing.T) {
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(c context.Context, id string) (*model.Ticket, error) {
+				return &model.Ticket{ID: ticketID, Status: model.TicketStatusOpen}, nil
+			},
+		}
+		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
+		dg, _ := discordgo.New("Bot Token")
+
+		_, err := svc.Unresolve(ctx, dg, ticketID)
+		assert.Error(t, err)
+	})
+}
+
 func TestTicketService_Close(t *testing.T) {
 	ctx := context.Background()
 	ticketID := "ticket-uuid"

@@ -501,6 +501,21 @@
 
 ---
 
+### `/ticket resolve`
+
+| Field | Detail |
+|-------|--------|
+| **Syntax** | `/ticket resolve` |
+| **Description** | Mark the current ticket as resolved. Unlike `/ticket close`, the channel/thread stays fully open and no transcript is generated — it's a lightweight "handled" marker. An auto-close timer starts (using the category's auto-close window) so the ticket closes automatically if nobody responds further. |
+| **Permission** | 🛡️ Staff |
+
+**Example:**
+```
+/ticket resolve
+```
+
+---
+
 ### `/ticket claim`
 
 | Field | Detail |

@@ -639,6 +639,58 @@ func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, ticket)
 }
 
+// Resolve marks a ticket as resolved.
+func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "ticketId")
+	callerUserIDStr := apiutil.GetUserID(r.Context())
+	callerUserID, _ := strconv.ParseInt(callerUserIDStr, 10, 64)
+
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	ticket, err = h.ticketSvc.Resolve(r.Context(), dg, ticketID, callerUserID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to resolve ticket: "+err.Error())
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, ticket)
+}
+
+// Unresolve reverts a resolved ticket back to Open/Claimed.
+func (h *Handler) Unresolve(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "ticketId")
+
+	ticket, err := h.ticketSvc.GetByID(r.Context(), ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Ticket not found")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), ticket.GuildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	ticket, err = h.ticketSvc.Unresolve(r.Context(), dg, ticketID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to un-resolve ticket: "+err.Error())
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, ticket)
+}
+
 // Reopen reopens a closed ticket.
 func (h *Handler) Reopen(w http.ResponseWriter, r *http.Request) {
 	ticketID := chi.URLParam(r, "ticketId")

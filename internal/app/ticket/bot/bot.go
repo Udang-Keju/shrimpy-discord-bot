@@ -121,6 +121,22 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 			response = fmt.Sprintf("❌ Failed to claim ticket: %v", err)
 		}
 
+	case "resolve":
+		_, err = h.ticketSvc.Resolve(context.Background(), s, targetID, userID)
+		if err == nil {
+			response = "✅ Ticket has been marked as resolved."
+		} else {
+			response = fmt.Sprintf("❌ Failed to resolve ticket: %v", err)
+		}
+
+	case "unresolve":
+		_, err = h.ticketSvc.Unresolve(context.Background(), s, targetID)
+		if err == nil {
+			response = "✅ Ticket has been un-resolved and is active again."
+		} else {
+			response = fmt.Sprintf("❌ Failed to un-resolve ticket: %v", err)
+		}
+
 	case "close":
 		_, err = h.ticketSvc.Close(context.Background(), s, targetID, nil, userID)
 		if err == nil {
@@ -178,6 +194,13 @@ func (h *BotHandler) HandleTicketCommand(s *discordgo.Session, i *discordgo.Inte
 			return "", err
 		}
 		return "Unclaim request submitted.", nil
+
+	case "resolve":
+		_, err = h.ticketSvc.Resolve(context.Background(), s, ticket.ID, userID)
+		if err != nil {
+			return "", err
+		}
+		return "Ticket marked as resolved.", nil
 
 	case "close":
 		var reason *string

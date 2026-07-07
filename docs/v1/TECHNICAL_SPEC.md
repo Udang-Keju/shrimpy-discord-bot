@@ -667,6 +667,8 @@ DELETE /api/v1/guilds/:guildId/reaction-roles/:msgId      # Delete message and r
 GET    /api/v1/guilds/:guildId/tickets                       # List tickets (filter: status, priority, category)
 GET    /api/v1/guilds/:guildId/tickets/:ticketId             # Get ticket detail + messages (incl. internal notes)
 PATCH  /api/v1/guilds/:guildId/tickets/:ticketId             # Update ticket (status, priority, claim)
+POST   /api/v1/guilds/:guildId/tickets/:ticketId/resolve     # Mark ticket resolved (channel stays open)
+POST   /api/v1/guilds/:guildId/tickets/:ticketId/unresolve   # Revert a resolved ticket to open/claimed
 POST   /api/v1/guilds/:guildId/tickets/:ticketId/close       # Close ticket with resolution reason (S-03)
 POST   /api/v1/guilds/:guildId/tickets/:ticketId/reopen      # Reopen a closed ticket
 POST   /api/v1/guilds/:guildId/tickets/:ticketId/archive     # Archive a ticket
@@ -687,7 +689,7 @@ DELETE /api/v1/guilds/:guildId/tickets/:ticketId/notes/:noteId           # Delet
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `status` | string | Filter by status (`open`, `claimed`, `closed`, `archived`) |
+| `status` | string | Filter by status (`open`, `claimed`, `resolved`, `closed`, `archived`) |
 | `priority` | string | Filter by priority |
 | `categoryId` | UUID | Filter by category |
 | `openedBy` | snowflake | Filter by opener's Discord ID |
@@ -857,11 +859,18 @@ stateDiagram-v2
     [*] --> Open : Member clicks panel button
 
     Open --> Claimed : Staff member uses /ticket claim
+    Open --> Resolved : Staff uses /ticket resolve
     Open --> Closed : Inquirer or staff uses /ticket close
     Open --> Closed : Auto-close timer fires (inactivity)
 
     Claimed --> Closed : Staff or inquirer uses /ticket close
     Claimed --> Open : Staff unclaims (releases ownership)
+    Claimed --> Resolved : Staff uses /ticket resolve
+
+    Resolved --> Closed : Staff or inquirer uses /ticket close
+    Resolved --> Closed : Auto-close timer fires (no further activity)
+    Resolved --> Open : Un-resolved (was never claimed)
+    Resolved --> Claimed : Un-resolved (was previously claimed)
 
     Closed --> Archived : Admin or staff archives the ticket
     Closed --> Open : Staff or admin reopens ticket
@@ -878,6 +887,15 @@ stateDiagram-v2
         Assigned to specific staff member.
         Auto-close timer may be paused
         (configurable).
+    end note
+
+    note right of Resolved
+        Staff consider the issue handled.
+        Channel/thread stays fully open (no lock,
+        no transcript yet) — distinct from Closed.
+        Auto-close timer (re)started using the
+        category's auto-close window; fires if
+        nobody reopens/responds further.
     end note
 
     note right of Closed
@@ -899,8 +917,10 @@ stateDiagram-v2
 | Transition | Allowed By | Side Effects |
 |------------|-----------|--------------|
 | Open → Claimed | Staff roles only | `claimed_by` set; channel renamed; embed updated |
-| Open/Claimed → Closed | Ticket opener OR staff | Channel locked; transcript generated; log posted |
-| Open → Closed (auto) | System (scheduler) | Close reason = "AUTO_CLOSE_INACTIVITY" |
+| Open/Claimed → Resolved | Staff roles only | Status set to `resolved`; confirmation embed posted; auto-close timer (re)started from the category's `auto_close_hours` |
+| Resolved → Open/Claimed | Staff roles only (un-resolve) | Status reverts to `claimed` (if previously claimed) or `open`; auto-close timer cleared |
+| Open/Claimed/Resolved → Closed | Ticket opener OR staff | Channel locked; transcript generated; log posted |
+| Open/Resolved → Closed (auto) | System (scheduler) | Close reason = "AUTO_CLOSE_INACTIVITY" (or resolved-specific variant) |
 | Claimed → Open | Claiming staff member | `claimed_by` cleared; embed updated |
 | Closed → Open | Staff roles only | Channel unlocked; auto-close timer reset |
 | Closed → Archived | Staff/Admin roles | Channel/thread deleted; DB status updated |

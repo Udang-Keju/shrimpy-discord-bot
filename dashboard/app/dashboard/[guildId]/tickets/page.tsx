@@ -6,6 +6,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Check,
+  CheckCheck,
+  RotateCcw,
   Lock,
   Unlock,
   Trash2,
@@ -26,7 +28,7 @@ export default function TicketsPage() {
 
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'claimed' | 'closed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'claimed' | 'resolved' | 'closed'>('all');
 
   const loadTickets = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,24 @@ export default function TicketsPage() {
   const handleClaim = async (ticketId: string) => {
     try {
       await ShrimpyAPI.claimTicket(guildId, ticketId, "StaffModerator");
+      await loadTickets();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleResolve = async (ticketId: string) => {
+    try {
+      await ShrimpyAPI.resolveTicket(guildId, ticketId);
+      await loadTickets();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUnresolve = async (ticketId: string) => {
+    try {
+      await ShrimpyAPI.unresolveTicket(guildId, ticketId);
       await loadTickets();
     } catch (e) {
       console.error(e);
@@ -103,7 +123,7 @@ export default function TicketsPage() {
         {/* Controls Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {(['all', 'open', 'claimed', 'closed'] as const).map(f => (
+            {(['all', 'open', 'claimed', 'resolved', 'closed'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
@@ -131,7 +151,7 @@ export default function TicketsPage() {
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-              {[...Array(4)].map((_, i) => <Skeleton key={i} height="30px" width="70px" />)}
+              {[...Array(5)].map((_, i) => <Skeleton key={i} height="30px" width="70px" />)}
             </div>
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} height="48px" style={{ borderRadius: 'var(--radius-sm)' }} />
@@ -184,9 +204,10 @@ export default function TicketsPage() {
                     <td className={styles.td}>{t.assignedTo || <span style={{ color: 'var(--color-text-muted)' }}>Unassigned</span>}</td>
                     <td className={styles.td}>
                       <span className={`
-                        ${styles.badgeStatus} 
+                        ${styles.badgeStatus}
                         ${t.status === 'open' ? styles.badgeOpen : ''}
                         ${t.status === 'claimed' ? styles.badgeClaimed : ''}
+                        ${t.status === 'resolved' ? styles.badgeResolved : ''}
                         ${t.status === 'closed' ? styles.badgeClosed : ''}
                       `}>
                         {t.status}
@@ -201,6 +222,18 @@ export default function TicketsPage() {
                           <button onClick={() => handleClaim(t.id)} className={styles.actionBtn} title="Claim Ticket">
                             <Check size={12} />
                             <span>Claim</span>
+                          </button>
+                        )}
+                        {(t.status === 'open' || t.status === 'claimed') && (
+                          <button onClick={() => handleResolve(t.id)} className={styles.actionBtn} title="Resolve Ticket">
+                            <CheckCheck size={12} />
+                            <span>Resolve</span>
+                          </button>
+                        )}
+                        {t.status === 'resolved' && (
+                          <button onClick={() => handleUnresolve(t.id)} className={styles.actionBtn} title="Un-resolve Ticket">
+                            <RotateCcw size={12} />
+                            <span>Un-resolve</span>
                           </button>
                         )}
                         {t.status !== 'closed' ? (

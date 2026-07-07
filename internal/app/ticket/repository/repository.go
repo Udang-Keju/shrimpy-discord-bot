@@ -88,7 +88,7 @@ func (r *TicketRepo) CountOpenByUser(ctx context.Context, guildID int64, categor
 	var count int64
 	result := r.db.WithContext(ctx).Model(&model.Ticket{}).
 		Where("guild_id = ? AND category_id = ? AND opened_by = ? AND status IN ?",
-			guildID, categoryID, userID, []model.TicketStatus{model.TicketStatusOpen, model.TicketStatusClaimed}).
+			guildID, categoryID, userID, []model.TicketStatus{model.TicketStatusOpen, model.TicketStatusClaimed, model.TicketStatusResolved}).
 		Count(&count)
 	return count, result.Error
 }
@@ -154,12 +154,12 @@ func (r *TicketRepo) ResetAutoClose(ctx context.Context, ticketID string, autoCl
 		Update("auto_close_at", autoCloseAt).Error
 }
 
-// ListDueForAutoClose returns all open/claimed tickets past their auto_close_at time.
+// ListDueForAutoClose returns all open/claimed/resolved tickets past their auto_close_at time.
 func (r *TicketRepo) ListDueForAutoClose(ctx context.Context) ([]model.Ticket, error) {
 	var tickets []model.Ticket
 	result := r.db.WithContext(ctx).
 		Where("auto_close_at IS NOT NULL AND auto_close_at <= NOW() AND status IN ?",
-			[]model.TicketStatus{model.TicketStatusOpen, model.TicketStatusClaimed}).
+			[]model.TicketStatus{model.TicketStatusOpen, model.TicketStatusClaimed, model.TicketStatusResolved}).
 		Find(&tickets)
 	return tickets, result.Error
 }
@@ -173,6 +173,9 @@ func (r *TicketRepo) GetStats(ctx context.Context, guildID int64) (*model.Ticket
 
 	// 2. Claimed count
 	r.db.WithContext(ctx).Model(&model.Ticket{}).Where("guild_id = ? AND status = ?", guildID, model.TicketStatusClaimed).Count(&stats.Claimed)
+
+	// 2b. Resolved count
+	r.db.WithContext(ctx).Model(&model.Ticket{}).Where("guild_id = ? AND status = ?", guildID, model.TicketStatusResolved).Count(&stats.Resolved)
 
 	// 3. Closed this month
 	firstOfMonth := time.Now().UTC().AddDate(0, 0, -time.Now().UTC().Day()+1)

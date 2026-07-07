@@ -24,7 +24,7 @@ export interface Ticket {
   channelId: string;
   creatorId: string;
   creatorUsername: string;
-  status: 'open' | 'claimed' | 'closed' | 'archived';
+  status: 'open' | 'claimed' | 'resolved' | 'closed' | 'archived';
   assignedTo?: string;
   categoryName: string;
   createdAt: string;
@@ -652,6 +652,26 @@ export const ShrimpyAPI = {
 
   claimTicket: async (guildId: string, ticketId: string, username: string): Promise<Ticket> => {
     return ShrimpyAPI.updateTicket(guildId, ticketId, { status: 'claimed', assignedTo: username });
+  },
+
+  resolveTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {
+    if (isDemoMode()) {
+      const t = mockTickets.find(x => x.id === ticketId);
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      t.status = 'resolved';
+      return t;
+    }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/resolve`, { method: 'POST' });
+  },
+
+  unresolveTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {
+    if (isDemoMode()) {
+      const t = mockTickets.find(x => x.id === ticketId);
+      if (!t) throw new Error(`Demo ticket ${ticketId} not found`);
+      t.status = t.assignedTo ? 'claimed' : 'open';
+      return t;
+    }
+    return fetchJSON<Ticket>(`/api/v1/guilds/${guildId}/tickets/${ticketId}/unresolve`, { method: 'POST' });
   },
 
   closeTicket: async (guildId: string, ticketId: string): Promise<Ticket> => {

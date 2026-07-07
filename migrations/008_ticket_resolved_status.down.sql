@@ -1,0 +1,5 @@
+-- migrations/008_ticket_resolved_status.down.sql
+-- PostgreSQL does not support dropping a single value from an enum type, so this
+-- migration cannot be cleanly reversed. Any tickets left with status = 'resolved'
+-- would need to be migrated to another status before the ticket_status type could
+-- be recreated without this value.

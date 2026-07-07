@@ -497,6 +497,11 @@
   color: var(--info);
 }
 
+.badgeResolved {
+  background-color: var(--accent-muted);
+  color: var(--color-accent);
+}
+
 .badgeClosed {
   background-color: rgba(155, 147, 192, 0.15);
   color: var(--color-text-muted);
