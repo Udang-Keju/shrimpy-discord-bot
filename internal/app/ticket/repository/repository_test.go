@@ -262,6 +262,32 @@ func TestTicketRepo(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, fetched.AutoCloseAt.Equal(now))
 	})
+
+	t.Run("CountOpenByUser counts Resolved tickets as still active", func(t *testing.T) {
+		db := setupTestDB(t)
+		repo := repository.NewTicketRepo(db)
+
+		tkt := &model.Ticket{
+			GuildID:    guildID,
+			CategoryID: categoryID,
+			OpenedBy:   userID,
+			Status:     model.TicketStatusOpen,
+			Priority:   model.TicketPriorityMedium,
+		}
+		created, err := repo.Create(ctx, tkt)
+		assert.NoError(t, err)
+
+		_, err = repo.UpdateStatus(ctx, created.ID, model.TicketStatusResolved, nil)
+		assert.NoError(t, err)
+
+		count, err := repo.CountOpenByUser(ctx, guildID, categoryID, userID)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), count)
+	})
+
+	// Note: ListDueForAutoClose's query uses Postgres's NOW(), which the SQLite test
+	// harness used here doesn't support, so it isn't covered by this suite (this
+	// predates the Resolved status change — it was untestable under SQLite before too).
 }
 
 func TestMessageRepo(t *testing.T) {

@@ -17,6 +17,7 @@ type TicketStatus string
 const (
 	TicketStatusOpen     TicketStatus = "open"
 	TicketStatusClaimed  TicketStatus = "claimed"
+	TicketStatusResolved TicketStatus = "resolved"
 	TicketStatusClosed   TicketStatus = "closed"
 	TicketStatusArchived TicketStatus = "archived"
 )
@@ -215,6 +216,7 @@ type TicketFilter struct {
 type TicketStats struct {
 	Open             int64
 	Claimed          int64
+	Resolved         int64
 	ClosedThisMonth  int64
 	ArchivedTotal    int64
 	AvgResolutionMin int64

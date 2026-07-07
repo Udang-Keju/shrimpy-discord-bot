@@ -160,6 +160,8 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Get("/tickets", s.ticketHandler.List)
 				r.Get("/tickets/{ticketId}", s.ticketHandler.Get)
 				r.Patch("/tickets/{ticketId}", s.ticketHandler.Update)
+				r.Post("/tickets/{ticketId}/resolve", s.ticketHandler.Resolve)
+				r.Post("/tickets/{ticketId}/unresolve", s.ticketHandler.Unresolve)
 				r.Post("/tickets/{ticketId}/close", s.ticketHandler.Close)
 				r.Post("/tickets/{ticketId}/reopen", s.ticketHandler.Reopen)
 				r.Post("/tickets/{ticketId}/archive", s.ticketHandler.Archive)

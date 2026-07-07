@@ -103,6 +103,11 @@ func GetSlashCommands() []*discordgo.ApplicationCommand {
 					Type:        discordgo.ApplicationCommandOptionSubCommand,
 				},
 				{
+					Name:        "resolve",
+					Description: "Mark the current ticket as resolved",
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+				},
+				{
 					Name:        "close",
 					Description: "Close the current ticket",
 					Type:        discordgo.ApplicationCommandOptionSubCommand,

@@ -719,6 +719,12 @@ func (s *TicketService) Open(ctx context.Context, dg *discordgo.Session, guildID
 				Emoji:    &discordgo.ComponentEmoji{Name: "🙋"},
 			},
 			discordgo.Button{
+				Label:    "Resolve",
+				Style:    discordgo.SuccessButton,
+				CustomID: fmt.Sprintf("ticket:resolve:%s", ticket.ID),
+				Emoji:    &discordgo.ComponentEmoji{Name: "✅"},
+			},
+			discordgo.Button{
 				Label:    "Close",
 				Style:    discordgo.DangerButton,
 				CustomID: fmt.Sprintf("ticket:close:%s", ticket.ID),
@@ -915,10 +921,17 @@ func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticket
 	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
 		return nil, fmt.Errorf("cannot claim a closed or archived ticket")
 	}
+	wasResolved := ticket.Status == model.TicketStatusResolved
 
 	ticket, err = s.ticketRepo.UpdateClaim(ctx, ticketID, &staffUserID)
 	if err != nil {
 		return nil, err
+	}
+
+	if wasResolved {
+		// Claiming a resolved ticket pulls it back into active work, so the
+		// resolved-auto-close timer no longer applies.
+		_ = s.ticketRepo.ResetAutoClose(ctx, ticketID, nil)
 	}
 
 	if ticket.ChannelID != nil {
@@ -975,6 +988,112 @@ func (s *TicketService) Unclaim(ctx context.Context, dg *discordgo.Session, tick
 			Color:       0xff7b6b,
 		}
 		_, _ = dg.ChannelMessageSendEmbed(chIDStr, embed)
+	}
+
+	return ticket, nil
+}
+
+// Resolve marks a ticket as handled without locking the channel or generating a
+// transcript. It starts (or refreshes) the category's auto-close timer so the
+// ticket is closed automatically if nobody reopens or responds further.
+func (s *TicketService) Resolve(ctx context.Context, dg *discordgo.Session, ticketID string, resolvedByUserID int64) (*model.Ticket, error) {
+	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
+		return nil, fmt.Errorf("cannot resolve a closed or archived ticket")
+	}
+	if ticket.Status == model.TicketStatusResolved {
+		return nil, fmt.Errorf("ticket is already resolved")
+	}
+
+	ticket, err = s.ticketRepo.UpdateStatus(ctx, ticketID, model.TicketStatusResolved, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if cat, err := s.categoryRepo.GetCategory(ctx, ticket.CategoryID); err == nil && cat.AutoCloseHours != nil {
+		acTime := time.Now().Add(time.Duration(*cat.AutoCloseHours) * time.Hour)
+		_ = s.ticketRepo.ResetAutoClose(ctx, ticketID, &acTime)
+	}
+
+	var targetIDStr string
+	if ticket.ChannelID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ChannelID)
+	} else if ticket.ThreadID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ThreadID)
+	}
+
+	if targetIDStr != "" {
+		embed := &discordgo.MessageEmbed{
+			Description: fmt.Sprintf("This ticket has been marked as **resolved** by <@%d>. It will auto-close if there's no further activity.", resolvedByUserID),
+			Color:       0x57f287,
+		}
+
+		buttons := discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
+					Label:    "Close",
+					Style:    discordgo.DangerButton,
+					CustomID: fmt.Sprintf("ticket:close:%s", ticket.ID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "🔒"},
+				},
+				discordgo.Button{
+					Label:    "Un-resolve",
+					Style:    discordgo.SecondaryButton,
+					CustomID: fmt.Sprintf("ticket:unresolve:%s", ticket.ID),
+					Emoji:    &discordgo.ComponentEmoji{Name: "↩️"},
+				},
+			},
+		}
+
+		_, _ = dg.ChannelMessageSendComplex(targetIDStr, &discordgo.MessageSend{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: []discordgo.MessageComponent{buttons},
+		})
+	}
+
+	return ticket, nil
+}
+
+// Unresolve reverts a resolved ticket back to Claimed (if it had a claimant) or Open,
+// and clears the auto-close timer that Resolve started.
+func (s *TicketService) Unresolve(ctx context.Context, dg *discordgo.Session, ticketID string) (*model.Ticket, error) {
+	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+
+	if ticket.Status != model.TicketStatusResolved {
+		return nil, fmt.Errorf("ticket is not resolved")
+	}
+
+	newStatus := model.TicketStatusOpen
+	if ticket.ClaimedBy != nil {
+		newStatus = model.TicketStatusClaimed
+	}
+
+	ticket, err = s.ticketRepo.UpdateStatus(ctx, ticketID, newStatus, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.ticketRepo.ResetAutoClose(ctx, ticketID, nil)
+
+	var targetIDStr string
+	if ticket.ChannelID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ChannelID)
+	} else if ticket.ThreadID != nil {
+		targetIDStr = fmt.Sprintf("%d", *ticket.ThreadID)
+	}
+	if targetIDStr != "" {
+		embed := &discordgo.MessageEmbed{
+			Description: "This ticket has been un-resolved and is active again.",
+			Color:       0xff7b6b,
+		}
+		_, _ = dg.ChannelMessageSendEmbed(targetIDStr, embed)
 	}
 
 	return ticket, nil
@@ -1269,6 +1388,9 @@ func (s *Scheduler) runCheck(ctx context.Context, provider discordutil.DiscordSe
 		}
 
 		reason := "Auto-closed due to inactivity."
+		if t.Status == model.TicketStatusResolved {
+			reason = "Auto-closed: resolved ticket had no further activity."
+		}
 		_, err = s.ticketSvc.Close(ctx, dg, t.ID, &reason, botUserID)
 		if err != nil {
 			fmt.Printf("Scheduler Error: failed to close ticket %s: %v\n", t.ID, err)

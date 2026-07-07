@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 
 ## [Unreleased]
+### Added
+- **Ticket "Resolve" status** ([TECHNICAL_SPEC.md](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/TECHNICAL_SPEC.md) §6, §4.5; [COMMAND_REFERENCE.md](file:///d:/Pesronal/Projects/Discord%20Bot/docs/v1/COMMAND_REFERENCE.md)): a new `resolved` ticket status, distinct from `closed` — staff mark a ticket as handled via a `Resolve` button (alongside the existing Claim/Close) or `/ticket resolve`, without locking the channel or generating a transcript. Resolving (re)starts an auto-close timer using the category's existing auto-close window, so an unanswered resolved ticket closes itself; un-resolving reverts to Open/Claimed and clears the timer. New `POST …/tickets/:id/resolve` and `.../unresolve` endpoints, `ticket_status` enum gains `resolved` (migration `008_ticket_resolved_status`), and the dashboard Tickets page gets a matching filter tab, badge, and row actions.
+
 ### Changed
 - **Resolved all 8 open questions in USER_JOURNEY.md §14** (now retitled "Decisions Log"), and propagated each into the spec:
   1. **Demo mode** gated behind an explicit `/demo` route; the mock-fallback is removed from `lib/api.ts` for real sessions — no silent mock rendering on API failure.
