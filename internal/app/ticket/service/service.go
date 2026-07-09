@@ -911,11 +911,87 @@ func buttonStyleFromString(s string) discordgo.ButtonStyle {
 	}
 }
 
+// ─── Ticket action authorization ───────────────────────────────────────────
+
+// ErrNotAuthorized is returned when a user attempts a ticket action they are
+// not permitted to perform.
+var ErrNotAuthorized = fmt.Errorf("you don't have permission to perform this action")
+
+// Actor identifies the user performing a ticket action along with the role and
+// privilege information needed to authorize it. Construct it from a Discord
+// interaction for bot actions (see actorFromInteraction), or use SystemActor
+// for callers that are already authorized: the REST dashboard, which passes the
+// guild-permission middleware, and the internal auto-close scheduler.
+type Actor struct {
+	UserID  int64
+	RoleIDs []int64
+	// Privileged short-circuits the role checks: Discord Administrator / Manage
+	// Server members, dashboard callers vetted by guild middleware, and system
+	// callers such as the scheduler.
+	Privileged bool
+}
+
+// SystemActor returns an Actor that is always authorized, for internal or
+// pre-authorized callers.
+func SystemActor() Actor { return Actor{Privileged: true} }
+
+// isTicketStaff reports whether the actor may act on the ticket as staff: a
+// privileged caller, a member of a guild staff role, or a member of a handler
+// role configured on the ticket's panel or category (the roles already invited
+// into the ticket channel to work it).
+func (s *TicketService) isTicketStaff(ctx context.Context, ticket *model.Ticket, actor Actor) bool {
+	if actor.Privileged {
+		return true
+	}
+	if len(actor.RoleIDs) == 0 {
+		return false
+	}
+	roleSet := make(map[int64]struct{}, len(actor.RoleIDs))
+	for _, r := range actor.RoleIDs {
+		roleSet[r] = struct{}{}
+	}
+
+	// Guild-wide staff roles.
+	if staffRoles, err := s.guildRepo.ListStaffRoles(ctx, ticket.GuildID); err == nil {
+		for _, sr := range staffRoles {
+			if _, ok := roleSet[sr.RoleID]; ok {
+				return true
+			}
+		}
+	}
+
+	// Handler roles configured on the ticket's category and its parent panel.
+	cat, err := s.categoryRepo.GetCategory(ctx, ticket.CategoryID)
+	if err != nil {
+		return false
+	}
+	if catRoles, err := s.categoryRepo.ListCategoryHandlerRoles(ctx, cat.ID); err == nil {
+		for _, hr := range catRoles {
+			if _, ok := roleSet[hr.RoleID]; ok {
+				return true
+			}
+		}
+	}
+	if panelRoles, err := s.categoryRepo.ListPanelHandlerRoles(ctx, cat.PanelID); err == nil {
+		for _, hr := range panelRoles {
+			if _, ok := roleSet[hr.RoleID]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Claim updates the ticket status and claimed_by field, renames the channel, and notifies staff.
-func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticketID string, staffUserID int64) (*model.Ticket, error) {
+// Only staff (see isTicketStaff) may claim a ticket.
+func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !s.isTicketStaff(ctx, ticket, actor) {
+		return nil, ErrNotAuthorized
 	}
 
 	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
@@ -923,6 +999,7 @@ func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticket
 	}
 	wasResolved := ticket.Status == model.TicketStatusResolved
 
+	staffUserID := actor.UserID
 	ticket, err = s.ticketRepo.UpdateClaim(ctx, ticketID, &staffUserID)
 	if err != nil {
 		return nil, err
@@ -957,11 +1034,15 @@ func (s *TicketService) Claim(ctx context.Context, dg *discordgo.Session, ticket
 	return ticket, nil
 }
 
-// Unclaim releases a ticket back to the open pool.
-func (s *TicketService) Unclaim(ctx context.Context, dg *discordgo.Session, ticketID string) (*model.Ticket, error) {
+// Unclaim releases a ticket back to the open pool. Staff-only.
+func (s *TicketService) Unclaim(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !s.isTicketStaff(ctx, ticket, actor) {
+		return nil, ErrNotAuthorized
 	}
 
 	if ticket.Status != model.TicketStatusClaimed {
@@ -996,11 +1077,17 @@ func (s *TicketService) Unclaim(ctx context.Context, dg *discordgo.Session, tick
 // Resolve marks a ticket as handled without locking the channel or generating a
 // transcript. It starts (or refreshes) the category's auto-close timer so the
 // ticket is closed automatically if nobody reopens or responds further.
-func (s *TicketService) Resolve(ctx context.Context, dg *discordgo.Session, ticketID string, resolvedByUserID int64) (*model.Ticket, error) {
+func (s *TicketService) Resolve(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Staff may resolve any ticket; the opener may resolve their own.
+	if !s.isTicketStaff(ctx, ticket, actor) && actor.UserID != ticket.OpenedBy {
+		return nil, ErrNotAuthorized
+	}
+	resolvedByUserID := actor.UserID
 
 	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
 		return nil, fmt.Errorf("cannot resolve a closed or archived ticket")
@@ -1060,10 +1147,15 @@ func (s *TicketService) Resolve(ctx context.Context, dg *discordgo.Session, tick
 
 // Unresolve reverts a resolved ticket back to Claimed (if it had a claimant) or Open,
 // and clears the auto-close timer that Resolve started.
-func (s *TicketService) Unresolve(ctx context.Context, dg *discordgo.Session, ticketID string) (*model.Ticket, error) {
+func (s *TicketService) Unresolve(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Mirror Resolve: staff, or the opener on their own ticket.
+	if !s.isTicketStaff(ctx, ticket, actor) && actor.UserID != ticket.OpenedBy {
+		return nil, ErrNotAuthorized
 	}
 
 	if ticket.Status != model.TicketStatusResolved {
@@ -1100,11 +1192,24 @@ func (s *TicketService) Unresolve(ctx context.Context, dg *discordgo.Session, ti
 }
 
 // Close locks the channel, compiles and posts the transcript, and updates DB status.
-func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticketID string, reason *string, closedByUserID int64) (*model.Ticket, error) {
+func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticketID string, reason *string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Staff may close any ticket; the opener may close their own only when the
+	// category permits self-close (AllowUserClose).
+	if !s.isTicketStaff(ctx, ticket, actor) {
+		if actor.UserID != ticket.OpenedBy {
+			return nil, ErrNotAuthorized
+		}
+		cat, err := s.categoryRepo.GetCategory(ctx, ticket.CategoryID)
+		if err != nil || !cat.AllowUserClose {
+			return nil, ErrNotAuthorized
+		}
+	}
+	closedByUserID := actor.UserID
 
 	if ticket.Status == model.TicketStatusClosed || ticket.Status == model.TicketStatusArchived {
 		return nil, fmt.Errorf("ticket is already closed/archived")
@@ -1210,11 +1315,15 @@ func (s *TicketService) Close(ctx context.Context, dg *discordgo.Session, ticket
 	return ticket, nil
 }
 
-// Reopen unlocks the ticket channel and restores the opener's permissions.
-func (s *TicketService) Reopen(ctx context.Context, dg *discordgo.Session, ticketID string) (*model.Ticket, error) {
+// Reopen unlocks the ticket channel and restores the opener's permissions. Staff-only.
+func (s *TicketService) Reopen(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) (*model.Ticket, error) {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !s.isTicketStaff(ctx, ticket, actor) {
+		return nil, ErrNotAuthorized
 	}
 
 	if ticket.Status != model.TicketStatusClosed {
@@ -1254,11 +1363,15 @@ func (s *TicketService) Reopen(ctx context.Context, dg *discordgo.Session, ticke
 	return ticket, nil
 }
 
-// Archive deletes the Discord channel/thread, retaining DB records.
-func (s *TicketService) Archive(ctx context.Context, dg *discordgo.Session, ticketID string) error {
+// Archive deletes the Discord channel/thread, retaining DB records. Staff-only.
+func (s *TicketService) Archive(ctx context.Context, dg *discordgo.Session, ticketID string, actor Actor) error {
 	ticket, err := s.ticketRepo.GetByID(ctx, ticketID)
 	if err != nil {
 		return err
+	}
+
+	if !s.isTicketStaff(ctx, ticket, actor) {
+		return ErrNotAuthorized
 	}
 
 	if ticket.ChannelID != nil {
@@ -1391,7 +1504,8 @@ func (s *Scheduler) runCheck(ctx context.Context, provider discordutil.DiscordSe
 		if t.Status == model.TicketStatusResolved {
 			reason = "Auto-closed: resolved ticket had no further activity."
 		}
-		_, err = s.ticketSvc.Close(ctx, dg, t.ID, &reason, botUserID)
+		// System-initiated close: authorized unconditionally, attributed to the bot.
+		_, err = s.ticketSvc.Close(ctx, dg, t.ID, &reason, Actor{UserID: botUserID, Privileged: true})
 		if err != nil {
 			fmt.Printf("Scheduler Error: failed to close ticket %s: %v\n", t.ID, err)
 		} else {

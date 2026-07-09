@@ -17,6 +17,28 @@ type BotHandler struct {
 	ticketSvc *service.TicketService
 }
 
+// actorFromInteraction builds a service.Actor from the interaction's member,
+// carrying the member's roles and whether they hold Administrator / Manage
+// Server (which bypasses the ticket-role checks).
+func actorFromInteraction(i *discordgo.InteractionCreate) service.Actor {
+	if i.Member == nil || i.Member.User == nil {
+		return service.Actor{}
+	}
+	userID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	roleIDs := make([]int64, 0, len(i.Member.Roles))
+	for _, r := range i.Member.Roles {
+		if id, err := strconv.ParseInt(r, 10, 64); err == nil {
+			roleIDs = append(roleIDs, id)
+		}
+	}
+	const adminPerms = discordgo.PermissionAdministrator | discordgo.PermissionManageServer
+	return service.Actor{
+		UserID:     userID,
+		RoleIDs:    roleIDs,
+		Privileged: i.Member.Permissions&adminPerms != 0,
+	}
+}
+
 // NewBotHandler constructs a new BotHandler.
 func NewBotHandler(ticketSvc *service.TicketService) *BotHandler {
 	return &BotHandler{
@@ -86,6 +108,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 
 	guildID, _ := strconv.ParseInt(i.GuildID, 10, 64)
 	userID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	actor := actorFromInteraction(i)
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -114,7 +137,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "claim":
-		_, err = h.ticketSvc.Claim(context.Background(), s, targetID, userID)
+		_, err = h.ticketSvc.Claim(context.Background(), s, targetID, actor)
 		if err == nil {
 			response = "✅ You have successfully claimed this ticket."
 		} else {
@@ -122,7 +145,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "resolve":
-		_, err = h.ticketSvc.Resolve(context.Background(), s, targetID, userID)
+		_, err = h.ticketSvc.Resolve(context.Background(), s, targetID, actor)
 		if err == nil {
 			response = "✅ Ticket has been marked as resolved."
 		} else {
@@ -130,7 +153,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "unresolve":
-		_, err = h.ticketSvc.Unresolve(context.Background(), s, targetID)
+		_, err = h.ticketSvc.Unresolve(context.Background(), s, targetID, actor)
 		if err == nil {
 			response = "✅ Ticket has been un-resolved and is active again."
 		} else {
@@ -138,7 +161,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "close":
-		_, err = h.ticketSvc.Close(context.Background(), s, targetID, nil, userID)
+		_, err = h.ticketSvc.Close(context.Background(), s, targetID, nil, actor)
 		if err == nil {
 			response = "✅ Ticket has been successfully closed."
 		} else {
@@ -146,7 +169,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "reopen":
-		_, err = h.ticketSvc.Reopen(context.Background(), s, targetID)
+		_, err = h.ticketSvc.Reopen(context.Background(), s, targetID, actor)
 		if err == nil {
 			response = "✅ Ticket has been successfully reopened."
 		} else {
@@ -154,7 +177,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 		}
 
 	case "archive":
-		err = h.ticketSvc.Archive(context.Background(), s, targetID)
+		err = h.ticketSvc.Archive(context.Background(), s, targetID, actor)
 		if err == nil {
 			response = "✅ Ticket has been successfully archived."
 		} else {
@@ -173,7 +196,7 @@ func (h *BotHandler) HandleComponentInteraction(s *discordgo.Session, i *discord
 // HandleTicketCommand routes slash commands for ticket actions inside ticket channels.
 func (h *BotHandler) HandleTicketCommand(s *discordgo.Session, i *discordgo.InteractionCreate, guildID int64, opt *discordgo.ApplicationCommandInteractionDataOption) (string, error) {
 	channelID, _ := strconv.ParseInt(i.ChannelID, 10, 64)
-	userID, _ := strconv.ParseInt(i.Member.User.ID, 10, 64)
+	actor := actorFromInteraction(i)
 
 	ticket, err := h.ticketSvc.GetByChannelID(context.Background(), channelID)
 	if err != nil {
@@ -182,21 +205,21 @@ func (h *BotHandler) HandleTicketCommand(s *discordgo.Session, i *discordgo.Inte
 
 	switch opt.Name {
 	case "claim":
-		_, err = h.ticketSvc.Claim(context.Background(), s, ticket.ID, userID)
+		_, err = h.ticketSvc.Claim(context.Background(), s, ticket.ID, actor)
 		if err != nil {
 			return "", err
 		}
 		return "Claim request submitted.", nil
 
 	case "unclaim":
-		_, err = h.ticketSvc.Unclaim(context.Background(), s, ticket.ID)
+		_, err = h.ticketSvc.Unclaim(context.Background(), s, ticket.ID, actor)
 		if err != nil {
 			return "", err
 		}
 		return "Unclaim request submitted.", nil
 
 	case "resolve":
-		_, err = h.ticketSvc.Resolve(context.Background(), s, ticket.ID, userID)
+		_, err = h.ticketSvc.Resolve(context.Background(), s, ticket.ID, actor)
 		if err != nil {
 			return "", err
 		}
@@ -208,7 +231,7 @@ func (h *BotHandler) HandleTicketCommand(s *discordgo.Session, i *discordgo.Inte
 			r := opt.Options[0].StringValue()
 			reason = &r
 		}
-		_, err = h.ticketSvc.Close(context.Background(), s, ticket.ID, reason, userID)
+		_, err = h.ticketSvc.Close(context.Background(), s, ticket.ID, reason, actor)
 		if err != nil {
 			return "", err
 		}

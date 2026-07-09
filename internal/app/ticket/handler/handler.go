@@ -583,9 +583,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if payload.Claimed != nil {
 		if *payload.Claimed {
-			ticket, err = h.ticketSvc.Claim(r.Context(), dg, ticketID, callerUserID)
+			ticket, err = h.ticketSvc.Claim(r.Context(), dg, ticketID, service.Actor{UserID: callerUserID, Privileged: true})
 		} else {
-			ticket, err = h.ticketSvc.Unclaim(r.Context(), dg, ticketID)
+			ticket, err = h.ticketSvc.Unclaim(r.Context(), dg, ticketID, service.SystemActor())
 		}
 		if err != nil {
 			apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Claim operation failed: "+err.Error())
@@ -630,7 +630,7 @@ func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticket, err = h.ticketSvc.Close(r.Context(), dg, ticketID, payload.Reason, callerUserID)
+	ticket, err = h.ticketSvc.Close(r.Context(), dg, ticketID, payload.Reason, service.Actor{UserID: callerUserID, Privileged: true})
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to close ticket: "+err.Error())
 		return
@@ -657,7 +657,7 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticket, err = h.ticketSvc.Resolve(r.Context(), dg, ticketID, callerUserID)
+	ticket, err = h.ticketSvc.Resolve(r.Context(), dg, ticketID, service.Actor{UserID: callerUserID, Privileged: true})
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to resolve ticket: "+err.Error())
 		return
@@ -682,7 +682,7 @@ func (h *Handler) Unresolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticket, err = h.ticketSvc.Unresolve(r.Context(), dg, ticketID)
+	ticket, err = h.ticketSvc.Unresolve(r.Context(), dg, ticketID, service.SystemActor())
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to un-resolve ticket: "+err.Error())
 		return
@@ -707,7 +707,7 @@ func (h *Handler) Reopen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticket, err = h.ticketSvc.Reopen(r.Context(), dg, ticketID)
+	ticket, err = h.ticketSvc.Reopen(r.Context(), dg, ticketID, service.SystemActor())
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to reopen ticket: "+err.Error())
 		return
@@ -732,7 +732,7 @@ func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.ticketSvc.Archive(r.Context(), dg, ticketID)
+	err = h.ticketSvc.Archive(r.Context(), dg, ticketID, service.SystemActor())
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to archive ticket: "+err.Error())
 		return

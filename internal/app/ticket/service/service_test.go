@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -973,7 +974,7 @@ func TestTicketService_Claim_Unclaim(t *testing.T) {
 			},
 		}
 
-		ticket, err := svc.Claim(ctx, dg, ticketID, staffUserID)
+		ticket, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: staffUserID, Privileged: true})
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.True(t, channelFetched)
@@ -1012,7 +1013,7 @@ func TestTicketService_Claim_Unclaim(t *testing.T) {
 		dg, _ := discordgo.New("Bot Token")
 		dg.Client.Transport = &mockTransport{}
 
-		ticket, err := svc.Claim(ctx, dg, ticketID, staffUserID)
+		ticket, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: staffUserID, Privileged: true})
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.True(t, autoCloseCleared)
@@ -1078,7 +1079,7 @@ func TestTicketService_Claim_Unclaim(t *testing.T) {
 			},
 		}
 
-		ticket, err := svc.Unclaim(ctx, dg, ticketID)
+		ticket, err := svc.Unclaim(ctx, dg, ticketID, service.SystemActor())
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.True(t, channelFetched)
@@ -1145,7 +1146,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 			},
 		}
 
-		ticket, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		ticket, err := svc.Resolve(ctx, dg, ticketID, service.Actor{UserID: staffUserID, Privileged: true})
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.Equal(t, model.TicketStatusResolved, updatedStatus)
@@ -1162,7 +1163,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
 		dg, _ := discordgo.New("Bot Token")
 
-		_, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		_, err := svc.Resolve(ctx, dg, ticketID, service.Actor{UserID: staffUserID, Privileged: true})
 		assert.Error(t, err)
 	})
 
@@ -1175,7 +1176,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
 		dg, _ := discordgo.New("Bot Token")
 
-		_, err := svc.Resolve(ctx, dg, ticketID, staffUserID)
+		_, err := svc.Resolve(ctx, dg, ticketID, service.Actor{UserID: staffUserID, Privileged: true})
 		assert.Error(t, err)
 	})
 
@@ -1207,7 +1208,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 		dg, _ := discordgo.New("Bot Token")
 		dg.Client.Transport = &mockTransport{}
 
-		ticket, err := svc.Unresolve(ctx, dg, ticketID)
+		ticket, err := svc.Unresolve(ctx, dg, ticketID, service.SystemActor())
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.Equal(t, model.TicketStatusClaimed, updatedStatus)
@@ -1231,7 +1232,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 		dg, _ := discordgo.New("Bot Token")
 		dg.Client.Transport = &mockTransport{}
 
-		ticket, err := svc.Unresolve(ctx, dg, ticketID)
+		ticket, err := svc.Unresolve(ctx, dg, ticketID, service.SystemActor())
 		assert.NoError(t, err)
 		assert.NotNil(t, ticket)
 		assert.Equal(t, model.TicketStatusOpen, updatedStatus)
@@ -1246,7 +1247,7 @@ func TestTicketService_Resolve_Unresolve(t *testing.T) {
 		svc := service.NewTicketService(ticketRepo, nil, nil, nil, nil)
 		dg, _ := discordgo.New("Bot Token")
 
-		_, err := svc.Unresolve(ctx, dg, ticketID)
+		_, err := svc.Unresolve(ctx, dg, ticketID, service.SystemActor())
 		assert.Error(t, err)
 	})
 }
@@ -1349,10 +1350,134 @@ func TestTicketService_Close(t *testing.T) {
 		},
 	}
 
-	ticket, err := svc.Close(ctx, dg, ticketID, &reason, closedByUserID)
+	ticket, err := svc.Close(ctx, dg, ticketID, &reason, service.Actor{UserID: closedByUserID, Privileged: true})
 	assert.NoError(t, err)
 	assert.NotNil(t, ticket)
 	assert.True(t, permissionUpdated)
 	assert.True(t, transcriptSent)
 	assert.True(t, closeEmbedSent)
+}
+
+// TestTicketService_ActionAuthorization verifies the staff/opener gate added to
+// the ticket action methods. Claim is used for the allow-matrix because a ticket
+// with no Discord channel performs no API calls once authorized; Close covers the
+// opener-specific rules on their denial paths (the allowed path runs the full
+// close flow, which is already covered by TestTicketService_Close).
+func TestTicketService_ActionAuthorization(t *testing.T) {
+	ctx := context.Background()
+	const (
+		ticketID   = "ticket-uuid"
+		guildID    = int64(12345)
+		categoryID = "cat-uuid"
+		panelID    = "panel-uuid"
+		openerID   = int64(67890)
+		staffRole  = int64(888)
+		catRole    = int64(777)
+		panelRole  = int64(999)
+		outsider   = int64(111)
+	)
+
+	// openTicket has no ChannelID/ThreadID, so authorized actions make no Discord calls.
+	openTicket := func() *model.Ticket {
+		return &model.Ticket{ID: ticketID, GuildID: guildID, CategoryID: categoryID, OpenedBy: openerID, Status: model.TicketStatusOpen}
+	}
+
+	roleList := func(ids []int64) func(context.Context, int64) ([]guild_model.StaffRole, error) {
+		return func(context.Context, int64) ([]guild_model.StaffRole, error) {
+			out := make([]guild_model.StaffRole, 0, len(ids))
+			for _, r := range ids {
+				out = append(out, guild_model.StaffRole{RoleID: r})
+			}
+			return out, nil
+		}
+	}
+
+	newSvc := func(staffRoles, catRoles, panelRoles []int64, allowUserClose bool) *service.TicketService {
+		ticketRepo := &MockTicketRepository{
+			GetByIDFunc: func(context.Context, string) (*model.Ticket, error) { return openTicket(), nil },
+			UpdateClaimFunc: func(_ context.Context, _ string, claimedBy *int64) (*model.Ticket, error) {
+				tk := openTicket()
+				tk.Status = model.TicketStatusClaimed
+				tk.ClaimedBy = claimedBy
+				return tk, nil
+			},
+		}
+		categoryRepo := &MockTicketCategoryRepository{
+			GetCategoryFunc: func(context.Context, string) (*model.TicketCategory, error) {
+				return &model.TicketCategory{ID: categoryID, PanelID: panelID, AllowUserClose: allowUserClose}, nil
+			},
+			ListCategoryHandlerRolesFunc: func(context.Context, string) ([]model.CategoryHandlerRole, error) {
+				out := make([]model.CategoryHandlerRole, 0, len(catRoles))
+				for _, r := range catRoles {
+					out = append(out, model.CategoryHandlerRole{RoleID: r})
+				}
+				return out, nil
+			},
+			ListPanelHandlerRolesFunc: func(context.Context, string) ([]model.PanelHandlerRole, error) {
+				out := make([]model.PanelHandlerRole, 0, len(panelRoles))
+				for _, r := range panelRoles {
+					out = append(out, model.PanelHandlerRole{RoleID: r})
+				}
+				return out, nil
+			},
+		}
+		guildRepo := &MockTicketGuildRepository{ListStaffRolesFunc: roleList(staffRoles)}
+		return service.NewTicketService(ticketRepo, categoryRepo, guildRepo, nil, nil)
+	}
+
+	dg, _ := discordgo.New("Bot Token")
+	dg.Client.Transport = &mockTransport{}
+
+	t.Run("Claim denied for a member with no staff or handler role", func(t *testing.T) {
+		svc := newSvc(nil, nil, nil, false)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: outsider, RoleIDs: []int64{123}})
+		assert.ErrorIs(t, err, service.ErrNotAuthorized)
+	})
+
+	t.Run("Claim denied for the ticket opener (claim is staff-only)", func(t *testing.T) {
+		svc := newSvc(nil, nil, nil, true)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: openerID})
+		assert.ErrorIs(t, err, service.ErrNotAuthorized)
+	})
+
+	t.Run("Claim allowed via a guild staff role", func(t *testing.T) {
+		svc := newSvc([]int64{staffRole}, nil, nil, false)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: outsider, RoleIDs: []int64{staffRole}})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Claim allowed via a category handler role", func(t *testing.T) {
+		svc := newSvc(nil, []int64{catRole}, nil, false)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: outsider, RoleIDs: []int64{catRole}})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Claim allowed via a panel handler role", func(t *testing.T) {
+		svc := newSvc(nil, nil, []int64{panelRole}, false)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: outsider, RoleIDs: []int64{panelRole}})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Claim allowed for an Administrator regardless of roles", func(t *testing.T) {
+		svc := newSvc(nil, nil, nil, false)
+		_, err := svc.Claim(ctx, dg, ticketID, service.Actor{UserID: outsider, Privileged: true})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Close denied for the opener when AllowUserClose is off", func(t *testing.T) {
+		svc := newSvc(nil, nil, nil, false)
+		_, err := svc.Close(ctx, dg, ticketID, nil, service.Actor{UserID: openerID})
+		assert.ErrorIs(t, err, service.ErrNotAuthorized)
+	})
+
+	t.Run("Close denied for a non-staff, non-opener even when AllowUserClose is on", func(t *testing.T) {
+		svc := newSvc(nil, nil, nil, true)
+		_, err := svc.Close(ctx, dg, ticketID, nil, service.Actor{UserID: outsider})
+		assert.ErrorIs(t, err, service.ErrNotAuthorized)
+	})
+
+	// Guard against accidentally widening ErrNotAuthorized to a generic error.
+	t.Run("ErrNotAuthorized is a distinct sentinel", func(t *testing.T) {
+		assert.False(t, errors.Is(service.ErrNotAuthorized, context.Canceled))
+	})
 }
