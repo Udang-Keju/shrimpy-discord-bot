@@ -66,15 +66,17 @@
    LIGHT THEME
    ───────────────────────────────────────────── */
 [data-theme="light"] {
-  /* Backgrounds */
-  --bg-base:             #FFF8F2;
+  /* Backgrounds — soft warm-neutral scale so coral/teal read as accents,
+     not a full-page wash. Cards are white and pop; inputs are a subtle
+     recessed neutral well (not saturated peach). */
+  --bg-base:             #F4F1EC;
   --bg-surface:          #FFFFFF;
-  --bg-surface-elevated: #FFF0E8;
-  --bg-surface-hover:    #FFE8DC;
+  --bg-surface-elevated: #F1ECE5;
+  --bg-surface-hover:    #EAE3DA;
 
   /* Borders */
-  --border-subtle:  #F0D5C8;
-  --border-default: #D4A898;
+  --border-subtle:  #E5DED4;
+  --border-default: #CEC5B8;
   --border-focus:   #E8503A;
 
   /* Brand */
@@ -93,10 +95,10 @@
   --info:    #2980B9;
 
   /* Text */
-  --text-primary:   #1A0F1F;
-  --text-secondary: #4A3558;
-  --text-muted:     #7A5C6E;
-  --text-disabled:  #B09AAA;
+  --text-primary:   #241E18;
+  --text-secondary: #4A4038;
+  --text-muted:     #79706A;
+  --text-disabled:  #B4ABA2;
   --text-on-primary: #FFFFFF;
 
   /* Shadows */
@@ -241,7 +243,7 @@ code, pre, kbd {
   border-bottom: 1px solid var(--border-subtle);
 }
 [data-theme="light"] .glass-effect {
-  background: rgba(255, 248, 242, 0.8);
+  background: rgba(244, 241, 236, 0.8);
   border-bottom: 1px solid var(--border-subtle);
 }
 

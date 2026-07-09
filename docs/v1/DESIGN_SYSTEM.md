@@ -105,26 +105,26 @@ Inspired by a warm tropical beach — sandy whites, bright coral, and clear teal
 ```
 Light Theme Preview:
 ┌─────────────────────────────────────────────────────────┐
-│ Background    #FFF8F2  ████████████████████████████████ │
+│ Background    #F4F1EC  ████████████████████████████████ │
 │ Surface       #FFFFFF  ████████████████████████████████ │
-│ Surface+      #FFF0E8  ████████████████████████████████ │
-│ Border        #F0D5C8  ████████████████████████████████ │
+│ Surface+      #F1ECE5  ████████████████████████████████ │
+│ Border        #E5DED4  ████████████████████████████████ │
 │ Primary       #E8503A  ████████████████████████████████ │
 │ Primary Hover #C93F2B  ████████████████████████████████ │
 │ Accent        #2A9D8F  ████████████████████████████████ │
-│ Text Primary  #1A0F1F  ████████████████████████████████ │
-│ Text Muted    #7A5C6E  ████████████████████████████████ │
+│ Text Primary  #241E18  ████████████████████████████████ │
+│ Text Muted    #79706A  ████████████████████████████████ │
 └─────────────────────────────────────────────────────────┘
 ```
 
 | Token | Hex | HSL | Usage |
 |-------|-----|-----|-------|
-| `--bg-base` | `#FFF8F2` | `hsl(27, 100%, 97%)` | Page background |
+| `--bg-base` | `#F4F1EC` | `hsl(38, 22%, 94%)` | Page background |
 | `--bg-surface` | `#FFFFFF` | `hsl(0, 0%, 100%)` | Cards, panels |
-| `--bg-surface-elevated` | `#FFF0E8` | `hsl(23, 100%, 95%)` | Modals, popovers |
-| `--bg-surface-hover` | `#FFE8DC` | `hsl(18, 100%, 93%)` | Hover state for surface elements |
-| `--border-subtle` | `#F0D5C8` | `hsl(18, 62%, 86%)` | Dividers, card borders |
-| `--border-default` | `#D4A898` | `hsl(15, 42%, 72%)` | Input borders |
+| `--bg-surface-elevated` | `#F1ECE5` | `hsl(34, 25%, 92%)` | Recessed input wells, modals, popovers |
+| `--bg-surface-hover` | `#EAE3DA` | `hsl(33, 24%, 89%)` | Hover state for surface elements |
+| `--border-subtle` | `#E5DED4` | `hsl(35, 22%, 87%)` | Dividers, card borders |
+| `--border-default` | `#CEC5B8` | `hsl(34, 18%, 76%)` | Input borders |
 | `--primary` | `#E8503A` | `hsl(9, 78%, 57%)` | Buttons, links, active states |
 | `--primary-hover` | `#C93F2B` | `hsl(9, 64%, 48%)` | Hover state for primary |
 | `--primary-muted` | `#E8503A1A` | `hsl(9, 78%, 57%, 10%)` | Primary tint backgrounds |
@@ -135,10 +135,10 @@ Light Theme Preview:
 | `--warning` | `#E67E22` | `hsl(28, 80%, 52%)` | Warning states |
 | `--danger` | `#E74C3C` | `hsl(6, 78%, 57%)` | Error, destructive actions |
 | `--info` | `#2980B9` | `hsl(204, 64%, 44%)` | Informational states |
-| `--text-primary` | `#1A0F1F` | `hsl(280, 28%, 9%)` | Body text, headings |
-| `--text-secondary` | `#4A3558` | `hsl(278, 22%, 28%)` | Secondary labels |
-| `--text-muted` | `#7A5C6E` | `hsl(330, 14%, 42%)` | Placeholder text, hints |
-| `--text-disabled` | `#B09AAA` | `hsl(330, 12%, 65%)` | Disabled elements |
+| `--text-primary` | `#241E18` | `hsl(32, 20%, 12%)` | Body text, headings |
+| `--text-secondary` | `#4A4038` | `hsl(31, 15%, 26%)` | Secondary labels |
+| `--text-muted` | `#79706A` | `hsl(28, 8%, 45%)` | Placeholder text, hints |
+| `--text-disabled` | `#B4ABA2` | `hsl(30, 11%, 67%)` | Disabled elements |
 | `--text-on-primary` | `#FFFFFF` | `hsl(0, 0%, 100%)` | Text on coral buttons |
 
 ---
@@ -149,15 +149,15 @@ These tokens map to UI meanings regardless of theme. Always use semantic tokens 
 
 | Semantic Token | Dark Value | Light Value | Usage |
 |----------------|------------|-------------|-------|
-| `--color-background` | `#1A1830` | `#FFF8F2` | Page root background |
+| `--color-background` | `#1A1830` | `#F4F1EC` | Page root background |
 | `--color-surface` | `#242140` | `#FFFFFF` | Card/panel backgrounds |
-| `--color-surface-raised` | `#2E2B52` | `#FFF0E8` | Elevated overlays |
-| `--color-border` | `#3D3960` | `#F0D5C8` | Default border color |
+| `--color-surface-raised` | `#2E2B52` | `#F1ECE5` | Elevated overlays / input wells |
+| `--color-border` | `#3D3960` | `#E5DED4` | Default border color |
 | `--color-primary` | `#FF7B6B` | `#E8503A` | Brand primary (coral) |
 | `--color-primary-fg` | `#FFFFFF` | `#FFFFFF` | Text on primary elements |
 | `--color-accent` | `#4ECDC4` | `#2A9D8F` | Brand accent (teal) |
-| `--color-text` | `#F5F0FF` | `#1A0F1F` | Default body text |
-| `--color-text-muted` | `#9B93C0` | `#7A5C6E` | Secondary/muted text |
+| `--color-text` | `#F5F0FF` | `#241E18` | Default body text |
+| `--color-text-muted` | `#9B93C0` | `#79706A` | Secondary/muted text |
 | `--color-success` | `#52D99B` | `#27AE60` | Positive/success |
 | `--color-warning` | `#FFB347` | `#E67E22` | Caution/warning |
 | `--color-danger` | `#FF5757` | `#E74C3C` | Error/destructive |
@@ -362,15 +362,15 @@ Full CSS variable sheet to be placed in `dashboard/app/globals.css`:
    LIGHT THEME
    ───────────────────────────────────────────── */
 [data-theme="light"] {
-  /* Backgrounds */
-  --bg-base:             #FFF8F2;
+  /* Backgrounds — soft warm-neutral scale; coral/teal stay as accents */
+  --bg-base:             #F4F1EC;
   --bg-surface:          #FFFFFF;
-  --bg-surface-elevated: #FFF0E8;
-  --bg-surface-hover:    #FFE8DC;
+  --bg-surface-elevated: #F1ECE5;
+  --bg-surface-hover:    #EAE3DA;
 
   /* Borders */
-  --border-subtle:  #F0D5C8;
-  --border-default: #D4A898;
+  --border-subtle:  #E5DED4;
+  --border-default: #CEC5B8;
   --border-focus:   #E8503A;
 
   /* Brand */
@@ -389,10 +389,10 @@ Full CSS variable sheet to be placed in `dashboard/app/globals.css`:
   --info:    #2980B9;
 
   /* Text */
-  --text-primary:   #1A0F1F;
-  --text-secondary: #4A3558;
-  --text-muted:     #7A5C6E;
-  --text-disabled:  #B09AAA;
+  --text-primary:   #241E18;
+  --text-secondary: #4A4038;
+  --text-muted:     #79706A;
+  --text-disabled:  #B4ABA2;
   --text-on-primary: #FFFFFF;
 
   /* Shadows */
