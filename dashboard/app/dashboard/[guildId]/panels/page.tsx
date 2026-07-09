@@ -16,7 +16,10 @@ import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole, DiscordEmoji } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import EmojiPicker from "@/components/EmojiPicker/EmojiPicker";
+import EmojiInsertButton from "@/components/EmojiPicker/EmojiInsertButton";
+import { useEmojiInsert } from "@/components/EmojiPicker/useEmojiInsert";
 import EmojiView from "@/components/EmojiView/EmojiView";
+import EmojiText from "@/components/EmojiView/EmojiText";
 import { useToast } from "@/hooks/useToast";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
@@ -107,6 +110,12 @@ export default function PanelsPage() {
   const [newCatOpenFooterIconUrl, setNewCatOpenFooterIconUrl] = useState("");
   // Whether the ticket opener may close their own ticket (staff/handlers always can).
   const [newCatAllowUserClose, setNewCatAllowUserClose] = useState(true);
+
+  // Refs for the free-text fields that support emoji insert-at-cursor.
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const embedDescRef = useRef<HTMLTextAreaElement>(null);
+  const catOpenContentRef = useRef<HTMLTextAreaElement>(null);
+  const catOpenDescRef = useRef<HTMLTextAreaElement>(null);
 
   // Tracks the live selection so async completions can tell whether the
   // panel/category they were issued for is still the one on screen.
@@ -630,6 +639,12 @@ export default function PanelsPage() {
   } : undefined;
   const hasCatPreviewEmbed = !!(catPreviewTitle || catPreviewDesc || catPreviewMedia);
 
+  // Emoji insert-at-cursor handlers for the free-text content/description fields.
+  const insertContentEmoji = useEmojiInsert(contentRef, newContent, setNewContent);
+  const insertEmbedDescEmoji = useEmojiInsert(embedDescRef, newEmbedDesc, setNewEmbedDesc);
+  const insertCatContentEmoji = useEmojiInsert(catOpenContentRef, newCatOpenContent, setNewCatOpenContent);
+  const insertCatDescEmoji = useEmojiInsert(catOpenDescRef, newCatOpenDesc, setNewCatOpenDesc);
+
   // Handler-role hierarchy: staff roles are always included; panel roles apply to every
   // category on the panel; category roles are additive to just that category. Each role
   // is shown editable in exactly one tier — lower tiers show higher ones read-only.
@@ -817,8 +832,11 @@ export default function PanelsPage() {
                 </p>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Plain Text Message (optional)</label>
-                  <textarea className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className={styles.label}>Plain Text Message (optional)</label>
+                    <EmojiInsertButton onSelect={insertContentEmoji} customEmojis={customEmojis} />
+                  </div>
+                  <textarea ref={contentRef} className={styles.textarea} rows={2} value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Sent as the message's own text, above any embed." />
                 </div>
 
                 <div className={styles.formGroup}>
@@ -827,8 +845,11 @@ export default function PanelsPage() {
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Embed Description</label>
-                  <textarea className={styles.textarea} rows={3} value={newEmbedDesc} onChange={e => setNewEmbedDesc(e.target.value)} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className={styles.label}>Embed Description</label>
+                    <EmojiInsertButton onSelect={insertEmbedDescEmoji} customEmojis={customEmojis} />
+                  </div>
+                  <textarea ref={embedDescRef} className={styles.textarea} rows={3} value={newEmbedDesc} onChange={e => setNewEmbedDesc(e.target.value)} />
                 </div>
 
                 <div className={styles.formGroup}>
@@ -897,7 +918,7 @@ export default function PanelsPage() {
             <div style={{ background: '#36393f', border: '1px solid #202225', padding: '16px', borderRadius: '8px', minHeight: 'auto' }}>
               {previewContent && (
                 <div style={{ color: '#dcddde', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.4', marginBottom: hasPreviewEmbed ? '10px' : 0 }}>
-                  {previewContent}
+                  <EmojiText text={previewContent} size={18} />
                 </div>
               )}
 
@@ -920,7 +941,7 @@ export default function PanelsPage() {
                     )}
                     {previewEmbedDesc && (
                       <div style={{ color: '#dcddde', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                        {previewEmbedDesc}
+                        <EmojiText text={previewEmbedDesc} size={16} />
                       </div>
                     )}
                     {isImageUrl(previewMedia?.image?.url) && (
@@ -1329,8 +1350,11 @@ export default function PanelsPage() {
                   </details>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Plain Text Greeting (optional)</label>
-                    <textarea className={styles.textarea} rows={2} value={newCatOpenContent} onChange={e => setNewCatOpenContent(e.target.value)} placeholder="e.g. {ping} a new ticket from {mention}" />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label className={styles.label}>Plain Text Greeting (optional)</label>
+                      <EmojiInsertButton onSelect={insertCatContentEmoji} customEmojis={customEmojis} />
+                    </div>
+                    <textarea ref={catOpenContentRef} className={styles.textarea} rows={2} value={newCatOpenContent} onChange={e => setNewCatOpenContent(e.target.value)} placeholder="e.g. {ping} a new ticket from {mention}" />
                   </div>
 
                   <div className={styles.formGroup}>
@@ -1339,8 +1363,11 @@ export default function PanelsPage() {
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label className={styles.label}>Greeting Embed Description (optional)</label>
-                    <textarea className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label className={styles.label}>Greeting Embed Description (optional)</label>
+                      <EmojiInsertButton onSelect={insertCatDescEmoji} customEmojis={customEmojis} />
+                    </div>
+                    <textarea ref={catOpenDescRef} className={styles.textarea} rows={2} value={newCatOpenDesc} onChange={e => setNewCatOpenDesc(e.target.value)} />
                   </div>
 
                   <div className={styles.formGroup}>
@@ -1412,7 +1439,7 @@ export default function PanelsPage() {
               <div style={{ background: '#36393f', border: '1px solid #202225', padding: '16px', borderRadius: '8px' }}>
                 {catPreviewContent && (
                   <div style={{ color: '#dcddde', fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.4', marginBottom: hasCatPreviewEmbed ? '10px' : 0 }}>
-                    {catPreviewContent}
+                    <EmojiText text={catPreviewContent} size={18} />
                   </div>
                 )}
 
@@ -1435,7 +1462,7 @@ export default function PanelsPage() {
                       )}
                       {catPreviewDesc && (
                         <div style={{ color: '#dcddde', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                          {catPreviewDesc}
+                          <EmojiText text={catPreviewDesc} size={16} />
                         </div>
                       )}
                       {isImageUrl(catPreviewMedia?.image?.url) && (

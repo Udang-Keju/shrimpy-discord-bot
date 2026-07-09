@@ -1,7 +1,7 @@
 // dashboard/app/dashboard/[guildId]/welcome/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Save,
@@ -11,8 +11,10 @@ import {
   Trash2
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, WelcomeConfig, DiscordChannel, DiscordRole } from "@/lib/api";
+import { ShrimpyAPI, WelcomeConfig, DiscordChannel, DiscordRole, DiscordEmoji } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import EmojiInsertButton from "@/components/EmojiPicker/EmojiInsertButton";
+import { useEmojiInsert } from "@/components/EmojiPicker/useEmojiInsert";
 import { useToast } from "@/hooks/useToast";
 import { Skeleton, SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
@@ -24,6 +26,8 @@ export default function WelcomePage() {
   const [config, setConfig] = useState<WelcomeConfig | null>(null);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [customEmojis, setCustomEmojis] = useState<DiscordEmoji[]>([]);
+  const dmTextRef = useRef<HTMLTextAreaElement>(null);
   const [autoRoles, setAutoRoles] = useState<string[]>([]);
   const [selectedAutoRole, setSelectedAutoRole] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,15 +37,17 @@ export default function WelcomePage() {
     async function loadData() {
       setLoading(true);
       try {
-        const [confData, chansData, rolesData, guildData] = await Promise.all([
+        const [confData, chansData, rolesData, guildData, emojiData] = await Promise.all([
           ShrimpyAPI.getWelcomeConfig(guildId),
           ShrimpyAPI.getDiscordChannels(guildId),
           ShrimpyAPI.getDiscordRoles(guildId),
-          ShrimpyAPI.getGuildConfig(guildId)
+          ShrimpyAPI.getGuildConfig(guildId),
+          ShrimpyAPI.getDiscordEmojis(guildId)
         ]);
         setConfig(confData);
         setChannels(chansData);
         setRoles(rolesData);
+        setCustomEmojis(emojiData);
         setAutoRoles(guildData.autoRoles);
 
         if (rolesData.length > 0) {
@@ -99,6 +105,8 @@ export default function WelcomePage() {
     if (!config) return;
     setConfig(prev => prev ? ({ ...prev, [key]: val }) : null);
   };
+
+  const insertDmEmoji = useEmojiInsert(dmTextRef, config?.dmText ?? "", v => updateField('dmText', v));
 
   if (loading) return (
     <div>
@@ -229,14 +237,18 @@ export default function WelcomePage() {
 
               {config.sendDm && (
                 <div className={styles.formGroup}>
-                  <label className={styles.label}>Private Greeting Content</label>
-                  <textarea 
-                    className={styles.textarea} 
-                    rows={4} 
-                    value={config.dmText} 
-                    onChange={e => updateField('dmText', e.target.value)} 
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className={styles.label}>Private Greeting Content</label>
+                    <EmojiInsertButton onSelect={insertDmEmoji} customEmojis={customEmojis} />
+                  </div>
+                  <textarea
+                    ref={dmTextRef}
+                    className={styles.textarea}
+                    rows={4}
+                    value={config.dmText}
+                    onChange={e => updateField('dmText', e.target.value)}
                     placeholder="Enter welcome message instructions..."
-                    required 
+                    required
                   />
                 </div>
               )}
