@@ -102,6 +102,8 @@ export default function PanelsPage() {
   const [newCatOpenImageUrl, setNewCatOpenImageUrl] = useState("");
   const [newCatOpenFooterText, setNewCatOpenFooterText] = useState("");
   const [newCatOpenFooterIconUrl, setNewCatOpenFooterIconUrl] = useState("");
+  // Whether the ticket opener may close their own ticket (staff/handlers always can).
+  const [newCatAllowUserClose, setNewCatAllowUserClose] = useState(true);
 
   // Tracks the live selection so async completions can tell whether the
   // panel/category they were issued for is still the one on screen.
@@ -123,8 +125,8 @@ export default function PanelsPage() {
   // means Edit mode).
   const [creatingNewCategory, setCreatingNewCategory] = useState(false);
   // Holds fields the category form doesn't expose (buttonOrder, ticketNameTemplate,
-  // maxTicketsPerUser, autoCloseHours, transcriptChannelId, allowUserClose) so an
-  // edit submission doesn't clobber them with create-time defaults.
+  // maxTicketsPerUser, autoCloseHours, transcriptChannelId) so an edit submission
+  // doesn't clobber them with create-time defaults.
   const [editingCategoryOriginal, setEditingCategoryOriginal] = useState<TicketCategory | null>(null);
 
   const resetPanelForm = () => {
@@ -163,6 +165,7 @@ export default function PanelsPage() {
     setNewCatOpenImageUrl("");
     setNewCatOpenFooterText("");
     setNewCatOpenFooterIconUrl("");
+    setNewCatAllowUserClose(true);
     setCategoryHandlerRoleIds([]);
   };
 
@@ -393,6 +396,7 @@ export default function PanelsPage() {
     setNewCatOpenImageUrl(c.ticketOpenMedia?.image?.url || "");
     setNewCatOpenFooterText(c.ticketOpenMedia?.footer?.text || "");
     setNewCatOpenFooterIconUrl(c.ticketOpenMedia?.footer?.iconUrl || "");
+    setNewCatAllowUserClose(c.allowUserClose ?? true);
   };
 
   // Clicking a category row both selects it (so its handler-roles card shows)
@@ -468,7 +472,7 @@ export default function PanelsPage() {
       maxTicketsPerUser: original?.maxTicketsPerUser ?? 1,
       autoCloseHours: original?.autoCloseHours,
       transcriptChannelId: original?.transcriptChannelId,
-      allowUserClose: original?.allowUserClose ?? true,
+      allowUserClose: newCatAllowUserClose,
       handlerRoleIds: categoryHandlerRoleIds,
     };
 
@@ -1265,6 +1269,26 @@ export default function PanelsPage() {
                       <Plus size={14} />
                       <span>Add</span>
                     </button>
+                  </div>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <p className={styles.fieldGroupTitle}>Permissions</p>
+                  <div className={styles.formGroupRow} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-4)' }}>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold' }}>Let the opener close their own ticket</div>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                        When off, only staff and handler roles can close tickets in this category. Staff, handler roles, and admins can always close and claim regardless of this setting.
+                      </div>
+                    </div>
+                    <label className={styles.toggle}>
+                      <input
+                        type="checkbox"
+                        checked={newCatAllowUserClose}
+                        onChange={e => setNewCatAllowUserClose(e.target.checked)}
+                      />
+                      <span className={styles.slider}></span>
+                    </label>
                   </div>
                 </div>
 
