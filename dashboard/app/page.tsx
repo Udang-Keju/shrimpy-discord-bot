@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import { getSavedTheme, applyTheme, Theme } from "../lib/theme";
+import { ShrimpyAPI, DiscordUser } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
@@ -14,6 +15,8 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
   const [activeTab, setActiveTab] = useState<"tickets" | "welcome" | "roles">("tickets");
+  // undefined = still checking the existing session; null = signed out; object = signed in.
+  const [user, setUser] = useState<DiscordUser | null | undefined>(undefined);
 
   // Handle Theme switching
   useEffect(() => {
@@ -22,6 +25,17 @@ export default function Home() {
       setTheme(getSavedTheme());
     }, 0);
     return () => clearTimeout(t);
+  }, []);
+
+  // Reuse the existing 7-day session cookie: if /auth/me succeeds the user is
+  // already logged in, so the navbar can offer "Open Dashboard" instead of a
+  // fresh Discord OAuth round-trip. A 401 (signed out) is expected, not an error.
+  useEffect(() => {
+    let cancelled = false;
+    ShrimpyAPI.getCurrentUser()
+      .then((u) => { if (!cancelled) setUser(u); })
+      .catch(() => { if (!cancelled) setUser(null); });
+    return () => { cancelled = true; };
   }, []);
 
   const toggleTheme = () => {
@@ -39,7 +53,7 @@ export default function Home() {
       <div className={styles.gridOverlay}></div>
 
       {/* NAVBAR */}
-      <Navbar theme={theme} toggleTheme={toggleTheme} />
+      <Navbar theme={theme} toggleTheme={toggleTheme} user={user} />
 
       {/* HERO SECTION */}
       <Hero />
