@@ -13,8 +13,10 @@ import {
   Info
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole } from "@/lib/api";
+import { ShrimpyAPI, TicketPanel, TicketCategory, DiscordChannel, DiscordRole, DiscordEmoji } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import EmojiPicker from "@/components/EmojiPicker/EmojiPicker";
+import EmojiView from "@/components/EmojiView/EmojiView";
 import { useToast } from "@/hooks/useToast";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
@@ -50,6 +52,7 @@ export default function PanelsPage() {
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [channelGroups, setChannelGroups] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [customEmojis, setCustomEmojis] = useState<DiscordEmoji[]>([]);
   const [selectedPanel, setSelectedPanel] = useState<TicketPanel | null>(null);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   // Working list of role IDs for the panel form (create or edit) — saved as part of the
@@ -173,17 +176,19 @@ export default function PanelsPage() {
     async function loadData() {
       setLoading(true);
       try {
-        const [panelsData, chansData, groupsData, rolesData, guildConfig] = await Promise.all([
+        const [panelsData, chansData, groupsData, rolesData, emojiData, guildConfig] = await Promise.all([
           ShrimpyAPI.listPanels(guildId),
           ShrimpyAPI.getDiscordChannels(guildId),
           ShrimpyAPI.getDiscordChannelGroups(guildId),
           ShrimpyAPI.getDiscordRoles(guildId),
+          ShrimpyAPI.getDiscordEmojis(guildId),
           ShrimpyAPI.getGuildConfig(guildId)
         ]);
         setPanels(panelsData);
         setChannels(chansData);
         setChannelGroups(groupsData);
         setRoles(rolesData);
+        setCustomEmojis(emojiData);
         setStaffRoleIds(guildConfig.staffRoles);
 
         if (chansData.length > 0) {
@@ -961,7 +966,7 @@ export default function PanelsPage() {
                               borderBottom: i < previewCategories.length - 1 ? '1px solid #3a3d44' : 'none',
                             }}
                           >
-                            {c.emoji && <span>{c.emoji}</span>}
+                            {c.emoji && <EmojiView emoji={c.emoji} size={16} />}
                             <span>{c.buttonLabel}</span>
                           </div>
                         ))
@@ -986,7 +991,8 @@ export default function PanelsPage() {
                         disabled
                       >
                         <Ticket size={14} />
-                        <span>{c.emoji ? `${c.emoji} ` : ''}{c.buttonLabel}</span>
+                        {c.emoji && <EmojiView emoji={c.emoji} size={15} />}
+                        <span>{c.buttonLabel}</span>
                       </button>
                     ))
                   ) : (
@@ -1055,9 +1061,10 @@ export default function PanelsPage() {
                         }}
                         onClick={() => handleSelectCategoryForEdit(c)}
                       >
-                        <div>
-                          <span style={{ fontWeight: 'bold' }}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {c.emoji && <EmojiView emoji={c.emoji} size={15} />}
+                          <span style={{ fontWeight: 'bold' }}>{c.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                             opens a {c.ticketDestination}
                           </span>
                         </div>
@@ -1118,12 +1125,12 @@ export default function PanelsPage() {
                     </div>
                     <div className={styles.formGroup}>
                       <label className={styles.label}>Button Emoji (optional)</label>
-                      <input
-                        className={styles.input}
-                        type="text"
-                        placeholder="🎫"
+                      <EmojiPicker
                         value={newCatEmoji}
-                        onChange={e => setNewCatEmoji(e.target.value)}
+                        onChange={setNewCatEmoji}
+                        customEmojis={customEmojis}
+                        clearable
+                        placeholder="Add emoji"
                       />
                     </div>
                   </div>

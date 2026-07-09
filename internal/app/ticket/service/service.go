@@ -853,7 +853,8 @@ func buildPanelSelectMenu(cats []model.TicketCategory) []discordgo.MessageCompon
 			opt.Description = *cat.ButtonDescription
 		}
 		if cat.Emoji != nil && *cat.Emoji != "" {
-			opt.Emoji = &discordgo.ComponentEmoji{Name: *cat.Emoji}
+			e := discordutil.ParseComponentEmoji(*cat.Emoji)
+			opt.Emoji = &e
 		}
 		options = append(options, opt)
 	}
@@ -881,7 +882,8 @@ func buildPanelButtons(cats []model.TicketCategory) []discordgo.MessageComponent
 			CustomID: fmt.Sprintf("ticket:open:%s", cat.ID),
 		}
 		if cat.Emoji != nil && *cat.Emoji != "" {
-			btn.Emoji = &discordgo.ComponentEmoji{Name: *cat.Emoji}
+			e := discordutil.ParseComponentEmoji(*cat.Emoji)
+			btn.Emoji = &e
 		}
 		current = append(current, btn)
 		if len(current) == 5 {

@@ -109,6 +109,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Get("/discord/channels", s.guildHandler.GetDiscordChannels)
 				r.Get("/discord/categories", s.guildHandler.GetDiscordCategories)
 				r.Get("/discord/roles", s.guildHandler.GetDiscordRoles)
+				r.Get("/discord/emojis", s.guildHandler.GetDiscordEmojis)
 
 				// Welcome onboarding config
 				r.Get("/welcome", s.welcomeHandler.Get)
