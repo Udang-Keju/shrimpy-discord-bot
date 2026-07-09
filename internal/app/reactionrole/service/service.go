@@ -124,9 +124,14 @@ func (s *ReactionRoleService) AddEmoji(ctx context.Context, dg *discordgo.Sessio
 		return nil, fmt.Errorf("cannot add emoji to a message that hasn't been posted to Discord")
 	}
 
+	// Store and react using the reaction API form (name:id for custom emoji, or the
+	// raw unicode char). This is the same key gateway reaction events resolve to via
+	// (*Emoji).APIName, so grants/revokes in HandleReactionAdd/Remove match on lookup.
+	key := discordutil.ReactionEmojiAPIName(emoji)
+
 	mapping := &model.ReactionRoleEmoji{
 		MessageID: messageID,
-		Emoji:     emoji,
+		Emoji:     key,
 		RoleID:    roleID,
 	}
 	created, err := s.repo.AddEmoji(ctx, mapping)
@@ -136,7 +141,7 @@ func (s *ReactionRoleService) AddEmoji(ctx context.Context, dg *discordgo.Sessio
 
 	channelIDStr := fmt.Sprintf("%d", msg.ChannelID)
 	msgIDStr := fmt.Sprintf("%d", *msg.MessageID)
-	err = dg.MessageReactionAdd(channelIDStr, msgIDStr, emoji)
+	err = dg.MessageReactionAdd(channelIDStr, msgIDStr, key)
 	if err != nil {
 		fmt.Printf("warning: failed to add reaction reaction to message: %v\n", err)
 	}
@@ -151,14 +156,15 @@ func (s *ReactionRoleService) RemoveEmoji(ctx context.Context, dg *discordgo.Ses
 		return err
 	}
 
-	if err := s.repo.RemoveEmoji(ctx, messageID, emoji); err != nil {
+	key := discordutil.ReactionEmojiAPIName(emoji)
+	if err := s.repo.RemoveEmoji(ctx, messageID, key); err != nil {
 		return err
 	}
 
 	if msg.MessageID != nil {
 		channelIDStr := fmt.Sprintf("%d", msg.ChannelID)
 		msgIDStr := fmt.Sprintf("%d", *msg.MessageID)
-		_ = dg.MessageReactionRemove(channelIDStr, msgIDStr, emoji, "@me")
+		_ = dg.MessageReactionRemove(channelIDStr, msgIDStr, key, "@me")
 	}
 
 	return nil

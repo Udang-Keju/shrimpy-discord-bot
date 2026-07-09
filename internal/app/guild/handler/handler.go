@@ -306,6 +306,54 @@ func (h *Handler) GetDiscordRoles(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, list)
 }
 
+// GetDiscordEmojis returns the guild's custom emojis for the dashboard emoji picker.
+// Each entry carries the canonical mention form the picker emits and a CDN URL for preview.
+func (h *Handler) GetDiscordEmojis(w http.ResponseWriter, r *http.Request) {
+	guildIDStr := chi.URLParam(r, "guildId")
+	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	// Prefer the gateway State cache: discordgo keeps it warm and Discord pushes
+	// GUILD_EMOJIS_UPDATE events on any add/rename/delete, so it's fresh without a
+	// REST call. Fall back to REST only when State is cold (e.g. just reconnected).
+	var emojis []*discordgo.Emoji
+	if guild, sErr := dg.State.Guild(guildIDStr); sErr == nil && guild != nil && len(guild.Emojis) > 0 {
+		emojis = guild.Emojis
+	} else if emojis, err = dg.GuildEmojis(guildIDStr); err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "DISCORD_ERROR", "Failed to fetch Discord emojis: "+err.Error())
+		return
+	}
+
+	type emojiResponse struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Animated bool   `json:"animated"`
+		Mention  string `json:"mention"`
+		URL      string `json:"url"`
+	}
+
+	list := make([]emojiResponse, 0, len(emojis))
+	for _, e := range emojis {
+		if e.ID == "" {
+			continue
+		}
+		list = append(list, emojiResponse{
+			ID:       e.ID,
+			Name:     e.Name,
+			Animated: e.Animated,
+			Mention:  discordutil.CustomEmojiMention(e.Name, e.ID, e.Animated),
+			URL:      discordutil.CustomEmojiURL(e.ID, e.Animated),
+		})
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, list)
+}
+
 // ─── Auto Roles ───────────────────────────────────────────────────────────────
 
 func (h *Handler) ListAutoRoles(w http.ResponseWriter, r *http.Request) {

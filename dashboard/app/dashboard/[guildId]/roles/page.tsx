@@ -10,19 +10,22 @@ import {
   AlertTriangle
 } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
-import { ShrimpyAPI, ReactionRole, ReactionRoleMapping, DiscordChannel, DiscordRole } from "@/lib/api";
+import { ShrimpyAPI, ReactionRole, ReactionRoleMapping, DiscordChannel, DiscordRole, DiscordEmoji } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
+import EmojiPicker from "@/components/EmojiPicker/EmojiPicker";
+import EmojiView from "@/components/EmojiView/EmojiView";
 import { useToast } from "@/hooks/useToast";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 export default function ReactionRolesPage() {
   const params = useParams();
   const guildId = params?.guildId as string;
-  const { showToast } = useToast();
+  const { showToast, updateToast } = useToast();
 
   const [reactionRoles, setReactionRoles] = useState<ReactionRole[]>([]);
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
+  const [customEmojis, setCustomEmojis] = useState<DiscordEmoji[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form states for new panel
@@ -39,14 +42,16 @@ export default function ReactionRolesPage() {
     async function loadData() {
       setLoading(true);
       try {
-        const [rrData, chansData, rolesData] = await Promise.all([
+        const [rrData, chansData, rolesData, emojiData] = await Promise.all([
           ShrimpyAPI.listReactionRoles(guildId),
           ShrimpyAPI.getDiscordChannels(guildId),
-          ShrimpyAPI.getDiscordRoles(guildId)
+          ShrimpyAPI.getDiscordRoles(guildId),
+          ShrimpyAPI.getDiscordEmojis(guildId)
         ]);
         setReactionRoles(rrData);
         setChannels(chansData);
         setRoles(rolesData);
+        setCustomEmojis(emojiData);
         
         if (chansData.length > 0) {
           setNewChannelId(chansData[0].id);
@@ -92,23 +97,28 @@ export default function ReactionRolesPage() {
       showToast("Please add at least one emoji-to-role mapping!", "warning");
       return;
     }
-    try {
-      const newWidget = await ShrimpyAPI.createReactionRole(guildId, {
-        channelId: newChannelId,
-        title: newTitle,
-        description: newDesc,
-        mappings
-      });
-      setReactionRoles(prev => [...prev, newWidget]);
 
-      // Reset form
-      setNewTitle("Select Your Roles");
-      setNewDesc("React below to pick up or drop server tags.");
-      setMappings([]);
-      showToast("Reaction role panel published successfully!", "success");
+    // Snapshot then reset the form synchronously so the next panel can be built while
+    // the bot posts the embed and adds reactions (a multi-round-trip operation).
+    const snapshot = { channelId: newChannelId, title: newTitle, description: newDesc, mappings };
+    setNewTitle("Select Your Roles");
+    setNewDesc("React below to pick up or drop server tags.");
+    setMappings([]);
+
+    const toastId = showToast("Publishing reaction role panel...", "loading");
+    try {
+      const newWidget = await ShrimpyAPI.createReactionRole(guildId, snapshot);
+      // The create endpoint only posts the embed; persist each emoji→role mapping
+      // (and add the reaction on Discord) individually.
+      for (const m of snapshot.mappings) {
+        await ShrimpyAPI.addReactionRoleEmoji(guildId, newWidget.id, m.emoji, m.roleId);
+      }
+      // Reflect the mappings locally regardless of what the create response echoed back.
+      setReactionRoles(prev => [...prev, { ...newWidget, mappings: snapshot.mappings }]);
+      updateToast(toastId, "Reaction role panel published successfully!", "success");
     } catch (err) {
       console.error(err);
-      showToast("Failed to publish reaction role panel.", "error");
+      updateToast(toastId, "Failed to publish reaction role panel.", "error");
     }
   };
 
@@ -176,7 +186,7 @@ export default function ReactionRolesPage() {
                     {mappings.map((m, idx) => (
                       <div key={idx} className={styles.actionBtn} style={{ justifyContent: 'space-between', cursor: 'default' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '16px' }}>{m.emoji}</span>
+                          <EmojiView emoji={m.emoji} size={16} />
                           <span style={{ fontWeight: 'bold' }}>{m.roleName}</span>
                         </div>
                         <button 
@@ -195,10 +205,10 @@ export default function ReactionRolesPage() {
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div className={styles.formGroup} style={{ width: '80px' }}>
                     <label className={styles.label} style={{ fontSize: '10px' }}>Emoji</label>
-                    <Dropdown
+                    <EmojiPicker
                       value={tempEmoji}
                       onChange={setTempEmoji}
-                      options={["🦐", "🛠️", "🎮", "📢", "🎨", "🏆"].map(e => ({ value: e, label: e }))}
+                      customEmojis={customEmojis}
                     />
                   </div>
                   
@@ -287,7 +297,7 @@ export default function ReactionRolesPage() {
                             gap: '4px'
                           }}
                         >
-                          <span>{m.emoji}</span>
+                          <EmojiView emoji={m.emoji} size={14} />
                           <span style={{ fontWeight: '500' }}>{m.roleName}</span>
                         </span>
                       ))}

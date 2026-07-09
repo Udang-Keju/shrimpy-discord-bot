@@ -151,6 +151,17 @@ export interface DiscordRole {
   color: string;
 }
 
+// A guild's custom emoji, as surfaced to the emoji picker. `mention` is the
+// canonical Discord form (<:name:id> / <a:name:id>) stored/sent for this emoji;
+// `url` is the CDN image for preview.
+export interface DiscordEmoji {
+  id: string;
+  name: string;
+  animated: boolean;
+  mention: string;
+  url: string;
+}
+
 export interface DiscordUser {
   id: string;
   username: string;
@@ -159,6 +170,12 @@ export interface DiscordUser {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_SHRIMPY_API_URL || 'http://localhost:8080';
+
+// In-memory cache for guild custom emojis. The picker reopens frequently but a
+// server's emoji set rarely changes, so a short TTL avoids refetching on every open
+// while still picking up edits within a few minutes.
+const EMOJI_CACHE_TTL_MS = 5 * 60 * 1000;
+const emojiCache = new Map<string, { emojis: DiscordEmoji[]; at: number }>();
 
 // Simulated Mock Database for Standalone/Offline mode
 const mockGuilds: Guild[] = [
@@ -303,6 +320,12 @@ const mockChannels: DiscordChannel[] = [
 const mockChannelGroups: DiscordChannel[] = [
   { id: 'group-support', name: 'Support', type: 'category' },
   { id: 'group-community', name: 'Community', type: 'category' }
+];
+
+const mockEmojis: DiscordEmoji[] = [
+  { id: '1001', name: 'shrimpy', animated: false, mention: '<:shrimpy:1001>', url: 'https://cdn.discordapp.com/emojis/1001.png' },
+  { id: '1002', name: 'pog', animated: false, mention: '<:pog:1002>', url: 'https://cdn.discordapp.com/emojis/1002.png' },
+  { id: '1003', name: 'party', animated: true, mention: '<a:party:1003>', url: 'https://cdn.discordapp.com/emojis/1003.gif' }
 ];
 
 const mockRoles: DiscordRole[] = [
@@ -477,6 +500,20 @@ export const ShrimpyAPI = {
   getDiscordRoles: async (guildId: string): Promise<DiscordRole[]> => {
     if (isDemoMode()) return mockRoles;
     return fetchJSON<DiscordRole[]>(`/api/v1/guilds/${guildId}/discord/roles`);
+  },
+
+  // The guild's custom emojis, for the emoji picker's "Server" tab. Cached per
+  // guild for EMOJI_CACHE_TTL_MS since the picker is opened often but a server's
+  // emoji set rarely changes; pass force=true to bypass (e.g. a manual refresh).
+  getDiscordEmojis: async (guildId: string, force = false): Promise<DiscordEmoji[]> => {
+    if (isDemoMode()) return mockEmojis;
+    const cached = emojiCache.get(guildId);
+    if (!force && cached && Date.now() - cached.at < EMOJI_CACHE_TTL_MS) {
+      return cached.emojis;
+    }
+    const emojis = await fetchJSON<DiscordEmoji[]>(`/api/v1/guilds/${guildId}/discord/emojis`);
+    emojiCache.set(guildId, { emojis, at: Date.now() });
+    return emojis;
   },
 
   // Welcome Config
@@ -725,6 +762,17 @@ export const ShrimpyAPI = {
     return fetchJSON<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles`, {
       method: 'POST',
       body: JSON.stringify(rr)
+    });
+  },
+
+  // Persists a single emoji→role mapping onto an existing reaction role message and
+  // makes the bot add the reaction on Discord. Called per mapping after the panel is
+  // created (the create endpoint itself only posts the embed).
+  addReactionRoleEmoji: async (guildId: string, msgId: string, emoji: string, roleId: string): Promise<void> => {
+    if (isDemoMode()) return;
+    await fetchJSON(`/api/v1/guilds/${guildId}/reaction-roles/${msgId}/emojis`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji, role_id: roleId })
     });
   },
 
