@@ -3,6 +3,44 @@
   width: 100%;
 }
 
+.insertWrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.iconTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.iconTrigger:hover:not(:disabled),
+.iconTriggerOpen {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.iconTrigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Right-align the popover under the icon so it doesn't overflow narrow label rows. */
+.insertWrapper .popover {
+  left: auto;
+  right: 0;
+}
+
 .trigger {
   width: 100%;
   min-height: 40px;

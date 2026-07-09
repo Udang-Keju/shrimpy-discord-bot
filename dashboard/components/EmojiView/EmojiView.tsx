@@ -6,7 +6,7 @@
 // Accepts the custom-emoji mention forms (<:name:id> / <a:name:id>), the reaction
 // API form (name:id — how reaction-role mappings come back from the API), or a raw
 // unicode emoji.
-const MENTION_RE = /^<(a)?:([a-zA-Z0-9_]+):(\d+)>$/;
+export const MENTION_RE = /^<(a)?:([a-zA-Z0-9_]+):(\d+)>$/;
 const REACTION_RE = /^([a-zA-Z0-9_]+):(\d+)$/;
 
 /** CDN image URL for a custom emoji string, or null for unicode/plain text. */
