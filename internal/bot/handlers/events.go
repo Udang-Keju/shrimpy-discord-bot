@@ -13,6 +13,7 @@ import (
 	rr_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/service"
 	ticket_bot "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/bot"
 	ticket_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/service"
+	translation_bot "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/translation/bot"
 	welcome_bot "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/bot"
 	welcome_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/service"
 	"github.com/bwmarrin/discordgo"
@@ -30,6 +31,7 @@ type HandlerContext struct {
 	WelcomeBot      *welcome_bot.BotHandler
 	ReactionRoleBot *rr_bot.BotHandler
 	TicketBot       *ticket_bot.BotHandler
+	TranslationBot  *translation_bot.BotHandler
 }
 
 // NewHandlerContext creates a new HandlerContext.
@@ -44,10 +46,9 @@ func NewHandlerContext(modules *app.Modules) *HandlerContext {
 		WelcomeBot:      modules.Welcome.Bot,
 		ReactionRoleBot: modules.ReactionRole.Bot,
 		TicketBot:       modules.Ticket.Bot,
+		TranslationBot:  modules.Translation.Bot,
 	}
 }
-
-
 
 // OnReady logs when the bot is successfully connected to the Gateway.
 func (ctx *HandlerContext) OnReady(s *discordgo.Session, r *discordgo.Ready) {
@@ -105,7 +106,10 @@ func (ctx *HandlerContext) OnMessageCreate(s *discordgo.Session, m *discordgo.Me
 	// 1. Log messages for tickets
 	ctx.TicketBot.OnMessageCreate(s, m)
 
-	// 2. Handle prefix commands if message starts with guild prefix
+	// 2. Auto-translate messages in configured channels
+	ctx.TranslationBot.OnMessageCreate(s, m)
+
+	// 3. Handle prefix commands if message starts with guild prefix
 	go func() {
 		cfg, err := ctx.GuildSvc.GetConfig(context.Background(), guildID)
 		if err != nil {
@@ -118,9 +122,11 @@ func (ctx *HandlerContext) OnMessageCreate(s *discordgo.Session, m *discordgo.Me
 	}()
 }
 
-// OnMessageReactionAdd handles roles being granted on reaction click.
+// OnMessageReactionAdd handles roles being granted on reaction click, and
+// reaction-triggered translation.
 func (ctx *HandlerContext) OnMessageReactionAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	ctx.ReactionRoleBot.OnMessageReactionAdd(s, r)
+	ctx.TranslationBot.OnMessageReactionAdd(s, r)
 }
 
 // OnMessageReactionRemove handles roles being revoked when reaction is removed.

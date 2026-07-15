@@ -175,6 +175,31 @@
 
 ---
 
+### Message Translation (Dashboard)
+
+| Field | Detail |
+|-------|--------|
+| **Where** | Dashboard → **Server Management → Message Translation** (`/dashboard/[guildId]/translation`) |
+| **Description** | Automatically translates member messages. Configured entirely from the dashboard (no slash command). |
+| **Permission** | ⚙️ Administrator |
+
+**Settings:**
+
+| Setting | Description |
+|---------|-------------|
+| **Enable Translation** | Master on/off switch for the feature. When off, no messages are translated. |
+| **Engine** | Translation provider: `DeepL`, `Google Translate`, or self-hosted `LibreTranslate`. |
+| **API Key** | Engine credential, stored AES-256-GCM encrypted; shown masked (`***`) once set. |
+| **Instance URL** | Base URL of the LibreTranslate instance (LibreTranslate engine only). |
+| **Default Target Language** | Language messages are translated into; falls back to the server's configured language when unset. |
+| **Auto-translate Channels** | Toggle + channel list. Every member message in a listed channel is auto-translated, with an optional per-channel target-language override. |
+| **Reaction Trigger Emojis** | Toggle + emoji list. Reacting to any message with a listed emoji translates that message, with an optional per-emoji target-language override. |
+
+> [!NOTE]
+> Messages already written in the target language, and messages that are only links, mentions, or emoji, are skipped. Translations are posted as an embed reply to the original message.
+
+---
+
 ### `/set prefix`
 
 | Field | Detail |
