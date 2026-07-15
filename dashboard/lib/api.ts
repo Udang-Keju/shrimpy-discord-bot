@@ -124,6 +124,30 @@ export interface WelcomeConfig {
   avatarEmoji: string;
 }
 
+export interface TranslationChannelConfig {
+  channelId: string;
+  targetLangOverride: string | null;
+}
+
+export interface TranslationEmojiConfig {
+  emoji: string;
+  targetLangOverride: string | null;
+}
+
+export interface TranslationConfig {
+  guildId: string;
+  enabled: boolean;
+  autoEnabled: boolean;
+  reactionEnabled: boolean;
+  provider: string;            // 'deepl' | 'google' | 'libretranslate'
+  apiKey: string;              // masked '***' when a key is stored, '' otherwise
+  hasApiKey: boolean;
+  endpointUrl: string | null;  // for self-hosted engines (LibreTranslate)
+  targetLang: string | null;   // null = fall back to the server language
+  channels: TranslationChannelConfig[];
+  emojis: TranslationEmojiConfig[];
+}
+
 export interface ReactionRoleMapping {
   emoji: string;
   roleId: string;
@@ -251,6 +275,24 @@ const mockWelcomeConfigs: Record<string, WelcomeConfig> = {
     avatarEmoji: '🦐'
   }
 };
+
+const mockTranslationConfigs: Record<string, TranslationConfig> = {};
+
+function defaultTranslationConfig(guildId: string): TranslationConfig {
+  return {
+    guildId,
+    enabled: false,
+    autoEnabled: false,
+    reactionEnabled: false,
+    provider: 'deepl',
+    apiKey: '',
+    hasApiKey: false,
+    endpointUrl: null,
+    targetLang: null,
+    channels: [],
+    emojis: []
+  };
+}
 
 let mockReactionRoles: ReactionRole[] = [
   {
@@ -542,6 +584,82 @@ export const ShrimpyAPI = {
       method: 'PUT',
       body: JSON.stringify(config)
     });
+  },
+
+  // Translation Config
+  getTranslationConfig: async (guildId: string): Promise<TranslationConfig> => {
+    if (isDemoMode()) {
+      return mockTranslationConfigs[guildId] || defaultTranslationConfig(guildId);
+    }
+    return fetchJSON<TranslationConfig>(`/api/v1/guilds/${guildId}/translation`);
+  },
+
+  saveTranslationConfig: async (guildId: string, config: TranslationConfig): Promise<TranslationConfig> => {
+    if (isDemoMode()) {
+      const stored = { ...config, hasApiKey: config.hasApiKey || (config.apiKey !== '' && config.apiKey !== '***'), apiKey: '***' };
+      mockTranslationConfigs[guildId] = stored;
+      return stored;
+    }
+    return fetchJSON<TranslationConfig>(`/api/v1/guilds/${guildId}/translation`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: config.enabled,
+        autoEnabled: config.autoEnabled,
+        reactionEnabled: config.reactionEnabled,
+        provider: config.provider,
+        apiKey: config.apiKey,
+        endpointUrl: config.endpointUrl,
+        targetLang: config.targetLang
+      })
+    });
+  },
+
+  addTranslationChannel: async (guildId: string, channelId: string, targetLangOverride: string | null = null): Promise<void> => {
+    if (isDemoMode()) {
+      const cfg = mockTranslationConfigs[guildId] || defaultTranslationConfig(guildId);
+      if (!cfg.channels.some(c => c.channelId === channelId)) {
+        cfg.channels = [...cfg.channels, { channelId, targetLangOverride }];
+      }
+      mockTranslationConfigs[guildId] = cfg;
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/translation/channels`, {
+      method: 'POST',
+      body: JSON.stringify({ channelId, targetLangOverride })
+    });
+  },
+
+  removeTranslationChannel: async (guildId: string, channelId: string): Promise<void> => {
+    if (isDemoMode()) {
+      const cfg = mockTranslationConfigs[guildId];
+      if (cfg) cfg.channels = cfg.channels.filter(c => c.channelId !== channelId);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/translation/channels/${channelId}`, { method: 'DELETE' });
+  },
+
+  addTranslationEmoji: async (guildId: string, emoji: string, targetLangOverride: string | null = null): Promise<void> => {
+    if (isDemoMode()) {
+      const cfg = mockTranslationConfigs[guildId] || defaultTranslationConfig(guildId);
+      if (!cfg.emojis.some(e => e.emoji === emoji)) {
+        cfg.emojis = [...cfg.emojis, { emoji, targetLangOverride }];
+      }
+      mockTranslationConfigs[guildId] = cfg;
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/translation/emojis`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji, targetLangOverride })
+    });
+  },
+
+  removeTranslationEmoji: async (guildId: string, emoji: string): Promise<void> => {
+    if (isDemoMode()) {
+      const cfg = mockTranslationConfigs[guildId];
+      if (cfg) cfg.emojis = cfg.emojis.filter(e => e.emoji !== emoji);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/translation/emojis?emoji=${encodeURIComponent(emoji)}`, { method: 'DELETE' });
   },
 
   // Ticket Panels

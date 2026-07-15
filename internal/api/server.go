@@ -14,6 +14,7 @@ import (
 	rr_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/handler"
 	settings_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/handler"
 	ticket_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket/handler"
+	translation_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/translation/handler"
 	welcome_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/handler"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/go-chi/chi/v5"
@@ -34,6 +35,7 @@ type Server struct {
 	ticketHandler       *ticket_handler.Handler
 	reactionRoleHandler *rr_handler.Handler
 	settingsHandler     *settings_handler.SettingsHandler
+	translationHandler  *translation_handler.Handler
 
 	// Services/Deps needed by middleware
 	guildSvc *guild_svc.GuildService
@@ -59,6 +61,7 @@ func NewServer(
 		ticketHandler:       modules.Ticket.Handler,
 		reactionRoleHandler: modules.ReactionRole.Handler,
 		settingsHandler:     modules.Settings.Handler,
+		translationHandler:  modules.Translation.Handler,
 		guildSvc:            modules.Guild.Service,
 		provider:            provider,
 	}
@@ -115,6 +118,14 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Get("/welcome", s.welcomeHandler.Get)
 				r.Put("/welcome", s.welcomeHandler.Save)
 				r.Delete("/welcome", s.welcomeHandler.Delete)
+
+				// Message translation config
+				r.Get("/translation", s.translationHandler.Get)
+				r.Put("/translation", s.translationHandler.Save)
+				r.Post("/translation/channels", s.translationHandler.AddChannel)
+				r.Delete("/translation/channels/{channelId}", s.translationHandler.RemoveChannel)
+				r.Post("/translation/emojis", s.translationHandler.AddEmoji)
+				r.Delete("/translation/emojis", s.translationHandler.RemoveEmoji)
 
 				// Auto-roles & Staff list config
 				r.Get("/auto-roles", s.guildHandler.ListAutoRoles)

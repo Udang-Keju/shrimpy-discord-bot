@@ -9,6 +9,7 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings"
 	settings_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/ticket"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/translation"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"gorm.io/gorm"
@@ -22,6 +23,7 @@ type Modules struct {
 	Welcome      *welcome.Module
 	ReactionRole *reactionrole.Module
 	Ticket       *ticket.Module
+	Translation  *translation.Module
 }
 
 // Build compiles and connects all modules with their respective layers.
@@ -39,6 +41,7 @@ func Build(
 	welcomeMod := welcome.Build(db)
 	reactionRoleMod := reactionrole.Build(db, provider)
 	ticketMod := ticket.Build(db, guildMod.Repo, provider)
+	translationMod := translation.Build(db, guildMod.Service, tokenEncKey)
 
 	return &Modules{
 		Settings:     settingsMod,
@@ -47,6 +50,7 @@ func Build(
 		Welcome:      welcomeMod,
 		ReactionRole: reactionRoleMod,
 		Ticket:       ticketMod,
+		Translation:  translationMod,
 	}
 }
 
@@ -59,6 +63,6 @@ func (m *Modules) Models() []any {
 	all = append(all, m.Welcome.Models()...)
 	all = append(all, m.ReactionRole.Models()...)
 	all = append(all, m.Ticket.Models()...)
+	all = append(all, m.Translation.Models()...)
 	return all
 }
-

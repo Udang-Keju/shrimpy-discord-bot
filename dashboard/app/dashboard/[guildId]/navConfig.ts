@@ -5,6 +5,7 @@ import {
   Tags,
   Settings,
   Layers,
+  Languages,
   LucideIcon
 } from "lucide-react";
 
@@ -48,6 +49,12 @@ export function getNavigationGroups(guildId: string): NavGroup[] {
           href: `/dashboard/${guildId}/roles`,
           icon: Tags,
           description: "Let members self-assign roles by reacting to a message."
+        },
+        {
+          name: "Message Translation",
+          href: `/dashboard/${guildId}/translation`,
+          icon: Languages,
+          description: "Auto-translate member messages by channel or emoji reaction."
         },
       ],
     },
