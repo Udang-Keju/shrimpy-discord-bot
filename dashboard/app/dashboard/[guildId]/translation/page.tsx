@@ -322,7 +322,7 @@ export default function TranslationPage() {
               options={overrideOptions}
               style={{ width: 160 }}
             />
-            <button type="button" onClick={handleAddChannel} className={styles.actionBtn} style={{ padding: "0 16px", display: "flex", alignItems: "center", gap: 4 }}>
+            <button type="button" onClick={handleAddChannel} className={styles.actionBtn} style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 4 }}>
               <Plus size={14} /><span>Add</span>
             </button>
           </div>
@@ -380,7 +380,7 @@ export default function TranslationPage() {
               options={overrideOptions}
               style={{ width: 160 }}
             />
-            <button type="button" onClick={() => handleAddEmoji(emojiInput)} className={styles.actionBtn} style={{ padding: "0 16px", display: "flex", alignItems: "center", gap: 4 }} disabled={!emojiInput}>
+            <button type="button" onClick={() => handleAddEmoji(emojiInput)} className={styles.actionBtn} style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 4 }} disabled={!emojiInput}>
               <Plus size={14} /><span>Add</span>
             </button>
           </div>
