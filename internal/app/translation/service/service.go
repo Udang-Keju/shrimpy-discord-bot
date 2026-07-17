@@ -56,6 +56,7 @@ type TranslationService struct {
 	guildProvider GuildConfigProvider
 	tokenEncKey   []byte
 	newTranslator TranslatorFactory
+	cache         *translationCache
 }
 
 // NewTranslationService constructs a new TranslationService.
@@ -65,6 +66,7 @@ func NewTranslationService(repo TranslationRepository, guildProvider GuildConfig
 		guildProvider: guildProvider,
 		tokenEncKey:   tokenEncKey,
 		newTranslator: translate.NewTranslator,
+		cache:         newTranslationCache(),
 	}
 }
 
@@ -280,6 +282,12 @@ func (s *TranslationService) TranslateReaction(ctx context.Context, dg *discordg
 // a DM to userID, falling back to the channel reply if the DM can't be sent
 // (e.g. the user has DMs closed). It is a no-op (nil error) when the message
 // should be skipped.
+//
+// A message is only ever sent to the translation engine once per target
+// language: the outcome is cached (keyed by messageID+language) so repeat
+// triggers — multiple reactors, multiple trigger emojis, re-adding a
+// reaction — reuse the cached result instead of hitting the API again, and
+// a channel reply is only ever posted once per message+language.
 func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordgo.Session, cfg *model.TranslationConfig, channelID, messageID, guildID, content, target, delivery, userID string) error {
 	content = strings.TrimSpace(content)
 	if !isTranslatable(content) {
@@ -289,43 +297,59 @@ func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordg
 		return nil
 	}
 
-	apiKey, err := s.decryptKey(cfg)
-	if err != nil {
-		return err
+	cacheKey := messageID + "|" + normalizeLang(target)
+	cached, hit := s.cache.get(cacheKey)
+	if !hit {
+		apiKey, err := s.decryptKey(cfg)
+		if err != nil {
+			return err
+		}
+
+		endpoint := ""
+		if cfg.EndpointURL != nil {
+			endpoint = *cfg.EndpointURL
+		}
+
+		translator, err := s.newTranslator(cfg.Provider, apiKey, endpoint)
+		if err != nil {
+			return err
+		}
+
+		res, err := translator.Translate(ctx, content, target)
+		if err != nil {
+			return err
+		}
+
+		cached = cachedTranslation{translatedText: res.TranslatedText, detectedSource: res.DetectedSourceLang}
+		// Skip when the message is already in the target language, or the
+		// engine returned an identical string.
+		if res.DetectedSourceLang != "" && res.DetectedSourceLang == normalizeLang(target) {
+			cached.skip = true
+		} else if strings.TrimSpace(res.TranslatedText) == "" ||
+			strings.EqualFold(strings.TrimSpace(res.TranslatedText), content) {
+			cached.skip = true
+		}
+		s.cache.set(cacheKey, cached)
 	}
 
-	endpoint := ""
-	if cfg.EndpointURL != nil {
-		endpoint = *cfg.EndpointURL
-	}
-
-	translator, err := s.newTranslator(cfg.Provider, apiKey, endpoint)
-	if err != nil {
-		return err
-	}
-
-	res, err := translator.Translate(ctx, content, target)
-	if err != nil {
-		return err
-	}
-
-	// Skip when the message is already in the target language, or the engine
-	// returned an identical string.
-	if res.DetectedSourceLang != "" && res.DetectedSourceLang == normalizeLang(target) {
+	if cached.skip {
 		return nil
 	}
-	if strings.TrimSpace(res.TranslatedText) == "" ||
-		strings.EqualFold(strings.TrimSpace(res.TranslatedText), content) {
+
+	// In channel-reply mode, the first delivery already posted the reply
+	// publicly — a second reactor triggering the same message shouldn't
+	// duplicate it.
+	if delivery != model.ReactionDeliveryDM && cached.channelDelivered {
 		return nil
 	}
 
 	footer := fmt.Sprintf("Auto-translated → %s", strings.ToUpper(target))
-	if res.DetectedSourceLang != "" {
-		footer = fmt.Sprintf("Auto-translated %s → %s", strings.ToUpper(res.DetectedSourceLang), strings.ToUpper(target))
+	if cached.detectedSource != "" {
+		footer = fmt.Sprintf("Auto-translated %s → %s", strings.ToUpper(cached.detectedSource), strings.ToUpper(target))
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Description: res.TranslatedText,
+		Description: cached.translatedText,
 		Color:       embedColor,
 		Footer:      &discordgo.MessageEmbedFooter{Text: footer},
 	}
@@ -337,7 +361,7 @@ func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordg
 		// DMs closed or another failure — fall back to the channel reply below.
 	}
 
-	_, err = dg.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+	_, err := dg.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Embed: embed,
 		Reference: &discordgo.MessageReference{
 			MessageID: messageID,
@@ -348,6 +372,8 @@ func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordg
 	if err != nil {
 		return fmt.Errorf("translation: send translated reply: %w", err)
 	}
+	cached.channelDelivered = true
+	s.cache.set(cacheKey, cached)
 	return nil
 }
 
