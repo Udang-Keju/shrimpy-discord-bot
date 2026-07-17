@@ -343,6 +343,25 @@ export default function TranslationPage() {
             </label>
           </div>
 
+          {config.reactionEnabled && (
+            <div className={styles.formGroup} style={{ marginBottom: "var(--space-2)" }}>
+              <label className={styles.label}>Send translation to</label>
+              <Dropdown
+                value={config.reactionDelivery}
+                onChange={val => updateField("reactionDelivery", val as "channel" | "dm")}
+                options={[
+                  { value: "channel", label: "Channel reply (visible to everyone)" },
+                  { value: "dm", label: "Direct message (visible only to the reacting member)" },
+                ]}
+              />
+              {config.reactionDelivery === "dm" && (
+                <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 }}>
+                  Falls back to a channel reply if the member has server DMs disabled.
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "8px 0" }}>
             {config.emojis.length === 0 ? (
               <div style={{ color: "var(--color-text-muted)", fontSize: "12px" }}>No trigger emojis configured yet.</div>

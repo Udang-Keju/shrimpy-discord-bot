@@ -139,6 +139,7 @@ export interface TranslationConfig {
   enabled: boolean;
   autoEnabled: boolean;
   reactionEnabled: boolean;
+  reactionDelivery: 'channel' | 'dm'; // where reaction-triggered translations are sent
   provider: string;            // 'deepl' | 'google' | 'libretranslate'
   apiKey: string;              // masked '***' when a key is stored, '' otherwise
   hasApiKey: boolean;
@@ -284,6 +285,7 @@ function defaultTranslationConfig(guildId: string): TranslationConfig {
     enabled: false,
     autoEnabled: false,
     reactionEnabled: false,
+    reactionDelivery: 'channel',
     provider: 'deepl',
     apiKey: '',
     hasApiKey: false,
@@ -606,6 +608,7 @@ export const ShrimpyAPI = {
         enabled: config.enabled,
         autoEnabled: config.autoEnabled,
         reactionEnabled: config.reactionEnabled,
+        reactionDelivery: config.reactionDelivery,
         provider: config.provider,
         apiKey: config.apiKey,
         endpointUrl: config.endpointUrl,

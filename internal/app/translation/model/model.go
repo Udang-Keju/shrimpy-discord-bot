@@ -2,20 +2,27 @@ package model
 
 import "time"
 
+// Reaction delivery modes: where a reaction-triggered translation is sent.
+const (
+	ReactionDeliveryChannel = "channel" // reply in the channel, visible to everyone
+	ReactionDeliveryDM      = "dm"      // DM the reacting user; falls back to channel if DMs are closed
+)
+
 // TranslationConfig maps to the translation_config table. It holds the
 // per-guild translation feature settings, including the (encrypted) engine
 // credentials.
 type TranslationConfig struct {
-	GuildID         int64   `gorm:"primaryKey;column:guild_id;autoIncrement:false"`
-	Enabled         bool    `gorm:"column:enabled"`          // master feature toggle
-	AutoEnabled     bool    `gorm:"column:auto_enabled"`     // auto-translate in configured channels
-	ReactionEnabled bool    `gorm:"column:reaction_enabled"` // translate on configured emoji reaction
-	Provider        string  `gorm:"column:provider;default:'deepl'"`
-	APIKeyEnc       []byte  `gorm:"column:api_key_enc"`  // AES-256-GCM encrypted engine API key
-	EndpointURL     *string `gorm:"column:endpoint_url"` // for self-hosted engines (LibreTranslate)
-	TargetLang      *string `gorm:"column:target_lang"`  // nil = fall back to guilds.language
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	GuildID          int64   `gorm:"primaryKey;column:guild_id;autoIncrement:false"`
+	Enabled          bool    `gorm:"column:enabled"`          // master feature toggle
+	AutoEnabled      bool    `gorm:"column:auto_enabled"`     // auto-translate in configured channels
+	ReactionEnabled  bool    `gorm:"column:reaction_enabled"` // translate on configured emoji reaction
+	ReactionDelivery string  `gorm:"column:reaction_delivery;default:'channel'"` // "channel" or "dm"
+	Provider         string  `gorm:"column:provider;default:'deepl'"`
+	APIKeyEnc        []byte  `gorm:"column:api_key_enc"`  // AES-256-GCM encrypted engine API key
+	EndpointURL      *string `gorm:"column:endpoint_url"` // for self-hosted engines (LibreTranslate)
+	TargetLang       *string `gorm:"column:target_lang"`  // nil = fall back to guilds.language
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // TableName overrides the GORM default table name mapping.

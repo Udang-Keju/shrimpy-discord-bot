@@ -73,7 +73,7 @@ func NewTranslationService(repo TranslationRepository, guildProvider GuildConfig
 func (s *TranslationService) GetConfig(ctx context.Context, guildID int64) (*model.TranslationConfig, error) {
 	cfg, err := s.repo.GetConfig(ctx, guildID)
 	if err == repository.ErrNotFound {
-		return &model.TranslationConfig{GuildID: guildID, Provider: translate.ProviderDeepL}, nil
+		return &model.TranslationConfig{GuildID: guildID, Provider: translate.ProviderDeepL, ReactionDelivery: model.ReactionDeliveryChannel}, nil
 	}
 	return cfg, err
 }
@@ -89,13 +89,14 @@ func (s *TranslationService) HasAPIKey(ctx context.Context, guildID int64) bool 
 
 // SaveConfigInput carries a dashboard save request.
 type SaveConfigInput struct {
-	Enabled         bool
-	AutoEnabled     bool
-	ReactionEnabled bool
-	Provider        string
-	APIKey          string // plaintext; "" or MaskedAPIKey preserves the stored key
-	EndpointURL     *string
-	TargetLang      *string
+	Enabled          bool
+	AutoEnabled      bool
+	ReactionEnabled  bool
+	ReactionDelivery string // "channel" or "dm"; anything else normalizes to "channel"
+	Provider         string
+	APIKey           string // plaintext; "" or MaskedAPIKey preserves the stored key
+	EndpointURL      *string
+	TargetLang       *string
 }
 
 // SaveConfig upserts the translation configuration, encrypting a newly supplied
@@ -114,6 +115,10 @@ func (s *TranslationService) SaveConfig(ctx context.Context, guildID int64, in S
 	cfg.Enabled = in.Enabled
 	cfg.AutoEnabled = in.AutoEnabled
 	cfg.ReactionEnabled = in.ReactionEnabled
+	cfg.ReactionDelivery = model.ReactionDeliveryChannel
+	if in.ReactionDelivery == model.ReactionDeliveryDM {
+		cfg.ReactionDelivery = model.ReactionDeliveryDM
+	}
 	cfg.Provider = in.Provider
 	if cfg.Provider == "" {
 		cfg.Provider = translate.ProviderDeepL
@@ -218,7 +223,7 @@ func (s *TranslationService) TranslateMessage(ctx context.Context, dg *discordgo
 	}
 
 	target := s.resolveTarget(ctx, guildID, override, cfg)
-	return s.translateAndReply(ctx, dg, cfg, m.ChannelID, m.ID, m.GuildID, m.Content, target)
+	return s.translateAndReply(ctx, dg, cfg, m.ChannelID, m.ID, m.GuildID, m.Content, target, model.ReactionDeliveryChannel, "")
 }
 
 // TranslateReaction runs the reaction-trigger path for a reaction add event.
@@ -263,12 +268,19 @@ func (s *TranslationService) TranslateReaction(ctx context.Context, dg *discordg
 	}
 
 	target := s.resolveTarget(ctx, guildID, override, cfg)
-	return s.translateAndReply(ctx, dg, cfg, r.ChannelID, r.MessageID, r.GuildID, msg.Content, target)
+	delivery := cfg.ReactionDelivery
+	if delivery == "" {
+		delivery = model.ReactionDeliveryChannel
+	}
+	return s.translateAndReply(ctx, dg, cfg, r.ChannelID, r.MessageID, r.GuildID, msg.Content, target, delivery, r.UserID)
 }
 
-// translateAndReply applies content guards, translates, and posts an embed
-// reply. It is a no-op (nil error) when the message should be skipped.
-func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordgo.Session, cfg *model.TranslationConfig, channelID, messageID, guildID, content, target string) error {
+// translateAndReply applies content guards, translates, and delivers the
+// result either as a channel reply or (delivery == model.ReactionDeliveryDM)
+// a DM to userID, falling back to the channel reply if the DM can't be sent
+// (e.g. the user has DMs closed). It is a no-op (nil error) when the message
+// should be skipped.
+func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordgo.Session, cfg *model.TranslationConfig, channelID, messageID, guildID, content, target, delivery, userID string) error {
 	content = strings.TrimSpace(content)
 	if !isTranslatable(content) {
 		return nil
@@ -318,6 +330,13 @@ func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordg
 		Footer:      &discordgo.MessageEmbedFooter{Text: footer},
 	}
 
+	if delivery == model.ReactionDeliveryDM && userID != "" {
+		if dmErr := s.sendDM(dg, userID, channelID, embed); dmErr == nil {
+			return nil
+		}
+		// DMs closed or another failure — fall back to the channel reply below.
+	}
+
 	_, err = dg.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Embed: embed,
 		Reference: &discordgo.MessageReference{
@@ -328,6 +347,24 @@ func (s *TranslationService) translateAndReply(ctx context.Context, dg *discordg
 	})
 	if err != nil {
 		return fmt.Errorf("translation: send translated reply: %w", err)
+	}
+	return nil
+}
+
+// sendDM delivers the translation embed privately to userID, tagging it with
+// the source channel since that context is otherwise lost outside the guild.
+func (s *TranslationService) sendDM(dg *discordgo.Session, userID, sourceChannelID string, embed *discordgo.MessageEmbed) error {
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		Name:  "Source",
+		Value: fmt.Sprintf("<#%s>", sourceChannelID),
+	})
+
+	dmChannel, err := dg.UserChannelCreate(userID)
+	if err != nil {
+		return fmt.Errorf("translation: open DM channel: %w", err)
+	}
+	if _, err := dg.ChannelMessageSendComplex(dmChannel.ID, &discordgo.MessageSend{Embed: embed}); err != nil {
+		return fmt.Errorf("translation: send DM: %w", err)
 	}
 	return nil
 }

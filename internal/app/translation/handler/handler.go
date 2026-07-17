@@ -35,11 +35,12 @@ type emojiDTO struct {
 }
 
 type configDTO struct {
-	GuildID         string       `json:"guildId"`
-	Enabled         bool         `json:"enabled"`
-	AutoEnabled     bool         `json:"autoEnabled"`
-	ReactionEnabled bool         `json:"reactionEnabled"`
-	Provider        string       `json:"provider"`
+	GuildID          string       `json:"guildId"`
+	Enabled          bool         `json:"enabled"`
+	AutoEnabled      bool         `json:"autoEnabled"`
+	ReactionEnabled  bool         `json:"reactionEnabled"`
+	ReactionDelivery string       `json:"reactionDelivery"` // "channel" or "dm"
+	Provider         string       `json:"provider"`
 	APIKey          string       `json:"apiKey"` // masked "***" when set, "" when unset
 	HasAPIKey       bool         `json:"hasApiKey"`
 	EndpointURL     *string      `json:"endpointUrl"`
@@ -75,13 +76,14 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 // saveRequest is the dashboard payload for the config PUT.
 type saveRequest struct {
-	Enabled         bool    `json:"enabled"`
-	AutoEnabled     bool    `json:"autoEnabled"`
-	ReactionEnabled bool    `json:"reactionEnabled"`
-	Provider        string  `json:"provider"`
-	APIKey          string  `json:"apiKey"`
-	EndpointURL     *string `json:"endpointUrl"`
-	TargetLang      *string `json:"targetLang"`
+	Enabled          bool    `json:"enabled"`
+	AutoEnabled      bool    `json:"autoEnabled"`
+	ReactionEnabled  bool    `json:"reactionEnabled"`
+	ReactionDelivery string  `json:"reactionDelivery"`
+	Provider         string  `json:"provider"`
+	APIKey           string  `json:"apiKey"`
+	EndpointURL      *string `json:"endpointUrl"`
+	TargetLang       *string `json:"targetLang"`
 }
 
 // Save upserts the translation config (excluding channel/emoji lists).
@@ -95,13 +97,14 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg, err := h.translationSvc.SaveConfig(r.Context(), guildID, service.SaveConfigInput{
-		Enabled:         req.Enabled,
-		AutoEnabled:     req.AutoEnabled,
-		ReactionEnabled: req.ReactionEnabled,
-		Provider:        req.Provider,
-		APIKey:          req.APIKey,
-		EndpointURL:     req.EndpointURL,
-		TargetLang:      req.TargetLang,
+		Enabled:          req.Enabled,
+		AutoEnabled:      req.AutoEnabled,
+		ReactionEnabled:  req.ReactionEnabled,
+		ReactionDelivery: req.ReactionDelivery,
+		Provider:         req.Provider,
+		APIKey:           req.APIKey,
+		EndpointURL:      req.EndpointURL,
+		TargetLang:       req.TargetLang,
 	})
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to save translation configuration")
@@ -221,16 +224,17 @@ func toConfigDTO(cfg *model.TranslationConfig, channels []model.TranslationChann
 	}
 
 	return configDTO{
-		GuildID:         strconv.FormatInt(cfg.GuildID, 10),
-		Enabled:         cfg.Enabled,
-		AutoEnabled:     cfg.AutoEnabled,
-		ReactionEnabled: cfg.ReactionEnabled,
-		Provider:        cfg.Provider,
-		APIKey:          apiKey,
-		HasAPIKey:       hasKey,
-		EndpointURL:     cfg.EndpointURL,
-		TargetLang:      cfg.TargetLang,
-		Channels:        chDTOs,
-		Emojis:          emDTOs,
+		GuildID:          strconv.FormatInt(cfg.GuildID, 10),
+		Enabled:          cfg.Enabled,
+		AutoEnabled:      cfg.AutoEnabled,
+		ReactionEnabled:  cfg.ReactionEnabled,
+		ReactionDelivery: cfg.ReactionDelivery,
+		Provider:         cfg.Provider,
+		APIKey:           apiKey,
+		HasAPIKey:        hasKey,
+		EndpointURL:      cfg.EndpointURL,
+		TargetLang:       cfg.TargetLang,
+		Channels:         chDTOs,
+		Emojis:           emDTOs,
 	}
 }

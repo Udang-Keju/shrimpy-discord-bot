@@ -34,7 +34,7 @@ func (r *TranslationRepo) UpsertConfig(ctx context.Context, cfg *model.Translati
 		Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "guild_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{
-				"enabled", "auto_enabled", "reaction_enabled",
+				"enabled", "auto_enabled", "reaction_enabled", "reaction_delivery",
 				"provider", "api_key_enc", "endpoint_url", "target_lang",
 			}),
 		}).
