@@ -269,6 +269,44 @@ func (h *Handler) GetDiscordCategories(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, list)
 }
 
+// GetDiscordVoiceChannels returns the guild's voice channels (GUILD_VOICE) for dropdown
+// selectors — e.g. choosing an existing channel to turn into a clock channel.
+func (h *Handler) GetDiscordVoiceChannels(w http.ResponseWriter, r *http.Request) {
+	guildIDStr := chi.URLParam(r, "guildId")
+	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	channels, err := dg.GuildChannels(guildIDStr)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "DISCORD_ERROR", "Failed to fetch Discord channels: "+err.Error())
+		return
+	}
+
+	type channelResponse struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		Type int    `json:"type"`
+	}
+
+	var list []channelResponse
+	for _, ch := range channels {
+		if ch.Type == discordgo.ChannelTypeGuildVoice {
+			list = append(list, channelResponse{
+				ID:   ch.ID,
+				Name: ch.Name,
+				Type: int(ch.Type),
+			})
+		}
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, list)
+}
+
 // GetDiscordRoles returns roles in the guild for role pickers.
 func (h *Handler) GetDiscordRoles(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")

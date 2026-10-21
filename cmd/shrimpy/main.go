@@ -86,6 +86,9 @@ func main() {
 	// Start auto-close background worker
 	go modules.Ticket.SchedulerSvc.Start(shutdownCtx, registry)
 
+	// Start clock channel refresh worker
+	go modules.Clock.Scheduler.Start(shutdownCtx, registry)
+
 	// Start HTTP server FIRST — Railway health checks hit /health immediately after deploy
 	go func() {
 		if err := apiServer.Start(); err != nil {
