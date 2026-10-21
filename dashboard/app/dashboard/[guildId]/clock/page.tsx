@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Plus, Trash2, Pencil, X } from "lucide-react";
+import { Trash2, Pencil, ArrowLeft, ArrowRight, Check } from "lucide-react";
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import {
   ShrimpyAPI,
@@ -11,27 +11,50 @@ import {
   TimezoneOption,
   DiscordChannel,
   CLOCK_FORMATS,
+  CLOCK_REFRESH_OPTIONS,
 } from "@/lib/api";
 import Dropdown from "@/components/Dropdown";
 import { useToast } from "@/hooks/useToast";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
-const DEFAULT_FORMAT = CLOCK_FORMATS[0].value;
+type Kind = "date" | "time";
+const KINDS: Kind[] = ["date", "time"];
+const KIND_LABEL: Record<Kind, string> = { date: "Date channel", time: "Time channel" };
+const DEFAULT_EMOJI: Record<Kind, string> = { date: "📅", time: "🕐" };
 const DEFAULT_TIMEZONE = "UTC";
+const DEFAULT_REFRESH = 5;
+const STEPS = ["Channels", "Format & timezone", "Review & save"];
 
 const SOURCE_OPTIONS = [
   { value: "create", label: "Create a channel for me" },
   { value: "existing", label: "Use an existing voice channel" },
 ];
 
-const FORMAT_OPTIONS = CLOCK_FORMATS.map(f => ({
-  value: f.value,
-  label: f.label,
-  group: f.kind === "date" ? "Date" : "Time",
-}));
-
+const formatsFor = (kind: Kind) => CLOCK_FORMATS.filter(f => f.kind === kind);
 const formatLabel = (format: string) =>
   CLOCK_FORMATS.find(f => f.value === format)?.label ?? format;
+const refreshLabel = (minutes: number) =>
+  CLOCK_REFRESH_OPTIONS.find(o => o.value === minutes)?.label ?? `Every ${minutes} minutes`;
+
+// Per-channel wizard state. `existing` is set when the server already has a clock of
+// this kind: its Discord channel is fixed and only the display settings are edited.
+interface ChannelDraft {
+  existing: ClockChannel | null;
+  source: string;
+  voiceChannelId: string;
+  categoryId: string;
+  format: string;
+  emoji: string;
+}
+
+const emptyDraft = (kind: Kind, existing: ClockChannel | null): ChannelDraft => ({
+  existing,
+  source: "create",
+  voiceChannelId: "",
+  categoryId: "",
+  format: existing?.format ?? formatsFor(kind)[0].value,
+  emoji: existing?.emoji ?? "",
+});
 
 export default function ClockPage() {
   const params = useParams();
@@ -43,15 +66,17 @@ export default function ClockPage() {
   const [voiceChannels, setVoiceChannels] = useState<DiscordChannel[]>([]);
   const [categories, setCategories] = useState<DiscordChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Form state. editingId is set while editing an existing clock.
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [format, setFormat] = useState(DEFAULT_FORMAT);
+  // The wizard shows while editing, or when the server has no clocks yet.
+  const [editing, setEditing] = useState(false);
+  const [step, setStep] = useState(0);
+  const [drafts, setDrafts] = useState<Record<Kind, ChannelDraft>>({
+    date: emptyDraft("date", null),
+    time: emptyDraft("time", null),
+  });
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
-  const [emoji, setEmoji] = useState("");
-  const [source, setSource] = useState("create");
-  const [voiceChannelId, setVoiceChannelId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [refreshMinutes, setRefreshMinutes] = useState(DEFAULT_REFRESH);
 
   const isSubmitting = useRef(false);
   const guildIdRef = useRef(guildId);
@@ -84,75 +109,121 @@ export default function ClockPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guildId]);
 
-  const resetForm = () => {
-    setEditingId(null);
-    setFormat(DEFAULT_FORMAT);
-    setTimezone(DEFAULT_TIMEZONE);
-    setEmoji("");
-    setSource("create");
-    setVoiceChannelId("");
-    setCategoryId("");
+  // The setup is the first date clock plus the first time clock; any others
+  // (from before the wizard existed) are listed separately and can only be removed.
+  const primary: Record<Kind, ClockChannel | null> = {
+    date: clocks.find(c => c.kind === "date") ?? null,
+    time: clocks.find(c => c.kind === "time") ?? null,
+  };
+  const extras = clocks.filter(c => c !== primary.date && c !== primary.time);
+  const hasSetup = clocks.length > 0;
+  const showWizard = editing || !hasSetup;
+
+  const startWizard = () => {
+    const anchor = primary.date ?? primary.time;
+    setDrafts({
+      date: emptyDraft("date", primary.date),
+      time: emptyDraft("time", primary.time),
+    });
+    setTimezone(anchor?.timezone ?? DEFAULT_TIMEZONE);
+    setRefreshMinutes(anchor?.refreshMinutes ?? DEFAULT_REFRESH);
+    setStep(0);
+    setEditing(true);
   };
 
-  const handleEdit = (clock: ClockChannel) => {
-    setEditingId(clock.id);
-    setFormat(clock.format);
-    setTimezone(clock.timezone);
-    setEmoji(clock.emoji ?? "");
+  const cancelWizard = () => {
+    setEditing(false);
+    setStep(0);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const updateDraft = (kind: Kind, patch: Partial<ChannelDraft>) =>
+    setDrafts(prev => ({ ...prev, [kind]: { ...prev[kind], ...patch } }));
+
+  // Step 1 needs a channel picked for every clock that will link an existing one.
+  const channelsError = (): string | null => {
+    for (const kind of KINDS) {
+      const d = drafts[kind];
+      if (!d.existing && d.source === "existing" && !d.voiceChannelId) {
+        return `Pick a voice channel for the ${kind} clock.`;
+      }
+    }
+    const { date, time } = drafts;
+    if (
+      !date.existing && !time.existing &&
+      date.source === "existing" && time.source === "existing" &&
+      date.voiceChannelId === time.voiceChannelId
+    ) {
+      return "The date and time clocks need different channels.";
+    }
+    return null;
+  };
+
+  const goNext = () => {
+    if (step === 0) {
+      const err = channelsError();
+      if (err) {
+        showToast(err, "error");
+        return;
+      }
+    }
+    setStep(s => Math.min(s + 1, STEPS.length - 1));
+  };
+
+  const handleSave = async () => {
     if (isSubmitting.current) return;
-    if (!editingId && source === "existing" && !voiceChannelId) {
-      showToast("Pick a voice channel to link.", "error");
+    const err = channelsError();
+    if (err) {
+      showToast(err, "error");
+      setStep(0);
       return;
     }
     isSubmitting.current = true;
 
-    // Snapshot, then reset the form right away so the next clock can be entered
-    // without waiting on the network.
-    const snapshot = {
-      editingId,
-      format,
-      timezone,
-      emoji: emoji.trim(),
-      source,
-      voiceChannelId,
-      categoryId,
-    };
+    // Snapshot, then reset the wizard right away so it never shows stale input
+    // while the requests are in flight.
+    const snapshot = { drafts, timezone, refreshMinutes };
     const requestGuildId = guildId;
-    resetForm();
-    isSubmitting.current = false;
+    cancelWizard();
+    setSaving(true);
 
-    const toastId = showToast(snapshot.editingId ? "Updating clock…" : "Setting up clock…", "loading");
+    const toastId = showToast("Saving clocks…", "loading");
     try {
-      if (snapshot.editingId) {
-        const saved = await ShrimpyAPI.updateClockChannel(requestGuildId, snapshot.editingId, {
-          format: snapshot.format,
-          timezone: snapshot.timezone,
-          emoji: snapshot.emoji,
-        });
-        if (guildIdRef.current === requestGuildId) {
-          setClocks(prev => prev.map(c => (c.id === saved.id ? saved : c)));
+      // Date first, then time. A failure partway leaves the first one saved, and
+      // the reload below shows exactly what was applied.
+      for (const kind of KINDS) {
+        const d = snapshot.drafts[kind];
+        const emoji = d.emoji.trim();
+        if (d.existing) {
+          await ShrimpyAPI.updateClockChannel(requestGuildId, d.existing.id, {
+            format: d.format,
+            timezone: snapshot.timezone,
+            refreshMinutes: snapshot.refreshMinutes,
+            emoji,
+          });
+        } else {
+          await ShrimpyAPI.createClockChannel(requestGuildId, {
+            format: d.format,
+            timezone: snapshot.timezone,
+            refreshMinutes: snapshot.refreshMinutes,
+            emoji,
+            channelId: d.source === "existing" ? d.voiceChannelId : null,
+            categoryId: d.source === "create" ? d.categoryId || null : null,
+          });
         }
-        updateToast(toastId, "Clock updated.", "success");
-      } else {
-        const created = await ShrimpyAPI.createClockChannel(requestGuildId, {
-          format: snapshot.format,
-          timezone: snapshot.timezone,
-          emoji: snapshot.emoji,
-          channelId: snapshot.source === "existing" ? snapshot.voiceChannelId : null,
-          categoryId: snapshot.source === "create" ? snapshot.categoryId || null : null,
-        });
-        if (guildIdRef.current === requestGuildId) {
-          setClocks(prev => [...prev.filter(c => c.id !== created.id), created]);
-        }
-        updateToast(toastId, "Clock added.", "success");
       }
-    } catch (err) {
-      console.error(err);
-      updateToast(toastId, snapshot.editingId ? "Failed to update clock." : "Failed to add clock.", "error");
+      updateToast(toastId, "Clock channels saved.", "success");
+    } catch (e) {
+      console.error(e);
+      updateToast(toastId, "Failed to save clock channels. Check what was applied below.", "error");
+    } finally {
+      isSubmitting.current = false;
+      try {
+        const fresh = await ShrimpyAPI.getClockChannels(requestGuildId);
+        if (guildIdRef.current === requestGuildId) setClocks(fresh);
+      } catch (e) {
+        console.error(e);
+      }
+      if (guildIdRef.current === requestGuildId) setSaving(false);
     }
   };
 
@@ -164,7 +235,6 @@ export default function ClockPage() {
     try {
       await ShrimpyAPI.deleteClockChannel(guildId, clock.id, deleteChannel);
       setClocks(prev => prev.filter(c => c.id !== clock.id));
-      if (editingId === clock.id) resetForm();
       showToast("Clock removed.", "success");
     } catch (err) {
       console.error(err);
@@ -172,7 +242,14 @@ export default function ClockPage() {
     }
   };
 
-  if (loading) return (
+  const handleRemoveSetup = async () => {
+    if (!window.confirm("Remove the date and time clocks? You will be asked about bot-created channels next.")) return;
+    for (const clock of [primary.date, primary.time].filter((c): c is ClockChannel => c !== null)) {
+      await handleDelete(clock);
+    }
+  };
+
+  if (loading || saving) return (
     <div>
       <SkeletonHeader />
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: 720 }}>
@@ -188,136 +265,223 @@ export default function ClockPage() {
   const voiceOptions = voiceChannels
     .filter(c => !linkedIds.has(c.id))
     .map(c => ({ value: c.id, label: c.name, icon: "🔊" }));
+  const hint = { fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 } as const;
+
+  const channelDescription = (kind: Kind) => {
+    const d = drafts[kind];
+    if (d.existing) return "Keeps its current Discord channel";
+    if (d.source === "existing") {
+      return `Linked: ${voiceChannels.find(c => c.id === d.voiceChannelId)?.name ?? "voice channel"}`;
+    }
+    const category = categories.find(c => c.id === d.categoryId)?.name;
+    return `Bot creates a view-only voice channel${category ? ` under ${category}` : ""}`;
+  };
 
   return (
     <div>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Clock Channels</h2>
         <p className={styles.sectionDesc}>
-          Show the current date or time in a channel name. The bot renames the channel automatically.
+          Show the current date and time in two channel names. The bot renames them automatically.
         </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: 720 }}>
 
-        {/* Existing clocks */}
-        <div className={styles.card}>
-          <h3 className={styles.cardTitle}>Your Clocks</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {clocks.length === 0 ? (
-              <div style={{ color: "var(--color-text-muted)", fontSize: "12px" }}>No clocks yet. Add one below.</div>
-            ) : (
-              clocks.map(clock => (
+        {showWizard ? (
+          <div className={styles.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 className={styles.cardTitle}>
+                Step {step + 1} of {STEPS.length}: {STEPS[step]}
+              </h3>
+              {hasSetup && (
+                <button type="button" onClick={cancelWizard} className={styles.actionBtn}
+                  style={{ padding: "6px 10px" }}>
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+              {step === 0 && KINDS.map(kind => {
+                const d = drafts[kind];
+                return (
+                  <div key={kind} className={styles.formGroup}>
+                    <label className={styles.label}>{KIND_LABEL[kind]}</label>
+                    {d.existing ? (
+                      <div style={hint}>
+                        Already set up as &ldquo;{d.existing.name || "waiting for first update"}&rdquo;. Its channel stays the same.
+                      </div>
+                    ) : (
+                      <>
+                        <Dropdown value={d.source} onChange={v => updateDraft(kind, { source: v })} options={SOURCE_OPTIONS} />
+                        {d.source === "create" ? (
+                          <div style={{ marginTop: 8 }}>
+                            <Dropdown
+                              value={d.categoryId}
+                              onChange={v => updateDraft(kind, { categoryId: v })}
+                              options={[{ value: "", label: "No category" }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
+                            />
+                            <div style={hint}>The bot creates a voice channel members can see but not join.</div>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 8 }}>
+                            <Dropdown
+                              value={d.voiceChannelId}
+                              onChange={v => updateDraft(kind, { voiceChannelId: v })}
+                              placeholder={voiceOptions.length === 0 ? "No unlinked voice channels" : "Select a voice channel..."}
+                              options={voiceOptions}
+                            />
+                            <div style={hint}>The channel&apos;s name will be replaced by the clock.</div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {step === 1 && (
+                <>
+                  {KINDS.map(kind => {
+                    const d = drafts[kind];
+                    return (
+                      <div key={kind} className={styles.formGroup}>
+                        <label className={styles.label}>{KIND_LABEL[kind]} format</label>
+                        <Dropdown
+                          value={d.format}
+                          onChange={v => updateDraft(kind, { format: v })}
+                          options={formatsFor(kind).map(f => ({ value: f.value, label: f.label }))}
+                        />
+                        <input
+                          className={styles.input}
+                          style={{ marginTop: 8 }}
+                          type="text"
+                          value={d.emoji}
+                          onChange={ev => updateDraft(kind, { emoji: ev.target.value })}
+                          maxLength={8}
+                          placeholder={`Emoji (optional, default ${DEFAULT_EMOJI[kind]})`}
+                        />
+                      </div>
+                    );
+                  })}
+                  <div style={hint}>Standard emoji only; custom server emoji can&apos;t appear in channel names.</div>
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Timezone</label>
+                    <Dropdown value={timezone} onChange={setTimezone} options={tzOptions} placeholder="UTC" />
+                    <div style={hint}>Shared by both channels. Sorted by GMT offset. Defaults to UTC.</div>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Refresh</label>
+                    <Dropdown
+                      value={String(refreshMinutes)}
+                      onChange={v => setRefreshMinutes(Number(v))}
+                      options={CLOCK_REFRESH_OPTIONS.map(o => ({ value: String(o.value), label: o.label }))}
+                    />
+                    <div style={hint}>
+                      Discord allows about 2 renames per 10 minutes per channel, so 5 minutes is the fastest. The time
+                      can be a few minutes behind.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  {KINDS.map(kind => {
+                    const d = drafts[kind];
+                    return (
+                      <div key={kind} className={styles.actionBtn} style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                        <span style={{ fontWeight: "bold" }}>
+                          {KIND_LABEL[kind]}: {d.emoji.trim() || DEFAULT_EMOJI[kind]} {formatLabel(d.format)}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>{channelDescription(kind)}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={hint}>
+                    Timezone: {tzLabel(timezone)} · {refreshLabel(refreshMinutes)}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-4)" }}>
+              <button type="button" className={styles.actionBtn} disabled={step === 0}
+                onClick={() => setStep(s => Math.max(s - 1, 0))}
+                style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: 6 }}>
+                <ArrowLeft size={14} /><span>Back</span>
+              </button>
+              {step < STEPS.length - 1 ? (
+                <button type="button" className={styles.submitBtn} onClick={goNext}>
+                  <span>Next</span><ArrowRight size={16} />
+                </button>
+              ) : (
+                <button type="button" className={styles.submitBtn} onClick={handleSave}>
+                  <Check size={16} /><span>Save</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.card}>
+            <h3 className={styles.cardTitle}>Your Clocks</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {KINDS.map(kind => {
+                const clock = primary[kind];
+                return (
+                  <div key={kind} className={styles.actionBtn} style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                    <span style={{ fontWeight: "bold" }}>
+                      {clock ? clock.name || "Waiting for first update…" : `No ${kind} clock`}
+                    </span>
+                    {clock && (
+                      <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
+                        {formatLabel(clock.format)} · {tzLabel(clock.timezone)} · {refreshLabel(clock.refreshMinutes)} · {clock.managed ? "Created by bot" : "Linked channel"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: "var(--space-4)" }}>
+              <button type="button" className={styles.submitBtn} onClick={startWizard}>
+                <Pencil size={16} /><span>Edit</span>
+              </button>
+              <button type="button" className={styles.actionBtn} onClick={handleRemoveSetup}
+                style={{ padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, color: "var(--color-danger)" }}>
+                <Trash2 size={14} /><span>Remove</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {extras.length > 0 && !showWizard && (
+          <div className={styles.card}>
+            <h3 className={styles.cardTitle}>Other Clocks</h3>
+            <div style={hint}>These were added before the guided setup and can only be removed.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: 8 }}>
+              {extras.map(clock => (
                 <div key={clock.id} className={styles.actionBtn} style={{ justifyContent: "space-between", cursor: "default" }}>
                   <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ fontWeight: "bold" }}>{clock.name || "Waiting for first update…"}</span>
                     <span style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
-                      {formatLabel(clock.format)} · {tzLabel(clock.timezone)} · {clock.managed ? "Created by bot" : "Linked channel"}
+                      {formatLabel(clock.format)} · {tzLabel(clock.timezone)} · {refreshLabel(clock.refreshMinutes)}
                     </span>
                   </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button type="button" onClick={() => handleEdit(clock)} aria-label="Edit clock"
-                      style={{ background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer" }}>
-                      <Pencil size={12} />
-                    </button>
-                    <button type="button" onClick={() => handleDelete(clock)} aria-label="Remove clock"
-                      style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer" }}>
-                      <Trash2 size={12} />
-                    </button>
-                  </span>
+                  <button type="button" onClick={() => handleDelete(clock)} aria-label="Remove clock"
+                    style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer" }}>
+                    <Trash2 size={12} />
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Add / edit form */}
-        <form onSubmit={handleSubmit} className={styles.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 className={styles.cardTitle}>{editingId ? "Edit Clock" : "Add a Clock"}</h3>
-            {editingId && (
-              <button type="button" onClick={resetForm} className={styles.actionBtn}
-                style={{ padding: "6px 10px", display: "flex", alignItems: "center", gap: 4 }}>
-                <X size={12} /><span>Cancel</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>Display</label>
-              <Dropdown value={format} onChange={setFormat} options={FORMAT_OPTIONS} />
+              ))}
             </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>Timezone</label>
-              <Dropdown value={timezone} onChange={setTimezone} options={tzOptions} placeholder="UTC" />
-              <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 }}>
-                Sorted by GMT offset. Defaults to UTC.
-              </div>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>Emoji (optional)</label>
-              <input
-                className={styles.input}
-                type="text"
-                value={emoji}
-                onChange={ev => setEmoji(ev.target.value)}
-                maxLength={8}
-                placeholder="Leave empty for the default 📅 / 🕐"
-              />
-              <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 }}>
-                Standard emoji only; custom server emoji can&apos;t appear in channel names.
-              </div>
-            </div>
-
-            {!editingId && (
-              <>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Channel</label>
-                  <Dropdown value={source} onChange={setSource} options={SOURCE_OPTIONS} />
-                </div>
-
-                {source === "create" ? (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Category (optional)</label>
-                    <Dropdown
-                      value={categoryId}
-                      onChange={setCategoryId}
-                      options={[{ value: "", label: "No category" }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
-                    />
-                    <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 }}>
-                      The bot creates a voice channel members can see but not join.
-                    </div>
-                  </div>
-                ) : (
-                  <div className={styles.formGroup}>
-                    <label className={styles.label}>Voice Channel</label>
-                    <Dropdown
-                      value={voiceChannelId}
-                      onChange={setVoiceChannelId}
-                      placeholder={voiceOptions.length === 0 ? "No unlinked voice channels" : "Select a voice channel..."}
-                      options={voiceOptions}
-                    />
-                    <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginTop: 4 }}>
-                      The channel&apos;s name will be replaced by the clock.
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
           </div>
-
-          <button type="submit" className={styles.submitBtn} style={{ marginTop: "var(--space-4)" }}>
-            {editingId ? <Pencil size={16} /> : <Plus size={16} />}
-            <span>{editingId ? "Save Changes" : "Add Clock"}</span>
-          </button>
-        </form>
+        )}
 
         <div style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>
-          Discord limits channel renames, so clocks refresh about every 5 minutes and the time may be a few
-          minutes behind. The bot needs the <strong>Manage Channels</strong> permission.
+          The bot needs the <strong>Manage Channels</strong> permission.
         </div>
       </div>
     </div>

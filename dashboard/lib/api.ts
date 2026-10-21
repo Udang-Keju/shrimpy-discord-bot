@@ -170,6 +170,7 @@ export interface ClockChannel {
   kind: 'date' | 'time';
   format: string;           // one of CLOCK_FORMATS[].value
   timezone: string;         // IANA zone, e.g. 'Asia/Jakarta'
+  refreshMinutes: number;   // one of CLOCK_REFRESH_OPTIONS[].value
   emoji: string | null;     // null = default emoji for the kind
   managed: boolean;         // true if the bot created the channel
   name: string;             // channel name last written; '' until the first rename
@@ -185,6 +186,7 @@ export interface TimezoneOption {
 export interface CreateClockInput {
   format: string;
   timezone: string;
+  refreshMinutes: number;
   emoji?: string;
   channelId?: string | null;   // omit to have the bot create the channel
   categoryId?: string | null;  // parent category for a bot-created channel
@@ -193,8 +195,18 @@ export interface CreateClockInput {
 export interface UpdateClockInput {
   format: string;
   timezone: string;
+  refreshMinutes: number;
   emoji?: string;
 }
+
+// How often the bot rewrites a clock's name; mirrors the backend's allowed values.
+export const CLOCK_REFRESH_OPTIONS: { value: number; label: string }[] = [
+  { value: 5, label: 'Every 5 minutes' },
+  { value: 10, label: 'Every 10 minutes' },
+  { value: 15, label: 'Every 15 minutes' },
+  { value: 30, label: 'Every 30 minutes' },
+  { value: 60, label: 'Every hour' },
+];
 
 // Display presets; `example` mirrors what the backend renders (UTC).
 export const CLOCK_FORMATS: { value: string; kind: 'date' | 'time'; label: string; example: string }[] = [
@@ -790,6 +802,7 @@ export const ShrimpyAPI = {
         kind: preset?.kind ?? 'time',
         format: input.format,
         timezone: input.timezone,
+        refreshMinutes: input.refreshMinutes,
         emoji: input.emoji || null,
         managed: !input.channelId,
         name: `${input.emoji || (preset?.kind === 'date' ? '📅' : '🕐')} ${preset?.example ?? ''}`.trim(),
@@ -814,6 +827,7 @@ export const ShrimpyAPI = {
         kind: preset?.kind ?? list[idx].kind,
         format: input.format,
         timezone: input.timezone,
+        refreshMinutes: input.refreshMinutes,
         emoji: input.emoji || null,
         name: `${input.emoji || (preset?.kind === 'date' ? '📅' : '🕐')} ${preset?.example ?? ''}`.trim(),
       };
