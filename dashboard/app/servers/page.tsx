@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ShrimpyAPI, Guild, DiscordUser, PublicConfig } from "@/lib/api";
-import { LogOut, Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
+import { getDefaultDashboardHref } from "@/app/dashboard/[guildId]/navConfig";
+import { LogOut,Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
 
 // Scoped invite permissions (USER_JOURNEY §14.6): View/Manage Channels, Manage Roles,
 // Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions,
@@ -247,7 +248,7 @@ export default function ServersPage() {
                   <div>
                     {hasJoined ? (
                       <button
-                        onClick={() => router.push(`/dashboard/${g.id}/tickets`)}
+                        onClick={() => router.push(getDefaultDashboardHref(g.id))}
                         style={{
                           width: "100%",
                           display: "flex",
