@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ShrimpyAPI, Guild, DiscordUser, PublicConfig } from "@/lib/api";
 import { getDefaultDashboardHref } from "@/app/dashboard/[guildId]/navConfig";
-import { LogOut,Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
+import { LogOut,Plus, Server, Bot, ArrowRight, ExternalLink, RefreshCw, Settings } from "lucide-react";
 
 // Scoped invite permissions (USER_JOURNEY §14.6): View/Manage Channels, Manage Roles,
 // Manage Threads, Send Messages, Embed Links, Read Message History, Add Reactions,
@@ -84,7 +84,11 @@ export default function ServersPage() {
     return url;
   };
 
-  const getServerInitials = (name: string) => {
+  // Mirrors the backend AdminMiddleware: bot owner, or Administrator of a guild with the bot.
+  // The server re-checks; this only decides whether to show the link.
+  const canManageBot = user?.is_owner === true || guilds.some((g) => g.is_admin && g.bot_joined);
+
+  const getServerInitials =(name: string) => {
     return name
       .split(" ")
       .map((word) => word[0])
@@ -132,6 +136,18 @@ export default function ServersPage() {
               )}
               <span style={{ fontSize: "14px", fontWeight: 600 }}>{user.globalName || user.username}</span>
             </div>
+          )}
+          {canManageBot && (
+            <button
+              onClick={() => router.push("/admin/apps")}
+              title="Manage the bot's Discord connection"
+              style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "var(--color-text-muted)", cursor: "pointer", fontSize: "14px", fontWeight: 500, transition: "color 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--color-primary)"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "var(--color-text-muted)"}
+            >
+              <Settings size={16} />
+              <span>Admin</span>
+            </button>
           )}
           <button
             onClick={handleRefresh}
