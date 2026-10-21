@@ -761,6 +761,8 @@ POST   /api/v1/admin/apps/:id/reconnect # Manually reconnect a specific Discord 
 
 > [!IMPORTANT]
 > These endpoints require the `AdminMiddleware`, which is layered on top of the standard `AuthMiddleware`. A request is allowed if the authenticated user **is the bot owner** — the owner of a managed Discord application as reported by Discord itself (`GET /oauth2/applications/@me` with the bot's token: `owner`, or `team.owner_user_id` for team apps; cached 10 min, last answer kept if Discord is unreachable); no environment variable is involved — **or is the owner / holds `ADMINISTRATOR` of at least one guild where the bot is installed** (the JWT `managed_guilds[].is_admin` flag, combined with a live bot-in-guild check). `MANAGE_GUILD` alone is not enough, and neither is administering a server the bot isn't in — otherwise anyone could create a server and administer the bot. Everyone else gets `403 FORBIDDEN`. `GET /auth/me` also returns `is_owner`.
+>
+> That rule gates the **read** routes only (`GET /admin/apps`, `GET /admin/apps/:id`). A bot is one gateway connection shared by every server it is in, so anything that starts, stops, or restarts it — `POST /admin/apps` (start), `PUT /admin/apps/:id` (a token change restarts), `DELETE /admin/apps/:id` (stop), `POST /admin/apps/:id/reconnect` (restart) — is **bot-owner only** (`OwnerMiddleware`); a server administrator gets `403` there.
 
 **GET /api/v1/admin/apps** response:
 ```json

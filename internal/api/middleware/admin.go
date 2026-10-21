@@ -7,6 +7,23 @@ import (
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 )
 
+// OwnerMiddleware restricts an endpoint to the bot owner (isOwner: owner of a managed Discord
+// application, as reported by Discord). Use it for actions that affect the bot in every server —
+// starting, stopping, or restarting a bot — which a single server's administrator must not control.
+//
+// This middleware must be chained AFTER AuthMiddleware.
+func OwnerMiddleware(isOwner func(userID string) bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isOwner(apiutil.GetUserID(r.Context())) {
+				apiutil.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Bot owner access required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // AdminMiddleware restricts access to bot-wide admin endpoints (/admin/apps). A request is
 // allowed if the authenticated user:
 //   - is the bot owner (isOwner: owner of a managed Discord application, as reported by Discord), OR

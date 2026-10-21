@@ -1,7 +1,8 @@
 // dashboard/app/admin/apps/page.tsx
 // USER_JOURNEY A.12 (status + reconnect only): bot-wide screen for the Discord applications the
-// backend runs. Access is enforced server-side (owner, or Administrator of a guild with the bot);
-// a 403 renders the access-denied state.
+// backend runs. Viewing status is open to the bot owner and to Administrators of a guild with the
+// bot; restarting a bot (which affects every server) is bot-owner only. Both are enforced
+// server-side — a 403 on the list renders the access-denied state.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +25,7 @@ export default function AdminAppsPage() {
   const [apps, setApps] = useState<DiscordApp[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [reconnecting, setReconnecting] = useState<Set<string>>(new Set());
+  const [isOwner, setIsOwner] = useState(false);
   // Synchronous double-click guard; `reconnecting` state alone lags a render behind.
   const inFlight = useRef<Set<string>>(new Set());
 
@@ -48,6 +50,10 @@ export default function AdminAppsPage() {
 
   useEffect(() => {
     async function load() {
+      // The server enforces owner-only; this just decides whether to show the Reconnect button.
+      ShrimpyAPI.getCurrentUser()
+        .then((user) => setIsOwner(user.is_owner === true))
+        .catch((err) => console.error("Failed to load current user", err));
       await loadApps();
     }
     load();
@@ -145,7 +151,10 @@ export default function AdminAppsPage() {
     <>
       <h1 style={{ fontSize: "32px", fontWeight: 800, letterSpacing: "-0.5px", margin: "0 0 8px" }}>Discord Applications</h1>
       <p style={{ color: "var(--color-text-muted)", fontSize: "14px", margin: "0 0 32px", lineHeight: 1.5 }}>
-        The backend automatically reconnects a bot that stays offline for a few minutes. If a bot still shows as offline in Discord, or a server is stuck on &quot;Invite Needed&quot; after inviting it, you can reconnect it here right away. This briefly interrupts the bot in every server.
+        The backend automatically reconnects a bot that stays offline for a few minutes.{" "}
+        {isOwner
+          ? "If a bot still shows as offline in Discord, or a server is stuck on “Invite Needed” after inviting it, you can reconnect it here right away. This briefly interrupts the bot in every server."
+          : "A bot is one connection shared by every server, so only the bot owner can reconnect it manually."}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -163,14 +172,16 @@ export default function AdminAppsPage() {
                 <h2 style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.name}</h2>
                 <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Client ID {app.discord_client_id}</span>
               </div>
-              <button
-                onClick={() => handleReconnect(app)}
-                disabled={busy}
-                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", borderRadius: "10px", border: "1px solid var(--color-border)", backgroundColor: "var(--color-surface-raised)", color: "var(--color-text)", fontSize: "14px", fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, flexShrink: 0 }}
-              >
-                <RefreshCw size={16} style={busy ? { animation: "spin 0.8s linear infinite" } : undefined} />
-                <span>{busy ? "Reconnecting…" : "Reconnect"}</span>
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => handleReconnect(app)}
+                  disabled={busy}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", borderRadius: "10px", border: "1px solid var(--color-border)", backgroundColor: "var(--color-surface-raised)", color: "var(--color-text)", fontSize: "14px", fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, flexShrink: 0 }}
+                >
+                  <RefreshCw size={16} style={busy ? { animation: "spin 0.8s linear infinite" } : undefined} />
+                  <span>{busy ? "Reconnecting…" : "Reconnect"}</span>
+                </button>
+              )}
             </div>
           );
         })}

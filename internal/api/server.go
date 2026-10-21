@@ -195,17 +195,27 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 			})
 		})
 
-		// Admin-only: bot application settings
+		// Bot application settings. A bot is one connection shared by every server it's in, so
+		// reading its status is open to server administrators, but anything that starts, stops,
+		// or restarts it (create / update / delete / reconnect) is bot-owner only.
 		r.Group(func(r chi.Router) {
 			r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
-			r.Use(api_middleware.AdminMiddleware(s.isOwner, s.botJoined))
 
-			r.Get("/admin/apps", s.settingsHandler.List)
-			r.Post("/admin/apps", s.settingsHandler.Create)
-			r.Get("/admin/apps/{id}", s.settingsHandler.Get)
-			r.Put("/admin/apps/{id}", s.settingsHandler.Update)
-			r.Delete("/admin/apps/{id}", s.settingsHandler.Delete)
-			r.Post("/admin/apps/{id}/reconnect", s.settingsHandler.Reconnect)
+			r.Group(func(r chi.Router) {
+				r.Use(api_middleware.AdminMiddleware(s.isOwner, s.botJoined))
+
+				r.Get("/admin/apps", s.settingsHandler.List)
+				r.Get("/admin/apps/{id}", s.settingsHandler.Get)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(api_middleware.OwnerMiddleware(s.isOwner))
+
+				r.Post("/admin/apps", s.settingsHandler.Create)
+				r.Put("/admin/apps/{id}", s.settingsHandler.Update)
+				r.Delete("/admin/apps/{id}", s.settingsHandler.Delete)
+				r.Post("/admin/apps/{id}/reconnect", s.settingsHandler.Reconnect)
+			})
 		})
 	})
 }
