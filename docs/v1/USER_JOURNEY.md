@@ -1087,7 +1087,7 @@ Transcripts                                                                     
 
 ### A.12 — `/admin/apps` (Owner — Multi-Bot Application Manager)
 
-**OWNER-ONLY**, and the only screen that lives **outside** `/dashboard/[guildId]` — it manages bot *applications*, not a single server. New UI over endpoints that already exist ([Spec §4.9](./TECHNICAL_SPEC.md#49-admin--discord-bot-applications)); gated by `AdminMiddleware` / `OWNER_DISCORD_ID`. This is the most sensitive screen in the product, so secrets are **always masked** and every mutation confirms.
+**OWNER + SERVER-ADMINISTRATOR ONLY** (the bot owner, or an Administrator of a server where Shrimpy is installed — not Manage Server-only users), and the only screen that lives **outside** `/dashboard/[guildId]` — it manages bot *applications*, not a single server. New UI over endpoints that already exist ([Spec §4.9](./TECHNICAL_SPEC.md#49-admin--discord-bot-applications)); gated by `AdminMiddleware` (bot owner as reported by Discord, or an Administrator of a server with the bot). This is the most sensitive screen in the product, so secrets are **always masked** and every mutation confirms.
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -1122,6 +1122,7 @@ Transcripts                                                                     
 - **Mask by default:** GET returns `"***"` for token + secret ([Spec §4.9](./TECHNICAL_SPEC.md#49-admin--discord-bot-applications)); the form treats an unchanged masked field as "keep existing" so a save never overwrites a secret with dots.
 - **Live effect:** `POST`/`PUT` (token) starts or reconnects the session in the background; `DELETE` stops it — reflect the resulting state with the connection dot after the action resolves (poll/refresh).
 - **Reconnect** maps to `POST …/apps/:id/reconnect`; show a transient "reconnecting…" state on the card.
+- **Built so far (status + reconnect only):** the `/admin/apps` route lists each app with its live `connected` state and a Reconnect button (loading → success/warning toast, status re-polled until healthy, background refresh every 30s). Add / Edit / Delete and "Reveal once" are not built yet. **Viewing vs controlling:** administrators of a server with the bot can open the page and see status, but the **Reconnect** button (and any future Add/Edit/Delete) is shown only to the bot owner — a bot is one connection shared by every server, so restarting it affects all of them; non-owners see a short explanatory note instead. The link is the **Admin** button in the `/servers` header, shown only when the user is the owner or an Administrator of a guild with `bot_joined`; the server re-checks every call and a 403 renders the access-denied card.
 
 ### A.13 — Cross-cutting states & flows
 

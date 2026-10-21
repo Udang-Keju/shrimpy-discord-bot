@@ -21,6 +21,11 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+// Default landing page for a guild: the first item in the navbar.
+export function getDefaultDashboardHref(guildId: string): string {
+  return getNavigationGroups(guildId)[0].items[0].href;
+}
+
 // Group order is Settings, Server Management, Tickets (see docs/v1/USER_JOURNEY.md §5.3 note).
 export function getNavigationGroups(guildId: string): NavGroup[] {
   return [

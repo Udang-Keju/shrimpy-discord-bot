@@ -24,6 +24,10 @@ type Modules struct {
 	ReactionRole *reactionrole.Module
 	Ticket       *ticket.Module
 	Translation  *translation.Module
+
+	// IsOwner reports whether a Discord user is the bot owner: the owner of a managed Discord
+	// application, as reported by Discord.
+	IsOwner func(userID string) bool
 }
 
 // Build compiles and connects all modules with their respective layers.
@@ -36,7 +40,7 @@ func Build(
 	guildCacheTTL time.Duration,
 ) *Modules {
 	settingsMod := settings.Build(db, tokenEncKey, controller)
-	authMod := auth.Build(db, jwtSecret, tokenEncKey, settingsMod.Service)
+	authMod := auth.Build(db, jwtSecret, tokenEncKey, settingsMod.Service, provider.IsBotOwner)
 	guildMod := guild.Build(db, guildCacheTTL, provider)
 	welcomeMod := welcome.Build(db)
 	reactionRoleMod := reactionrole.Build(db, provider)
@@ -51,6 +55,7 @@ func Build(
 		ReactionRole: reactionRoleMod,
 		Ticket:       ticketMod,
 		Translation:  translationMod,
+		IsOwner:      provider.IsBotOwner,
 	}
 }
 

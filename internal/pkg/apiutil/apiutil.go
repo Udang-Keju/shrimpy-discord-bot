@@ -16,12 +16,14 @@ const (
 
 // Guild carries the display data for a guild the user manages. Name/Icon are
 // populated from Discord's OAuth2 /users/@me/guilds response at login/refresh
-// time; BotJoined is filled in live by handlers that need it.
+// time; BotJoined is filled in live by handlers that need it. IsAdmin is true when the user
+// is the guild owner or holds ADMINISTRATOR there (as opposed to MANAGE_GUILD only).
 type Guild struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Icon      string `json:"icon"`
 	BotJoined bool   `json:"bot_joined"`
+	IsAdmin   bool   `json:"is_admin"`
 }
 
 // GetUserID retrieves the Discord user ID string from the request context.

@@ -11,6 +11,20 @@ export interface Guild {
   autoRoles: string[];
   staffRoles: string[];
   bot_joined?: boolean;
+  // Owner or ADMINISTRATOR of this guild (vs MANAGE_GUILD only). Gates the bot-wide /admin/apps screen.
+  is_admin?: boolean;
+}
+
+// A Discord bot application managed from /admin/apps. Secrets are never returned.
+export interface DiscordApp {
+  id: string;
+  name: string;
+  discord_client_id: string;
+  discord_redirect_uri: string;
+  // Live gateway health: the bot's websocket is open and heartbeating.
+  connected: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PublicConfig {
@@ -192,6 +206,7 @@ export interface DiscordUser {
   username: string;
   globalName?: string;
   avatar?: string;
+  is_owner?: boolean;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_SHRIMPY_API_URL || 'http://localhost:8080';
@@ -203,6 +218,18 @@ const EMOJI_CACHE_TTL_MS = 5 * 60 * 1000;
 const emojiCache = new Map<string, { emojis: DiscordEmoji[]; at: number }>();
 
 // Simulated Mock Database for Standalone/Offline mode
+const mockApps: DiscordApp[] = [
+  {
+    id: 'demo-app-1',
+    name: 'Production Bot',
+    discord_client_id: '123456789012345678',
+    discord_redirect_uri: 'http://localhost:8080/api/v1/auth/callback',
+    connected: true,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
 const mockGuilds: Guild[] = [
   {
     id: '123456789012345678',
@@ -448,6 +475,18 @@ export const ShrimpyAPI = {
   refreshSession: async (): Promise<void> => {
     if (isDemoMode()) return;
     await fetch(`${API_BASE}/api/v1/auth/refresh`, { method: 'POST', credentials: 'include' });
+  },
+
+  // Bot applications (owner / server-administrator only; 403 otherwise)
+  listApps: async (): Promise<DiscordApp[]> => {
+    if (isDemoMode()) return mockApps;
+    return fetchJSON<DiscordApp[]>('/api/v1/admin/apps');
+  },
+
+  // Closes and re-opens the app's Discord gateway connection without restarting the backend.
+  reconnectApp: async (appId: string): Promise<void> => {
+    if (isDemoMode()) return;
+    await fetchJSON(`/api/v1/admin/apps/${appId}/reconnect`, { method: 'POST' });
   },
 
   // Guilds

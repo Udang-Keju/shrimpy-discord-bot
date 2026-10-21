@@ -14,7 +14,7 @@ import {
   Moon
 } from "lucide-react";
 import styles from "./dashboard.module.css";
-import { getNavigationGroups } from "./navConfig";
+import { getNavigationGroups, getDefaultDashboardHref } from "./navConfig";
 import { ShrimpyAPI, Guild, DiscordUser, PublicConfig, isDemoMode } from "@/lib/api";
 import { getSavedTheme, applyTheme, Theme } from "@/lib/theme";
 import DemoBanner from "@/components/DemoBanner";
@@ -109,12 +109,9 @@ export default function DashboardLayout({
   };
 
   const handleGuildChange = (selectedId: string) => {
-    if (pathname === `/dashboard/${guildId}`) {
-      router.push(`/dashboard/${selectedId}`);
-      return;
-    }
-    const currentTab = pathname.split("/").pop() || "tickets";
-    router.push(`/dashboard/${selectedId}/${currentTab}`);
+    const currentTab = pathname.split("/").pop();
+    const isKnownTab = navigationItems.some(item => item.href.endsWith(`/${currentTab}`));
+    router.push(isKnownTab ? `/dashboard/${selectedId}/${currentTab}` : getDefaultDashboardHref(selectedId));
   };
 
   const isIconUrl = (icon?: string) => !!icon && icon.startsWith("http");
@@ -150,7 +147,6 @@ export default function DashboardLayout({
   const needsInvite = currentGuild?.bot_joined === false;
 
   const getPageTitle = () => {
-    if (pathname === `/dashboard/${guildId}`) return "Overview";
     const current = navigationItems.find(item => pathname.startsWith(item.href));
     return current ? current.name : "Dashboard";
   };

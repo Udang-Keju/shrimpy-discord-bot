@@ -39,15 +39,17 @@ type AuthHandler struct {
 	jwtSecret   []byte
 	tokenEncKey []byte
 	settings    SettingsProvider
+	isOwner     func(userID string) bool
 }
 
 // NewAuthHandler constructs a new AuthHandler.
-func NewAuthHandler(userRepo AuthUserRepo, jwtSecret []byte, tokenEncKey []byte, settings SettingsProvider) *AuthHandler {
+func NewAuthHandler(userRepo AuthUserRepo, jwtSecret []byte, tokenEncKey []byte, settings SettingsProvider, isOwner func(userID string) bool) *AuthHandler {
 	return &AuthHandler{
 		userRepo:    userRepo,
 		jwtSecret:   jwtSecret,
 		tokenEncKey: tokenEncKey,
 		settings:    settings,
+		isOwner:     isOwner,
 	}
 }
 
@@ -256,6 +258,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		"username":       u.Username,
 		"avatar":         discordutil.UserAvatarURL(userID, getStringValue(u.AvatarHash)),
 		"managed_guilds": managedGuilds,
+		"is_owner":       h.isOwner(userID),
 	})
 }
 
@@ -463,16 +466,19 @@ func getStringValue(s *string) string {
 // buildManagedGuilds filters the user's Discord guilds down to the ones they
 // can administer (Owner, ADMINISTRATOR, or MANAGE_GUILD), carrying over the
 // display name/icon Discord returned so the dashboard doesn't need bot
-// membership in the guild to render them.
+// membership in the guild to render them. IsAdmin marks the Owner/ADMINISTRATOR
+// subset, which gates bot-wide admin access (see middleware.AdminMiddleware).
 func buildManagedGuilds(discGuilds []discordGuild) []apiutil.Guild {
 	var managed []apiutil.Guild
 	for _, g := range discGuilds {
 		perms := int64(g.Permissions)
-		if g.Owner || (perms&0x8) != 0 || (perms&0x20) != 0 {
+		isAdmin := g.Owner || (perms&0x8) != 0
+		if isAdmin || (perms&0x20) != 0 {
 			managed = append(managed, apiutil.Guild{
-				ID:   g.ID,
-				Name: g.Name,
-				Icon: discordutil.GuildIconURL(g.ID, getStringValue(g.Icon)),
+				ID:      g.ID,
+				Name:    g.Name,
+				Icon:    discordutil.GuildIconURL(g.ID, getStringValue(g.Icon)),
+				IsAdmin: isAdmin,
 			})
 		}
 	}

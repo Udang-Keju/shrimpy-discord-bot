@@ -274,7 +274,6 @@ Example: `internal/app/settings/service/service.go` encrypts bot tokens before s
 **Optional**:
 - `API_PORT` or `PORT`: HTTP server port (default: 8080)
 - `DEV_GUILD_ID`: Discord guild ID for instant slash command registration during development
-- `OWNER_DISCORD_ID`: Discord user ID granted unconditional admin access to `/admin/apps` endpoints
 - `CORS_ALLOWED_ORIGINS`: Comma-separated allowed origins for CORS (default: http://localhost:3000)
 - `CACHE_TTL_SECONDS`: Guild config cache TTL (default: 300)
 - `ENVIRONMENT`: `development` or `production`

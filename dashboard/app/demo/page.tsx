@@ -4,6 +4,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ShrimpyAPI } from "@/lib/api";
+import { getDefaultDashboardHref } from "@/app/dashboard/[guildId]/navConfig";
 
 const DEMO_GUILD_ID = "123456789012345678";
 
@@ -12,7 +13,7 @@ export default function DemoEntryPage() {
 
   useEffect(() => {
     ShrimpyAPI.enterDemoMode();
-    router.replace(`/dashboard/${DEMO_GUILD_ID}/tickets`);
+    router.replace(getDefaultDashboardHref(DEMO_GUILD_ID));
   }, [router]);
 
   return (

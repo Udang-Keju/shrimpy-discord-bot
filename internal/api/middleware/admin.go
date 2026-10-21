@@ -1,39 +1,56 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
-	"os"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 )
 
-// AdminMiddleware restricts access to bot admin endpoints.
-// A request is considered admin if the authenticated user:
-//   - Has a non-empty managed_guilds list in their JWT (meaning they have
-//     ADMINISTRATOR or MANAGE_GUILD on at least one bot guild), OR
-//   - Their Discord user ID matches the OWNER_DISCORD_ID environment variable.
+// OwnerMiddleware restricts an endpoint to the bot owner (isOwner: owner of a managed Discord
+// application, as reported by Discord). Use it for actions that affect the bot in every server —
+// starting, stopping, or restarting a bot — which a single server's administrator must not control.
 //
 // This middleware must be chained AFTER AuthMiddleware.
-func AdminMiddleware(next http.Handler) http.Handler {
-	ownerID := os.Getenv("OWNER_DISCORD_ID")
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := apiutil.GetUserID(r.Context())
-		managedGuilds := apiutil.GetManagedGuilds(r.Context())
-
-		// Superadmin override via env var
-		if ownerID != "" && userID == ownerID {
+func OwnerMiddleware(isOwner func(userID string) bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isOwner(apiutil.GetUserID(r.Context())) {
+				apiutil.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Bot owner access required")
+				return
+			}
 			next.ServeHTTP(w, r)
-			return
-		}
+		})
+	}
+}
 
-		// Any user who manages at least one guild (has ADMINISTRATOR or MANAGE_GUILD)
-		// is considered an admin for bot-wide settings purposes.
-		if len(managedGuilds) > 0 {
-			next.ServeHTTP(w, r)
-			return
-		}
+// AdminMiddleware restricts access to bot-wide admin endpoints (/admin/apps). A request is
+// allowed if the authenticated user:
+//   - is the bot owner (isOwner: owner of a managed Discord application, as reported by Discord), OR
+//   - is the owner or holds ADMINISTRATOR of at least one guild where the bot is installed
+//     (botJoined reports installation). Admins of guilds without the bot, and users with only
+//     MANAGE_GUILD, are denied — otherwise anyone could create a server and administer the bot.
+//
+// This middleware must be chained AFTER AuthMiddleware.
+func AdminMiddleware(
+	isOwner func(userID string) bool,
+	botJoined func(ctx context.Context, guildID string) bool,
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isOwner(apiutil.GetUserID(r.Context())) {
+				next.ServeHTTP(w, r)
+				return
+			}
 
-		apiutil.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Admin access required")
-	})
+			for _, g := range apiutil.GetManagedGuilds(r.Context()) {
+				if g.IsAdmin && botJoined(r.Context(), g.ID) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			apiutil.WriteError(w, http.StatusForbidden, "FORBIDDEN", "Bot owner or server administrator access required")
+		})
+	}
 }

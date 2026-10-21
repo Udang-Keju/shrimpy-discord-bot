@@ -749,7 +749,7 @@ The **`/health`** endpoint backs the Overview health strip and the inline checks
 
 ### 4.9 Admin — Discord Bot Applications
 
-These endpoints allow the bot owner or any admin to manage the Discord credentials stored in the `discord_apps` table. The backend dynamically starts, stops, and reconnects bot sessions based on these configurations.
+These endpoints allow the bot owner or a server administrator (see access rule below) to manage the Discord credentials stored in the `discord_apps` table. The backend dynamically starts, stops, and reconnects bot sessions based on these configurations.
 
 ```
 GET    /api/v1/admin/apps              # List all configured applications (secrets masked)
@@ -760,7 +760,9 @@ POST   /api/v1/admin/apps/:id/reconnect # Manually reconnect a specific Discord 
 ```
 
 > [!IMPORTANT]
-> These endpoints require the `AdminMiddleware`, which is layered on top of the standard `AuthMiddleware`. A request is considered admin if the authenticated user has a non-empty `managed_guilds` JWT claim (meaning they hold `ADMINISTRATOR` or `MANAGE_GUILD` on at least one bot guild). An optional `OWNER_DISCORD_ID` env var grants unconditional access.
+> These endpoints require the `AdminMiddleware`, which is layered on top of the standard `AuthMiddleware`. A request is allowed if the authenticated user **is the bot owner** — the owner of a managed Discord application as reported by Discord itself (`GET /oauth2/applications/@me` with the bot's token: `owner`, or `team.owner_user_id` for team apps; cached 10 min, last answer kept if Discord is unreachable); no environment variable is involved — **or is the owner / holds `ADMINISTRATOR` of at least one guild where the bot is installed** (the JWT `managed_guilds[].is_admin` flag, combined with a live bot-in-guild check). `MANAGE_GUILD` alone is not enough, and neither is administering a server the bot isn't in — otherwise anyone could create a server and administer the bot. Everyone else gets `403 FORBIDDEN`. `GET /auth/me` also returns `is_owner`.
+>
+> That rule gates the **read** routes only (`GET /admin/apps`, `GET /admin/apps/:id`). A bot is one gateway connection shared by every server it is in, so anything that starts, stops, or restarts it — `POST /admin/apps` (start), `PUT /admin/apps/:id` (a token change restarts), `DELETE /admin/apps/:id` (stop), `POST /admin/apps/:id/reconnect` (restart) — is **bot-owner only** (`OwnerMiddleware`); a server administrator gets `403` there.
 
 **GET /api/v1/admin/apps** response:
 ```json
@@ -772,11 +774,16 @@ POST   /api/v1/admin/apps/:id/reconnect # Manually reconnect a specific Discord 
     "discord_client_id": "123456789012345678",
     "discord_client_secret": "***",
     "discord_redirect_uri": "https://your-railway-domain/api/v1/auth/callback",
+    "connected": true,
     "created_at": "2026-06-21T12:00:00Z",
     "updated_at": "2026-06-21T12:00:00Z"
   }
 ]
 ```
+
+`connected` is live gateway health (session open, marked ready, and a heartbeat ACK within the last 2 minutes) — not a DB field. It is set by `GET` list/detail only. `POST …/reconnect` closes and re-opens the gateway for that app; on reconnect Discord re-sends `GUILD_CREATE` for every guild, which re-registers any guild the backend missed while disconnected.
+
+**Automatic recovery (`Registry.RunWatchdog`):** every 30s the backend checks each session; one unhealthy for 3 minutes is restarted, then retried with exponential backoff (3 → 6 → 12 → 24 → 30 min cap) while it keeps failing, so a permanent fault (e.g. a disallowed privileged intent) cannot hammer Discord's identify rate limit. Restarts reuse the same `*discordgo.Session` (close + open in place) rather than building a new one: discordgo's own reconnect loop can reopen a session after `Close()`, so a second session for the same token could leave two live connections processing every event twice. For the same reason `StartSession` with an unchanged token restarts in place; only a token change creates a new session. A session whose first connect failed stays registered so the watchdog keeps retrying it.
 
 **POST /api/v1/admin/apps** body:
 ```json
@@ -1158,7 +1165,7 @@ shrimpy-discord-bot/
 │   │
 │   ├── api/
 │   │   ├── middleware/
-│   │   │   ├── admin.go              # Admin-only access check (managed_guilds or OWNER_DISCORD_ID)
+│   │   │   ├── admin.go              # Admin access check (bot owner per Discord, or ADMINISTRATOR of a guild with the bot)
 │   │   │   ├── auth.go               # JWT validation middleware
 │   │   │   ├── guild.go              # Guild permission check middleware
 │   │   │   └── ratelimit.go          # API rate limiting
@@ -1222,7 +1229,6 @@ All configuration is loaded from environment variables (12-factor app style). A 
 | `TOKEN_ENCRYPTION_KEY` | ✅ Always | — | 64-character hex string (32 bytes) for AES-256-GCM encryption |
 | `PORT` | ✅ Railway | — | Injected by Railway automatically — takes priority over `API_PORT` |
 | `API_PORT` | ❌ | `8080` | Port for the REST API server (fallback when `PORT` is not set) |
-| `OWNER_DISCORD_ID` | ❌ | — | Discord user ID with unconditional admin access to `/api/v1/admin/apps` |
 | `BOT_PREFIX` | ❌ | `!` | Global default prefix (overridden per-guild) |
 | `ENVIRONMENT` | ❌ | `development` | `development` or `production` |
 | `LOG_LEVEL` | ❌ | `info` | `debug`, `info`, `warn`, `error` |
@@ -1338,7 +1344,6 @@ Set these in the Railway project dashboard under **Variables**:
 | `TOKEN_ENCRYPTION_KEY` | ✅ Always | `openssl rand -hex 64` (64 hex chars = 32 bytes for AES-256) |
 | `CORS_ALLOWED_ORIGINS` | ✅ Always | `https://<your-vercel-domain>` |
 | `ENVIRONMENT` | ✅ Always | `production` |
-| `OWNER_DISCORD_ID` | ❌ Optional | Your Discord user ID — grants unconditional access to `/admin/settings` |
 
 > [!IMPORTANT]
 > **First-boot workflow**: Set all four `DISCORD_*` vars → deploy → the app seeds `bot_settings` automatically → you can then delete those four vars from Railway (credentials now live in DB). After first boot, update credentials via the dashboard at `PUT /api/v1/admin/settings`.
