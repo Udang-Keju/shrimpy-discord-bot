@@ -333,10 +333,12 @@ The config screens largely exist; the journey work is **ordering, previewing, an
 - Bot nickname, prefix, log channel, per-user ticket limit (`A-07` ✅ present). **Missing:** auto-close inactivity duration (`A-08`), language selection.
 
 **(f) Clock Channels — `/clock`** ([clock/page.tsx](../../dashboard/app/dashboard/[guildId]/clock/page.tsx))
-- First item of the **Server Management** group. Lists the server's clocks (current channel name, format, timezone, created-by-bot vs linked) and a single add/edit form.
-- **Add:** choose a display preset (grouped Date / Time), a **timezone from a dropdown that shows each zone's GMT offset and is sorted by it (default UTC)**, an optional emoji, then either **"Create a channel for me"** (a voice channel members can see but not join, optionally under a category) or **"Use an existing voice channel"** (its name will be replaced).
+- First item of the **Server Management** group. With no setup yet it shows a three-step wizard; once saved it shows the date and time clocks (current channel name, format, timezone, refresh interval, created-by-bot vs linked) with **Edit** (reopens the wizard prefilled) and **Remove**. Clocks beyond one date and one time (from before the wizard) are listed separately and can only be removed.
+- **Step 1, Channels:** for the date channel and the time channel, either **"Create a channel for me"** (a voice channel members can see but not join, optionally under a category) or **"Use an existing voice channel"** (its name will be replaced).
+- **Step 2, Format & timezone:** a preset and optional emoji per channel (presets go down to the minute, never seconds), one **timezone shared by both, from a dropdown that shows each zone's GMT offset and is sorted by it (default UTC)**, and a **refresh** dropdown (5 / 10 / 15 / 30 minutes or 1 hour).
+- **Step 3, Review & save:** a summary of both channels, then Save.
 - **Remove:** a bot-created channel offers to delete the Discord channel too; a linked channel is always left in place.
-- Copy sets expectations: Discord limits renames, so clocks refresh about every 5 minutes and the time can be a few minutes behind; the bot needs **Manage Channels**.
+- Copy sets expectations: Discord limits renames, so 5 minutes is the fastest refresh and the time can be a few minutes behind; the bot needs **Manage Channels**.
 
 ### 7.7 Operate — Tickets (shared with Staff, see §8)
 
