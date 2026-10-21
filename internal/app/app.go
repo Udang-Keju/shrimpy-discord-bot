@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/clock"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/settings"
@@ -24,6 +25,7 @@ type Modules struct {
 	ReactionRole *reactionrole.Module
 	Ticket       *ticket.Module
 	Translation  *translation.Module
+	Clock        *clock.Module
 
 	// IsOwner reports whether a Discord user is the bot owner: the owner of a managed Discord
 	// application, as reported by Discord.
@@ -46,6 +48,7 @@ func Build(
 	reactionRoleMod := reactionrole.Build(db, provider)
 	ticketMod := ticket.Build(db, guildMod.Repo, provider)
 	translationMod := translation.Build(db, guildMod.Service, tokenEncKey)
+	clockMod := clock.Build(db, provider)
 
 	return &Modules{
 		Settings:     settingsMod,
@@ -55,6 +58,7 @@ func Build(
 		ReactionRole: reactionRoleMod,
 		Ticket:       ticketMod,
 		Translation:  translationMod,
+		Clock:        clockMod,
 		IsOwner:      provider.IsBotOwner,
 	}
 }
@@ -69,5 +73,6 @@ func (m *Modules) Models() []any {
 	all = append(all, m.ReactionRole.Models()...)
 	all = append(all, m.Ticket.Models()...)
 	all = append(all, m.Translation.Models()...)
+	all = append(all, m.Clock.Models()...)
 	return all
 }

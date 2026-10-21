@@ -11,6 +11,7 @@ import (
 	api_middleware "github.com/Udang-Keju/shrimpy-discord-bot/internal/api/middleware"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app"
 	auth_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/auth/handler"
+	clock_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/clock/handler"
 	guild_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/handler"
 	guild_svc "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/guild/service"
 	rr_handler "github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/handler"
@@ -38,6 +39,7 @@ type Server struct {
 	reactionRoleHandler *rr_handler.Handler
 	settingsHandler     *settings_handler.SettingsHandler
 	translationHandler  *translation_handler.Handler
+	clockHandler        *clock_handler.Handler
 
 	// Services/Deps needed by middleware
 	guildSvc *guild_svc.GuildService
@@ -65,6 +67,7 @@ func NewServer(
 		reactionRoleHandler: modules.ReactionRole.Handler,
 		settingsHandler:     modules.Settings.Handler,
 		translationHandler:  modules.Translation.Handler,
+		clockHandler:        modules.Clock.Handler,
 		guildSvc:            modules.Guild.Service,
 		provider:            provider,
 		isOwner:             modules.IsOwner,
@@ -125,6 +128,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Patch("/nickname", s.guildHandler.UpdateNickname)
 				r.Get("/discord/channels", s.guildHandler.GetDiscordChannels)
 				r.Get("/discord/categories", s.guildHandler.GetDiscordCategories)
+				r.Get("/discord/voice-channels", s.guildHandler.GetDiscordVoiceChannels)
 				r.Get("/discord/roles", s.guildHandler.GetDiscordRoles)
 				r.Get("/discord/emojis", s.guildHandler.GetDiscordEmojis)
 
@@ -140,6 +144,13 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Delete("/translation/channels/{channelId}", s.translationHandler.RemoveChannel)
 				r.Post("/translation/emojis", s.translationHandler.AddEmoji)
 				r.Delete("/translation/emojis", s.translationHandler.RemoveEmoji)
+
+				// Clock channels (channels renamed to show date/time)
+				r.Get("/clock-channels", s.clockHandler.List)
+				r.Post("/clock-channels", s.clockHandler.Create)
+				r.Get("/clock-channels/timezones", s.clockHandler.Timezones)
+				r.Put("/clock-channels/{id}", s.clockHandler.Update)
+				r.Delete("/clock-channels/{id}", s.clockHandler.Delete)
 
 				// Auto-roles & Staff list config
 				r.Get("/auto-roles", s.guildHandler.ListAutoRoles)

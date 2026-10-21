@@ -163,6 +163,60 @@ export interface TranslationConfig {
   emojis: TranslationEmojiConfig[];
 }
 
+// A channel the bot renames to show the current date or time in a timezone.
+export interface ClockChannel {
+  id: string;
+  channelId: string;
+  kind: 'date' | 'time';
+  format: string;           // one of CLOCK_FORMATS[].value
+  timezone: string;         // IANA zone, e.g. 'Asia/Jakarta'
+  refreshMinutes: number;   // one of CLOCK_REFRESH_OPTIONS[].value
+  emoji: string | null;     // null = default emoji for the kind
+  managed: boolean;         // true if the bot created the channel
+  name: string;             // channel name last written; '' until the first rename
+}
+
+// One timezone dropdown entry. The API returns these already sorted by GMT offset.
+export interface TimezoneOption {
+  id: string;
+  offsetMinutes: number;
+  label: string;            // e.g. "(GMT+07:00) Asia/Jakarta"
+}
+
+export interface CreateClockInput {
+  format: string;
+  timezone: string;
+  refreshMinutes: number;
+  emoji?: string;
+  channelId?: string | null;   // omit to have the bot create the channel
+  categoryId?: string | null;  // parent category for a bot-created channel
+}
+
+export interface UpdateClockInput {
+  format: string;
+  timezone: string;
+  refreshMinutes: number;
+  emoji?: string;
+}
+
+// How often the bot rewrites a clock's name; mirrors the backend's allowed values.
+export const CLOCK_REFRESH_OPTIONS: { value: number; label: string }[] = [
+  { value: 5, label: 'Every 5 minutes' },
+  { value: 10, label: 'Every 10 minutes' },
+  { value: 15, label: 'Every 15 minutes' },
+  { value: 30, label: 'Every 30 minutes' },
+  { value: 60, label: 'Every hour' },
+];
+
+// Display presets; `example` mirrors what the backend renders (UTC).
+export const CLOCK_FORMATS: { value: string; kind: 'date' | 'time'; label: string; example: string }[] = [
+  { value: 'date_long', kind: 'date', label: 'Saturday Apr 27th', example: 'Saturday Apr 27th' },
+  { value: 'date_medium', kind: 'date', label: 'Apr 27th, 2024', example: 'Apr 27th, 2024' },
+  { value: 'date_iso', kind: 'date', label: '2024-04-27', example: '2024-04-27' },
+  { value: 'time_12h', kind: 'time', label: '3:17am UTC', example: '3:17am UTC' },
+  { value: 'time_24h', kind: 'time', label: '03:17 UTC', example: '03:17 UTC' },
+];
+
 export interface ReactionRoleMapping {
   emoji: string;
   roleId: string;
@@ -322,6 +376,24 @@ function defaultTranslationConfig(guildId: string): TranslationConfig {
     emojis: []
   };
 }
+
+const mockClockChannels: Record<string, ClockChannel[]> = {};
+
+const mockVoiceChannels: DiscordChannel[] = [
+  { id: 'voice-lounge', name: 'Lounge', type: 'voice' },
+  { id: 'voice-stats-1', name: 'Stats', type: 'voice' }
+];
+
+// Static stand-in for the API's list (sorted by GMT offset), used in demo mode.
+const mockTimezones: TimezoneOption[] = [
+  { id: 'America/Los_Angeles', offsetMinutes: -420, label: '(GMT-07:00) America/Los_Angeles' },
+  { id: 'America/New_York', offsetMinutes: -240, label: '(GMT-04:00) America/New_York' },
+  { id: 'UTC', offsetMinutes: 0, label: '(GMT+00:00) UTC' },
+  { id: 'Europe/Paris', offsetMinutes: 120, label: '(GMT+02:00) Europe/Paris' },
+  { id: 'Asia/Kolkata', offsetMinutes: 330, label: '(GMT+05:30) Asia/Kolkata' },
+  { id: 'Asia/Jakarta', offsetMinutes: 420, label: '(GMT+07:00) Asia/Jakarta' },
+  { id: 'Asia/Tokyo', offsetMinutes: 540, label: '(GMT+09:00) Asia/Tokyo' },
+];
 
 let mockReactionRoles: ReactionRole[] = [
   {
@@ -702,6 +774,79 @@ export const ShrimpyAPI = {
       return;
     }
     await fetchJSON(`/api/v1/guilds/${guildId}/translation/emojis?emoji=${encodeURIComponent(emoji)}`, { method: 'DELETE' });
+  },
+
+  // Clock Channels
+  getClockChannels: async (guildId: string): Promise<ClockChannel[]> => {
+    if (isDemoMode()) return mockClockChannels[guildId] || [];
+    return fetchJSON<ClockChannel[]>(`/api/v1/guilds/${guildId}/clock-channels`);
+  },
+
+  getClockTimezones: async (guildId: string): Promise<TimezoneOption[]> => {
+    if (isDemoMode()) return mockTimezones;
+    return fetchJSON<TimezoneOption[]>(`/api/v1/guilds/${guildId}/clock-channels/timezones`);
+  },
+
+  // Existing voice channels that can be linked as a clock.
+  getDiscordVoiceChannels: async (guildId: string): Promise<DiscordChannel[]> => {
+    if (isDemoMode()) return mockVoiceChannels;
+    return fetchJSON<DiscordChannel[]>(`/api/v1/guilds/${guildId}/discord/voice-channels`);
+  },
+
+  createClockChannel: async (guildId: string, input: CreateClockInput): Promise<ClockChannel> => {
+    if (isDemoMode()) {
+      const preset = CLOCK_FORMATS.find(f => f.value === input.format);
+      const created: ClockChannel = {
+        id: `clock-${Date.now()}`,
+        channelId: input.channelId || `voice-${Date.now()}`,
+        kind: preset?.kind ?? 'time',
+        format: input.format,
+        timezone: input.timezone,
+        refreshMinutes: input.refreshMinutes,
+        emoji: input.emoji || null,
+        managed: !input.channelId,
+        name: `${input.emoji || (preset?.kind === 'date' ? '📅' : '🕐')} ${preset?.example ?? ''}`.trim(),
+      };
+      mockClockChannels[guildId] = [...(mockClockChannels[guildId] || []), created];
+      return created;
+    }
+    return fetchJSON<ClockChannel>(`/api/v1/guilds/${guildId}/clock-channels`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    });
+  },
+
+  updateClockChannel: async (guildId: string, id: string, input: UpdateClockInput): Promise<ClockChannel> => {
+    if (isDemoMode()) {
+      const list = mockClockChannels[guildId] || [];
+      const preset = CLOCK_FORMATS.find(f => f.value === input.format);
+      const idx = list.findIndex(c => c.id === id);
+      if (idx === -1) throw new Error('Clock channel not found');
+      const updated: ClockChannel = {
+        ...list[idx],
+        kind: preset?.kind ?? list[idx].kind,
+        format: input.format,
+        timezone: input.timezone,
+        refreshMinutes: input.refreshMinutes,
+        emoji: input.emoji || null,
+        name: `${input.emoji || (preset?.kind === 'date' ? '📅' : '🕐')} ${preset?.example ?? ''}`.trim(),
+      };
+      list[idx] = updated;
+      return updated;
+    }
+    return fetchJSON<ClockChannel>(`/api/v1/guilds/${guildId}/clock-channels/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(input)
+    });
+  },
+
+  // deleteChannel also deletes the Discord channel, but the server only does so for bot-created ones.
+  deleteClockChannel: async (guildId: string, id: string, deleteChannel = false): Promise<void> => {
+    if (isDemoMode()) {
+      mockClockChannels[guildId] = (mockClockChannels[guildId] || []).filter(c => c.id !== id);
+      return;
+    }
+    await fetchJSON(`/api/v1/guilds/${guildId}/clock-channels/${id}?deleteChannel=${deleteChannel}`, { method: 'DELETE' });
   },
 
   // Ticket Panels
