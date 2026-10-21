@@ -6,6 +6,7 @@ import {
   Settings,
   Layers,
   Languages,
+  Clock,
   LucideIcon
 } from "lucide-react";
 
@@ -43,6 +44,12 @@ export function getNavigationGroups(guildId: string): NavGroup[] {
     {
       label: "Server Management",
       items: [
+        {
+          name: "Clock Channels",
+          href: `/dashboard/${guildId}/clock`,
+          icon: Clock,
+          description: "Show the current date and time in channel names."
+        },
         {
           name: "Welcome Greetings",
           href: `/dashboard/${guildId}/welcome`,
