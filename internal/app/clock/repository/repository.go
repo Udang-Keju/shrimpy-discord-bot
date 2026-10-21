@@ -53,7 +53,7 @@ func (r *ClockRepo) Create(ctx context.Context, c *model.ClockChannel) (*model.C
 	result := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "guild_id"}, {Name: "channel_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"kind", "format", "timezone", "emoji"}),
+			DoUpdates: clause.AssignmentColumns([]string{"kind", "format", "timezone", "emoji", "refresh_minutes"}),
 		}).
 		Create(c)
 	return c, result.Error
@@ -64,7 +64,7 @@ func (r *ClockRepo) Update(ctx context.Context, c *model.ClockChannel) error {
 	return r.db.WithContext(ctx).
 		Model(&model.ClockChannel{}).
 		Where("guild_id = ? AND id = ?", c.GuildID, c.ID).
-		Select("kind", "format", "timezone", "emoji").
+		Select("kind", "format", "timezone", "emoji", "refresh_minutes").
 		Updates(c).Error
 }
 

@@ -26,26 +26,28 @@ func NewHandler(clockSvc *service.ClockService) *Handler {
 
 // clockDTO shapes the API response. Snowflakes are strings in JSON.
 type clockDTO struct {
-	ID        string  `json:"id"`
-	ChannelID string  `json:"channelId"`
-	Kind      string  `json:"kind"`
-	Format    string  `json:"format"`
-	Timezone  string  `json:"timezone"`
-	Emoji     *string `json:"emoji"`
-	Managed   bool    `json:"managed"`
-	Name      string  `json:"name"` // channel name last written; "" until first rename
+	ID             string  `json:"id"`
+	ChannelID      string  `json:"channelId"`
+	Kind           string  `json:"kind"`
+	Format         string  `json:"format"`
+	Timezone       string  `json:"timezone"`
+	RefreshMinutes int     `json:"refreshMinutes"`
+	Emoji          *string `json:"emoji"`
+	Managed        bool    `json:"managed"`
+	Name           string  `json:"name"` // channel name last written; "" until first rename
 }
 
 func toDTO(c model.ClockChannel) clockDTO {
 	return clockDTO{
-		ID:        c.ID,
-		ChannelID: discordutil.FormatID(c.ChannelID),
-		Kind:      c.Kind,
-		Format:    c.Format,
-		Timezone:  c.Timezone,
-		Emoji:     c.Emoji,
-		Managed:   c.Managed,
-		Name:      c.LastName,
+		ID:             c.ID,
+		ChannelID:      discordutil.FormatID(c.ChannelID),
+		Kind:           c.Kind,
+		Format:         c.Format,
+		Timezone:       c.Timezone,
+		RefreshMinutes: c.RefreshMinutes,
+		Emoji:          c.Emoji,
+		Managed:        c.Managed,
+		Name:           c.LastName,
 	}
 }
 
@@ -75,11 +77,12 @@ func (h *Handler) Timezones(w http.ResponseWriter, r *http.Request) {
 // createRequest is the payload for adding a clock. Omit channelId to have the
 // bot create the channel (under categoryId, if given).
 type createRequest struct {
-	Format     string  `json:"format"`
-	Timezone   string  `json:"timezone"`
-	Emoji      string  `json:"emoji"`
-	ChannelID  *string `json:"channelId"`
-	CategoryID *string `json:"categoryId"`
+	Format         string  `json:"format"`
+	Timezone       string  `json:"timezone"`
+	RefreshMinutes int     `json:"refreshMinutes"`
+	Emoji          string  `json:"emoji"`
+	ChannelID      *string `json:"channelId"`
+	CategoryID     *string `json:"categoryId"`
 }
 
 // Create adds a clock channel.
@@ -104,11 +107,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clock, err := h.clockSvc.Create(r.Context(), guildID, service.CreateInput{
-		Format:     req.Format,
-		Timezone:   req.Timezone,
-		Emoji:      req.Emoji,
-		ChannelID:  channelID,
-		CategoryID: categoryID,
+		Format:         req.Format,
+		Timezone:       req.Timezone,
+		RefreshMinutes: req.RefreshMinutes,
+		Emoji:          req.Emoji,
+		ChannelID:      channelID,
+		CategoryID:     categoryID,
 	})
 	if err != nil {
 		writeServiceError(w, err, "Failed to create clock channel")
@@ -119,9 +123,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 // updateRequest is the payload for changing how a clock is displayed.
 type updateRequest struct {
-	Format   string `json:"format"`
-	Timezone string `json:"timezone"`
-	Emoji    string `json:"emoji"`
+	Format         string `json:"format"`
+	Timezone       string `json:"timezone"`
+	RefreshMinutes int    `json:"refreshMinutes"`
+	Emoji          string `json:"emoji"`
 }
 
 // Update changes a clock's format, timezone or emoji.
@@ -135,9 +140,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clock, err := h.clockSvc.Update(r.Context(), guildID, chi.URLParam(r, "id"), service.UpdateInput{
-		Format:   req.Format,
-		Timezone: req.Timezone,
-		Emoji:    req.Emoji,
+		Format:         req.Format,
+		Timezone:       req.Timezone,
+		RefreshMinutes: req.RefreshMinutes,
+		Emoji:          req.Emoji,
 	})
 	if err != nil {
 		writeServiceError(w, err, "Failed to update clock channel")

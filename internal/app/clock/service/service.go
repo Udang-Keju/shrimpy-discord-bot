@@ -64,18 +64,20 @@ func NewClockService(repo ClockRepository, provider discordutil.DiscordSessionPr
 // a locked voice channel (under CategoryID, if set); otherwise the existing
 // voice channel is linked and renamed.
 type CreateInput struct {
-	Format     string
-	Timezone   string
-	Emoji      string
-	ChannelID  *int64
-	CategoryID *int64
+	Format         string
+	Timezone       string
+	Emoji          string
+	RefreshMinutes int // 0 = DefaultRefreshMinutes
+	ChannelID      *int64
+	CategoryID     *int64
 }
 
 // UpdateInput changes how an existing clock is displayed.
 type UpdateInput struct {
-	Format   string
-	Timezone string
-	Emoji    string
+	Format         string
+	Timezone       string
+	Emoji          string
+	RefreshMinutes int // 0 = DefaultRefreshMinutes
 }
 
 // List returns the clock channels configured for a guild.
@@ -112,6 +114,10 @@ func (s *ClockService) Create(ctx context.Context, guildID int64, in CreateInput
 	if err != nil {
 		return nil, err
 	}
+	refresh, err := normalizeRefresh(in.RefreshMinutes)
+	if err != nil {
+		return nil, err
+	}
 	tz := in.Timezone
 	if tz == "" {
 		tz = "UTC"
@@ -123,11 +129,12 @@ func (s *ClockService) Create(ctx context.Context, guildID int64, in CreateInput
 	}
 
 	clock := &model.ClockChannel{
-		GuildID:  guildID,
-		Kind:     kind,
-		Format:   in.Format,
-		Timezone: tz,
-		Emoji:    emoji,
+		GuildID:        guildID,
+		Kind:           kind,
+		Format:         in.Format,
+		Timezone:       tz,
+		Emoji:          emoji,
+		RefreshMinutes: refresh,
 	}
 	name, err := FormatName(kind, in.Format, tz, in.Emoji, s.now())
 	if err != nil {
@@ -180,10 +187,16 @@ func (s *ClockService) Update(ctx context.Context, guildID int64, id string, in 
 		return nil, err
 	}
 
+	refresh, err := normalizeRefresh(in.RefreshMinutes)
+	if err != nil {
+		return nil, err
+	}
+
 	clock, err := s.get(ctx, guildID, id)
 	if err != nil {
 		return nil, err
 	}
+	clock.RefreshMinutes = refresh
 	clock.Kind = kind
 	clock.Format = in.Format
 	clock.Timezone = in.Timezone
