@@ -14,10 +14,11 @@ type Module struct {
 }
 
 // Build compiles all layers of the auth feature.
-// settings is used by the handler to load live OAuth2 credentials from the DB.
-func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte, settings handler.SettingsProvider) *Module {
+// settings is used by the handler to load live OAuth2 credentials from the DB; isOwner tells
+// /auth/me whether the signed-in user is the bot owner.
+func Build(db *gorm.DB, jwtSecret []byte, tokenEncKey []byte, settings handler.SettingsProvider, isOwner func(userID string) bool) *Module {
 	repo := repository.NewUserRepo(db)
-	h := handler.NewAuthHandler(repo, jwtSecret, tokenEncKey, settings)
+	h := handler.NewAuthHandler(repo, jwtSecret, tokenEncKey, settings, isOwner)
 	return &Module{
 		Repo:    repo,
 		Handler: h,

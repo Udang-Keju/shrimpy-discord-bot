@@ -20,6 +20,7 @@ type DiscordAppDTO struct {
 	DiscordClientID     string    `json:"discord_client_id"`
 	DiscordClientSecret string    `json:"discord_client_secret"` // masked as "***"
 	DiscordRedirectURI  string    `json:"discord_redirect_uri"`
+	Connected           bool      `json:"connected"` // live gateway health; only set by List/GetByID
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
@@ -57,6 +58,7 @@ type SettingsRepo interface {
 type BotSessionController interface {
 	StartSession(appID string, token string) error
 	StopSession(appID string) error
+	IsConnected(appID string) bool
 }
 
 type cachedSecrets struct {
@@ -107,11 +109,17 @@ func (s *SettingsService) List(ctx context.Context) ([]DiscordAppDTO, error) {
 			DiscordClientID:     row.DiscordClientID,
 			DiscordClientSecret: "***",
 			DiscordRedirectURI:  row.DiscordRedirectURI,
+			Connected:           s.isConnected(row.ID),
 			CreatedAt:           row.CreatedAt,
 			UpdatedAt:           row.UpdatedAt,
 		}
 	}
 	return dtos, nil
+}
+
+// isConnected reports the live gateway health of an app's bot session.
+func (s *SettingsService) isConnected(id string) bool {
+	return s.controller != nil && s.controller.IsConnected(id)
 }
 
 // GetByID returns a single app DTO by ID.
@@ -128,6 +136,7 @@ func (s *SettingsService) GetByID(ctx context.Context, id string) (*DiscordAppDT
 		DiscordClientID:     row.DiscordClientID,
 		DiscordClientSecret: "***",
 		DiscordRedirectURI:  row.DiscordRedirectURI,
+		Connected:           s.isConnected(row.ID),
 		CreatedAt:           row.CreatedAt,
 		UpdatedAt:           row.UpdatedAt,
 	}, nil

@@ -98,6 +98,9 @@ func main() {
 		log.Fatalf("Fatal: %v", err)
 	}
 
+	// Heal bot connections that silently drop, without anyone pressing Reconnect.
+	go registry.RunWatchdog(shutdownCtx)
+
 	fmt.Println("Shrimpy Backend is now fully operational! 🦐")
 
 	// 12. Graceful shutdown

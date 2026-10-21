@@ -11,4 +11,7 @@ import (
 type DiscordSessionProvider interface {
 	GetSessionForGuild(ctx context.Context, guildID int64) (*discordgo.Session, error)
 	IsBotInGuild(guildID string) bool
+	// IsBotOwner reports whether the Discord user owns one of the managed bot applications,
+	// as reported by Discord.
+	IsBotOwner(userID string) bool
 }

@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +42,7 @@ type Server struct {
 	// Services/Deps needed by middleware
 	guildSvc *guild_svc.GuildService
 	provider discordutil.DiscordSessionProvider
+	isOwner  func(userID string) bool
 }
 
 // NewServer constructs a new REST API Server.
@@ -64,7 +67,18 @@ func NewServer(
 		translationHandler:  modules.Translation.Handler,
 		guildSvc:            modules.Guild.Service,
 		provider:            provider,
+		isOwner:             modules.IsOwner,
 	}
+}
+
+// botJoined reports whether the bot is in the guild: live gateway state first, then the persisted
+// DB record so a gateway that is offline/reconnecting doesn't make an installed guild look uninstalled.
+func (s *Server) botJoined(ctx context.Context, guildID string) bool {
+	if s.provider.IsBotInGuild(guildID) {
+		return true
+	}
+	id, err := strconv.ParseInt(guildID, 10, 64)
+	return err == nil && s.guildSvc.IsJoined(ctx, id)
 }
 
 // SetupRoutes registers global middlewares, sets up public/private route groups, and mounts handlers.
@@ -184,7 +198,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 		// Admin-only: bot application settings
 		r.Group(func(r chi.Router) {
 			r.Use(api_middleware.AuthMiddleware(s.jwtSecret))
-			r.Use(api_middleware.AdminMiddleware)
+			r.Use(api_middleware.AdminMiddleware(s.isOwner, s.botJoined))
 
 			r.Get("/admin/apps", s.settingsHandler.List)
 			r.Post("/admin/apps", s.settingsHandler.Create)
