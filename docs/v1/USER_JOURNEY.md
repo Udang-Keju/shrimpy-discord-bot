@@ -158,6 +158,7 @@ OWNER ONLY
 │ ▸ Transcripts           │
 │                         │
 │ SERVER MANAGEMENT       │   (Admin only — fully hidden for Staff, §14.4)
+│ ▸ Clock Channels        │
 │ ▸ Ticket Panels         │
 │ ▸ Welcome               │
 │ ▸ Reaction Roles        │
@@ -330,6 +331,12 @@ The config screens largely exist; the journey work is **ordering, previewing, an
 
 **(e) General Settings — `/settings`** ([settings/page.tsx](../../dashboard/app/dashboard/[guildId]/settings/page.tsx))
 - Bot nickname, prefix, log channel, per-user ticket limit (`A-07` ✅ present). **Missing:** auto-close inactivity duration (`A-08`), language selection.
+
+**(f) Clock Channels — `/clock`** ([clock/page.tsx](../../dashboard/app/dashboard/[guildId]/clock/page.tsx))
+- First item of the **Server Management** group. Lists the server's clocks (current channel name, format, timezone, created-by-bot vs linked) and a single add/edit form.
+- **Add:** choose a display preset (grouped Date / Time), a **timezone from a dropdown that shows each zone's GMT offset and is sorted by it (default UTC)**, an optional emoji, then either **"Create a channel for me"** (a voice channel members can see but not join, optionally under a category) or **"Use an existing voice channel"** (its name will be replaced).
+- **Remove:** a bot-created channel offers to delete the Discord channel too; a linked channel is always left in place.
+- Copy sets expectations: Discord limits renames, so clocks refresh about every 5 minutes and the time can be a few minutes behind; the bot needs **Manage Channels**.
 
 ### 7.7 Operate — Tickets (shared with Staff, see §8)
 

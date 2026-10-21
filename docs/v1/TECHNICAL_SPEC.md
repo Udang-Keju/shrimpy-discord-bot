@@ -451,6 +451,23 @@ CREATE TABLE welcome_config (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+-- Clock channels: channels the bot renames to show the current date/time (migration 012)
+CREATE TABLE clock_channels (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    guild_id    BIGINT       NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
+    channel_id  BIGINT       NOT NULL,
+    kind        VARCHAR(8)   NOT NULL,                  -- 'date' | 'time'
+    format      VARCHAR(32)  NOT NULL,                  -- preset: date_long, date_medium, date_iso, time_12h, time_24h
+    timezone    VARCHAR(64)  NOT NULL DEFAULT 'UTC',    -- IANA zone name from the server-side allow-list
+    emoji       VARCHAR(32),                            -- NULL = default emoji for the kind (📅 / 🕐)
+    managed     BOOLEAN      NOT NULL DEFAULT FALSE,    -- TRUE if the bot created the channel
+    last_name   VARCHAR(100) NOT NULL DEFAULT '',       -- last name written; skips no-op renames
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (guild_id, channel_id)
+);
+CREATE INDEX idx_clock_channels_guild_id ON clock_channels(guild_id);
+
 -- Auto-roles assigned on member join
 CREATE TABLE auto_roles (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -823,6 +840,26 @@ All errors follow a consistent envelope:
 }
 ```
 
+### 4.10 Clock Channels
+
+Channels the bot renames to show the current date or time (e.g. `📅 Saturday Apr 27th`, `🕐 3:17am UTC`). Each clock has its own format and timezone, so a guild can show several.
+
+```
+GET    /api/v1/guilds/:guildId/clock-channels             # List clocks
+POST   /api/v1/guilds/:guildId/clock-channels             # Add a clock (create a channel, or link an existing voice channel)
+PUT    /api/v1/guilds/:guildId/clock-channels/:id         # Change format / timezone / emoji
+DELETE /api/v1/guilds/:guildId/clock-channels/:id         # Remove; ?deleteChannel=true also deletes a bot-created channel
+GET    /api/v1/guilds/:guildId/clock-channels/timezones   # Allowed zones with current GMT offset, sorted by offset
+GET    /api/v1/guilds/:guildId/discord/voice-channels     # Voice channels available to link
+```
+
+`POST` body: `{ "format", "timezone" (default "UTC"), "emoji"?, "channelId"?, "categoryId"? }`. Omit `channelId` to have the bot create a voice channel (under `categoryId`, if given) that members can see but not join; pass an existing voice channel's ID to link it instead. A linked channel is never deleted by the API. Invalid input returns `400 VALIDATION_ERROR`, an unknown clock `404 NOT_FOUND`.
+
+`GET …/timezones` returns `[{ "id": "Asia/Jakarta", "offsetMinutes": 420, "label": "(GMT+07:00) Asia/Jakarta" }, …]`, sorted from the most negative offset up. Offsets are computed per request so DST shifts are reflected. Only these zones are accepted.
+
+> [!NOTE]
+> **Refresh and rate limits.** A background worker (started in `main.go` next to the ticket auto-close scheduler) renames every clock every 5 minutes, and once at startup. Discord limits channel renames to about 2 per 10 minutes per channel, so the worker skips a channel whose name has not changed (tracked in `last_name`) and bounds each rename with a 10 s timeout so one rate-limited channel cannot stall the rest. The time therefore can lag by a few minutes. The bot needs **Manage Channels**.
+
 ---
 
 ## 5. Discord Event Handling
@@ -1141,6 +1178,14 @@ shrimpy-discord-bot/
 │   │   │   ├── handler/handler.go
 │   │   │   ├── bot/bot.go
 │   │   │   └── reactionrole.go       # Module builder/entry point
+│   │   ├── clock/                    # Channels renamed to show date/time (no bot layer)
+│   │   │   ├── model/model.go
+│   │   │   ├── repository/repository.go
+│   │   │   ├── service/service.go    # Channel create/link + rename
+│   │   │   ├── service/format.go     # Pure name formatting + timezone options
+│   │   │   ├── service/scheduler.go  # 5-minute refresh worker
+│   │   │   ├── handler/handler.go
+│   │   │   └── clock.go              # Module builder/entry point
 │   │   └── ticket/                   # Interactive ticketing panels & transcripts
 │   │       ├── model/model.go
 │   │       ├── config/config.go      # Feature-specific config settings
@@ -1193,6 +1238,7 @@ shrimpy-discord-bot/
 │   │   │       ├── tickets/[ticketId]/page.tsx   # ★ Ticket detail
 │   │   │       ├── transcripts/page.tsx          # ★ Transcript archive
 │   │   │       ├── panels/page.tsx
+│   │   │       ├── clock/page.tsx
 │   │   │       ├── welcome/page.tsx
 │   │   │       ├── roles/page.tsx
 │   │   │       └── settings/page.tsx
