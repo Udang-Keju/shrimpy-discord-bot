@@ -18,7 +18,7 @@ Authoritative specs live in `docs/`. **Consult the relevant doc before implement
 | [docs/v1/DESIGN_SYSTEM.md](docs/v1/DESIGN_SYSTEM.md) | Visual identity: color tokens (dark/light), typography, spacing, component tokens, theming |
 | [docs/v1/COMMAND_REFERENCE.md](docs/v1/COMMAND_REFERENCE.md) | Discord slash/prefix command parameters and permission levels |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Running log of spec/architecture changes |
-| [internal/CLAUDE.md](internal/CLAUDE.md) | Backend Go conventions: layering, errors, context, DB, handlers, Discord rate limits, table-driven testing |
+| [internal/GO_STYLE.md](internal/GO_STYLE.md) | Backend Go style: layering, errors, context, DB, handlers, Discord rate limits, table-driven tests. **Read before writing or reviewing backend code** |
 | [dashboard/CLAUDE.md](dashboard/CLAUDE.md) | Dashboard-specific frontend conventions (Next.js breaking changes, toast/async mutation patterns) |
 
 > Dashboard/frontend work is primarily governed by **USER_JOURNEY.md** + **DESIGN_SYSTEM.md**. Backend work is primarily governed by **TECHNICAL_SPEC.md** + **PRD.md**.
@@ -290,7 +290,7 @@ Use Supabase's **Transaction mode** connection string (port 6543) with `?pgbounc
 
 ## Code Style Conventions
 
-- Go: Follow standard Go conventions; use `gofmt`
+- Go: Follow standard Go conventions; use `gofmt`. Full backend style guide (including table-driven tests): [internal/GO_STYLE.md](internal/GO_STYLE.md)
 - Error handling: Always wrap errors with context using `fmt.Errorf("...: %w", err)`
 - Logging: Use `fmt.Printf` for structured logs (future: migrate to `slog`)
 - Database: Use GORM for ORM; raw SQL for complex queries

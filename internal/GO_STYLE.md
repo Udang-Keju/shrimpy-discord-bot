@@ -1,6 +1,6 @@
-# Backend Go conventions
+# Go style guide
 
-Applies to everything under `internal/` and `cmd/`. Architecture (vertical feature modules, `Build()` wiring, the multi-bot registry) is in the root [CLAUDE.md](../CLAUDE.md); this file covers how to write the code.
+How to write backend Go code in this repo (`internal/` and `cmd/`). Architecture (vertical feature modules, `Build()` wiring, the multi-bot registry) is in the root [CLAUDE.md](../CLAUDE.md); this file covers the code itself.
 
 ## Layout and layering
 
