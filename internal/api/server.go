@@ -168,6 +168,7 @@ func (s *Server) SetupRoutes(allowedOrigins string) {
 				r.Get("/reaction-roles", s.reactionRoleHandler.ListReactionRoles)
 				r.Post("/reaction-roles", s.reactionRoleHandler.CreateReactionRole)
 				r.Get("/reaction-roles/{msgId}", s.reactionRoleHandler.GetReactionRole)
+				r.Patch("/reaction-roles/{msgId}", s.reactionRoleHandler.UpdateReactionRole)
 				r.Delete("/reaction-roles/{msgId}", s.reactionRoleHandler.DeleteReactionRole)
 				r.Post("/reaction-roles/{msgId}/emojis", s.reactionRoleHandler.AddEmojiMapping)
 				r.Delete("/reaction-roles/{msgId}/emojis", s.reactionRoleHandler.RemoveEmojiMapping)

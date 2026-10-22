@@ -156,6 +156,55 @@ func (h *Handler) CreateReactionRole(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusCreated, toReactionRoleResponse(msg))
 }
 
+// UpdateReactionRole edits a reaction role message's content and re-renders it on Discord.
+func (h *Handler) UpdateReactionRole(w http.ResponseWriter, r *http.Request) {
+	guildID, _ := strconv.ParseInt(chi.URLParam(r, "guildId"), 10, 64)
+	msgID := chi.URLParam(r, "msgId")
+
+	existing, err := h.reactionSvc.Get(r.Context(), msgID)
+	if err != nil || existing.GuildID != guildID {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Reaction role message not found")
+		return
+	}
+
+	var payload createReactionRolePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid payload")
+		return
+	}
+	chID, err := strconv.ParseInt(payload.ChannelID, 10, 64)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid Channel ID format")
+		return
+	}
+
+	dg, err := h.provider.GetSessionForGuild(r.Context(), guildID)
+	if err != nil {
+		apiutil.WriteError(w, http.StatusNotFound, "NOT_FOUND", "Bot session not found: "+err.Error())
+		return
+	}
+
+	updated, err := h.reactionSvc.Update(r.Context(), dg, msgID, service.CreateParams{
+		GuildID:     guildID,
+		ChannelID:   chID,
+		Content:     payload.Content,
+		Title:       payload.Title,
+		Description: payload.Description,
+		Color:       payload.Color,
+		Media:       payload.Media,
+	})
+	if errors.Is(err, service.ErrEmptyMessage) {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Add plain text or embed content to the message")
+		return
+	}
+	if err != nil {
+		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update reaction role: "+err.Error())
+		return
+	}
+
+	apiutil.WriteJSON(w, http.StatusOK, toReactionRoleResponse(updated))
+}
+
 func (h *Handler) DeleteReactionRole(w http.ResponseWriter, r *http.Request) {
 	msgID := chi.URLParam(r, "msgId")
 

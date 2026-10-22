@@ -1092,6 +1092,25 @@ export const ShrimpyAPI = {
     });
   },
 
+  // Edits the message fields (and channel) of an existing reaction role message; the bot
+  // re-renders the Discord message. Mappings are reconciled separately per emoji.
+  updateReactionRole: async (guildId: string, msgId: string, rr: Omit<ReactionRole, 'id' | 'guildId'>): Promise<ReactionRole> => {
+    if (isDemoMode()) {
+      const updated: ReactionRole = { ...rr, id: msgId, guildId };
+      mockReactionRoles = mockReactionRoles.map(r => r.id === msgId ? updated : r);
+      return updated;
+    }
+    return fetchJSON<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles/${msgId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ channelId: rr.channelId, content: rr.content, title: rr.title, description: rr.description, color: rr.color, media: rr.media })
+    });
+  },
+
+  removeReactionRoleEmoji: async (guildId: string, msgId: string, emoji: string): Promise<void> => {
+    if (isDemoMode()) return;
+    await fetchJSON(`/api/v1/guilds/${guildId}/reaction-roles/${msgId}/emojis?emoji=${encodeURIComponent(emoji)}`, { method: 'DELETE' });
+  },
+
   // Persists a single emoji→role mapping onto an existing reaction role message and
   // makes the bot add the reaction on Discord. Called per mapping after the panel is
   // created (the create endpoint itself only posts the embed).

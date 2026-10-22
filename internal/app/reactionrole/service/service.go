@@ -67,36 +67,53 @@ func nilIfEmpty(s string) *string {
 	return &s
 }
 
-// Create creates a reaction role message in the DB, posts it on Discord (plain text, embed, or both), and stores the message ID.
-func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session, p CreateParams) (*model.ReactionRoleMessage, error) {
+// buildMessage validates the params and renders them into the Discord message parts.
+func buildMessage(p CreateParams) (content string, embed *discordgo.MessageEmbed, err error) {
 	fields := discordutil.EmbedFields{
 		Title:       nilIfEmpty(p.Title),
 		Description: nilIfEmpty(p.Description),
 		Color:       p.Color,
 		Media:       p.Media,
 	}
-	content, embed := discordutil.BuildContentAndEmbed(nilIfEmpty(p.Content), fields, func(s string) string { return s })
-	if content == "" && embed == nil {
-		return nil, ErrEmptyMessage
-	}
+	content, embed = discordutil.BuildContentAndEmbed(nilIfEmpty(p.Content), fields, func(s string) string { return s })
 	// An embed with only a color has nothing to show, and Discord rejects it.
 	if embed != nil && embed.Title == "" && embed.Description == "" && embed.Author == nil &&
 		embed.Thumbnail == nil && embed.Image == nil && embed.Footer == nil {
 		embed = nil
-		if content == "" {
-			return nil, ErrEmptyMessage
-		}
+	}
+	if content == "" && embed == nil {
+		return "", nil, ErrEmptyMessage
+	}
+	return content, embed, nil
+}
+
+// applyParams copies the editable message fields from p onto msg.
+func applyParams(msg *model.ReactionRoleMessage, p CreateParams) error {
+	msg.ChannelID = p.ChannelID
+	msg.Content = nilIfEmpty(p.Content)
+	msg.EmbedTitle = nilIfEmpty(p.Title)
+	msg.EmbedDescription = nilIfEmpty(p.Description)
+	msg.EmbedColor = p.Color
+	return msg.SetMedia(p.Media)
+}
+
+func messageSend(content string, embed *discordgo.MessageEmbed) *discordgo.MessageSend {
+	send := &discordgo.MessageSend{Content: content}
+	if embed != nil {
+		send.Embeds = []*discordgo.MessageEmbed{embed}
+	}
+	return send
+}
+
+// Create creates a reaction role message in the DB, posts it on Discord (plain text, embed, or both), and stores the message ID.
+func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session, p CreateParams) (*model.ReactionRoleMessage, error) {
+	content, embed, err := buildMessage(p)
+	if err != nil {
+		return nil, err
 	}
 
-	msg := &model.ReactionRoleMessage{
-		GuildID:          p.GuildID,
-		ChannelID:        p.ChannelID,
-		Content:          nilIfEmpty(content),
-		EmbedTitle:       fields.Title,
-		EmbedDescription: fields.Description,
-		EmbedColor:       p.Color,
-	}
-	if err := msg.SetMedia(p.Media); err != nil {
+	msg := &model.ReactionRoleMessage{GuildID: p.GuildID}
+	if err := applyParams(msg, p); err != nil {
 		return nil, err
 	}
 
@@ -105,12 +122,7 @@ func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session,
 		return nil, err
 	}
 
-	channelID := p.ChannelID
-	send := &discordgo.MessageSend{Content: content}
-	if embed != nil {
-		send.Embeds = []*discordgo.MessageEmbed{embed}
-	}
-	dgMsg, err := dg.ChannelMessageSendComplex(fmt.Sprintf("%d", channelID), send)
+	dgMsg, err := dg.ChannelMessageSendComplex(fmt.Sprintf("%d", p.ChannelID), messageSend(content, embed))
 	if err != nil {
 		_ = s.repo.DeleteMessage(ctx, created.ID)
 		return nil, fmt.Errorf("failed to post Discord message: %w", err)
@@ -128,6 +140,71 @@ func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session,
 
 	created.MessageID = &discordMsgID
 	return created, nil
+}
+
+// Update changes a reaction role message's content and re-renders it on Discord. Editing in
+// place keeps the existing reactions; if the channel changed, the message is reposted in the
+// new channel, the existing emoji reactions are re-added, and the old message is deleted.
+func (s *ReactionRoleService) Update(ctx context.Context, dg *discordgo.Session, id string, p CreateParams) (*model.ReactionRoleMessage, error) {
+	content, embed, err := buildMessage(p)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := s.repo.GetMessage(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	oldChannelID := msg.ChannelID
+	var oldDiscordMsgID *int64 = msg.MessageID
+
+	if err := applyParams(msg, p); err != nil {
+		return nil, err
+	}
+
+	switch {
+	case oldDiscordMsgID == nil || oldChannelID != p.ChannelID:
+		dgMsg, err := dg.ChannelMessageSendComplex(fmt.Sprintf("%d", p.ChannelID), messageSend(content, embed))
+		if err != nil {
+			return nil, fmt.Errorf("failed to post Discord message: %w", err)
+		}
+		newID, err := discordutil.ParseID(dgMsg.ID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Discord message ID returned: %w", err)
+		}
+		for _, e := range msg.Emojis {
+			if err := dg.MessageReactionAdd(dgMsg.ChannelID, dgMsg.ID, e.Emoji); err != nil {
+				fmt.Printf("warning: failed to re-add reaction %q: %v\n", e.Emoji, err)
+			}
+		}
+		if oldDiscordMsgID != nil {
+			_ = dg.ChannelMessageDelete(fmt.Sprintf("%d", oldChannelID), fmt.Sprintf("%d", *oldDiscordMsgID))
+		}
+		msg.MessageID = &newID
+	default:
+		// Pointers (and a non-nil empty slice) so that clearing the text or the embed is sent.
+		embeds := []*discordgo.MessageEmbed{}
+		if embed != nil {
+			embeds = append(embeds, embed)
+		}
+		edit := discordgo.NewMessageEdit(fmt.Sprintf("%d", p.ChannelID), fmt.Sprintf("%d", *oldDiscordMsgID))
+		edit.Content = &content
+		edit.Embeds = &embeds
+		if _, err := dg.ChannelMessageEditComplex(edit); err != nil {
+			return nil, fmt.Errorf("failed to edit Discord message: %w", err)
+		}
+	}
+
+	updated, err := s.repo.UpdateMessage(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+	if msg.MessageID != oldDiscordMsgID {
+		if err := s.repo.SetDiscordMessageID(ctx, id, *msg.MessageID); err != nil {
+			return nil, err
+		}
+	}
+	return updated, nil
 }
 
 // AddEmoji adds a reaction emoji and maps it to a role.

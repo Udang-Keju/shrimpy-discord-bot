@@ -211,6 +211,72 @@ func TestReactionRoleService_Create_Validation(t *testing.T) {
 	}
 }
 
+func TestReactionRoleService_Update(t *testing.T) {
+	ctx := context.Background()
+	discordMsgID := int64(777)
+	newDesc := "Updated"
+
+	newRepo := func(channelID int64) *MockReactionRoleRepository {
+		return &MockReactionRoleRepository{
+			GetMessageFunc: func(c context.Context, id string) (*model.ReactionRoleMessage, error) {
+				return &model.ReactionRoleMessage{
+					ID: id, ChannelID: channelID, MessageID: &discordMsgID,
+					Emojis: []model.ReactionRoleEmoji{{Emoji: "🦐"}},
+				}, nil
+			},
+			UpdateMessageFunc: func(c context.Context, msg *model.ReactionRoleMessage) (*model.ReactionRoleMessage, error) {
+				return msg, nil
+			},
+			SetDiscordMessageIDFunc: func(c context.Context, id string, mid int64) error { return nil },
+		}
+	}
+
+	t.Run("edits in place when the channel is unchanged", func(t *testing.T) {
+		svc := service.NewReactionRoleService(newRepo(999888))
+		dg, _ := discordgo.New("Bot Token")
+		var gotMethod, gotPath string
+		dg.Client.Transport = &mockTransport{roundTrip: func(req *http.Request) (*http.Response, error) {
+			gotMethod, gotPath = req.Method, req.URL.Path
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"777"}`))}, nil
+		}}
+
+		updated, err := svc.Update(ctx, dg, "msg-uuid", service.CreateParams{ChannelID: 999888, Description: newDesc})
+		assert.NoError(t, err)
+		assert.Equal(t, "PATCH", gotMethod)
+		assert.Equal(t, "/api/v9/channels/999888/messages/777", gotPath)
+		assert.Equal(t, newDesc, *updated.EmbedDescription)
+		assert.Equal(t, discordMsgID, *updated.MessageID)
+	})
+
+	t.Run("reposts and re-reacts when the channel changes", func(t *testing.T) {
+		svc := service.NewReactionRoleService(newRepo(999888))
+		dg, _ := discordgo.New("Bot Token")
+		var calls []string
+		dg.Client.Transport = &mockTransport{roundTrip: func(req *http.Request) (*http.Response, error) {
+			calls = append(calls, req.Method+" "+req.URL.Path)
+			body := `{"id":"888","channel_id":"111"}`
+			if req.Method == "PUT" || req.Method == "DELETE" {
+				return &http.Response{StatusCode: 204, Body: io.NopCloser(strings.NewReader(""))}, nil
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
+		}}
+
+		updated, err := svc.Update(ctx, dg, "msg-uuid", service.CreateParams{ChannelID: 111, Description: newDesc})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(888), *updated.MessageID)
+		assert.Equal(t, int64(111), updated.ChannelID)
+		assert.Contains(t, calls, "POST /api/v9/channels/111/messages")
+		assert.Contains(t, calls, "DELETE /api/v9/channels/999888/messages/777")
+		assert.Len(t, calls, 3)
+	})
+
+	t.Run("rejects an empty message", func(t *testing.T) {
+		svc := service.NewReactionRoleService(newRepo(999888))
+		_, err := svc.Update(ctx, nil, "msg-uuid", service.CreateParams{ChannelID: 999888})
+		assert.ErrorIs(t, err, service.ErrEmptyMessage)
+	})
+}
+
 func TestReactionRoleService_AddRemoveDelete(t *testing.T) {
 	ctx := context.Background()
 	messageID := "msg-uuid"
