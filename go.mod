@@ -1,6 +1,6 @@
 module github.com/Udang-Keju/shrimpy-discord-bot
 
-go 1.26.4
+go 1.27.3
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0

@@ -2,7 +2,7 @@
 
 > A Go-powered Discord server management & help desk bot with a web-based admin dashboard.
 
-[![Go Version](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -23,7 +23,7 @@ A single compiled Go binary acts as both the **Discord bot** and the **REST API 
 
 | Layer | Technology |
 |-------|-----------|
-| **Bot runtime** | Go 1.26, [discordgo](https://github.com/bwmarrin/discordgo) |
+| **Bot runtime** | Go 1.27, [discordgo](https://github.com/bwmarrin/discordgo) |
 | **HTTP router** | [go-chi/chi](https://github.com/go-chi/chi) |
 | **Database** | PostgreSQL 16 via [pgx/v5](https://github.com/jackc/pgx) |
 | **Auth** | Discord OAuth2, JWT ([golang-jwt/jwt](https://github.com/golang-jwt/jwt)) |
@@ -77,7 +77,7 @@ shrimpy-discord-bot/
 
 ### Prerequisites
 
-- [Go 1.26+](https://go.dev/dl/)
+- [Go 1.27+](https://go.dev/dl/)
 - [Node.js 20+](https://nodejs.org/)
 - [PostgreSQL 16+](https://www.postgresql.org/) (or Docker)
 - A [Discord Application](https://discord.com/developers/applications) with a bot token
