@@ -52,7 +52,7 @@ export default function AdminAppsPage() {
     async function load() {
       // The server enforces owner-only; this just decides whether to show the Reconnect button.
       ShrimpyAPI.getCurrentUser()
-        .then((user) => setIsOwner(user.is_owner === true))
+        .then((user) => setIsOwner(user.isOwner === true))
         .catch((err) => console.error("Failed to load current user", err));
       await loadApps();
     }
@@ -170,7 +170,7 @@ export default function AdminAppsPage() {
                   <span style={{ fontSize: "12px", fontWeight: 600, color }}>{app.connected ? "Connected" : "Disconnected"}</span>
                 </div>
                 <h2 style={{ fontSize: "17px", fontWeight: 700, margin: "4px 0 2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.name}</h2>
-                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Client ID {app.discord_client_id}</span>
+                <span style={{ fontSize: "12px", color: "var(--color-text-muted)" }}>Client ID {app.discordClientId}</span>
               </div>
               {isOwner && (
                 <button

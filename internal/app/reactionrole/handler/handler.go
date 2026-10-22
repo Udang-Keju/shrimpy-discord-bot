@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/service"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/apiutil"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
@@ -25,6 +26,44 @@ func NewHandler(reactionSvc *service.ReactionRoleService, provider discordutil.D
 	}
 }
 
+type emojiMappingResponse struct {
+	Emoji  string `json:"emoji"`
+	RoleID string `json:"role_id"`
+}
+
+// reactionRoleResponse is the dashboard-facing shape of a reaction role message.
+// Snowflake IDs are strings because JS numbers cannot hold 64-bit integers.
+type reactionRoleResponse struct {
+	ID          string                 `json:"id"`
+	GuildID     string                 `json:"guild_id"`
+	ChannelID   string                 `json:"channel_id"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Mappings    []emojiMappingResponse `json:"mappings"`
+}
+
+func toReactionRoleResponse(m *model.ReactionRoleMessage) reactionRoleResponse {
+	resp := reactionRoleResponse{
+		ID:        m.ID,
+		GuildID:   strconv.FormatInt(m.GuildID, 10),
+		ChannelID: strconv.FormatInt(m.ChannelID, 10),
+		Mappings:  make([]emojiMappingResponse, 0, len(m.Emojis)),
+	}
+	if m.EmbedTitle != nil {
+		resp.Title = *m.EmbedTitle
+	}
+	if m.EmbedDescription != nil {
+		resp.Description = *m.EmbedDescription
+	}
+	for _, e := range m.Emojis {
+		resp.Mappings = append(resp.Mappings, emojiMappingResponse{
+			Emoji:  e.Emoji,
+			RoleID: strconv.FormatInt(e.RoleID, 10),
+		})
+	}
+	return resp
+}
+
 func (h *Handler) ListReactionRoles(w http.ResponseWriter, r *http.Request) {
 	guildIDStr := chi.URLParam(r, "guildId")
 	guildID, _ := strconv.ParseInt(guildIDStr, 10, 64)
@@ -35,7 +74,11 @@ func (h *Handler) ListReactionRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, msgs)
+	resp := make([]reactionRoleResponse, 0, len(msgs))
+	for i := range msgs {
+		resp = append(resp, toReactionRoleResponse(&msgs[i]))
+	}
+	apiutil.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) GetReactionRole(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +90,7 @@ func (h *Handler) GetReactionRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, msg)
+	apiutil.WriteJSON(w, http.StatusOK, toReactionRoleResponse(msg))
 }
 
 type createReactionRolePayload struct {
@@ -86,7 +129,7 @@ func (h *Handler) CreateReactionRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiutil.WriteJSON(w, http.StatusCreated, msg)
+	apiutil.WriteJSON(w, http.StatusCreated, toReactionRoleResponse(msg))
 }
 
 func (h *Handler) DeleteReactionRole(w http.ResponseWriter, r *http.Request) {

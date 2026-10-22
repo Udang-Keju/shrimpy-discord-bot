@@ -10,26 +10,26 @@ export interface Guild {
   logChannelId?: string;
   autoRoles: string[];
   staffRoles: string[];
-  bot_joined?: boolean;
+  botJoined?: boolean;
   // Owner or ADMINISTRATOR of this guild (vs MANAGE_GUILD only). Gates the bot-wide /admin/apps screen.
-  is_admin?: boolean;
+  isAdmin?: boolean;
 }
 
 // A Discord bot application managed from /admin/apps. Secrets are never returned.
 export interface DiscordApp {
   id: string;
   name: string;
-  discord_client_id: string;
-  discord_redirect_uri: string;
+  discordClientId: string;
+  discordRedirectUri: string;
   // Live gateway health: the bot's websocket is open and heartbeating.
   connected: boolean;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PublicConfig {
-  client_id: string;
-  redirect_uri: string;
+  clientId: string;
+  redirectUri: string;
 }
 
 export interface Ticket {
@@ -260,7 +260,7 @@ export interface DiscordUser {
   username: string;
   globalName?: string;
   avatar?: string;
-  is_owner?: boolean;
+  isOwner?: boolean;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_SHRIMPY_API_URL || 'http://localhost:8080';
@@ -276,11 +276,11 @@ const mockApps: DiscordApp[] = [
   {
     id: 'demo-app-1',
     name: 'Production Bot',
-    discord_client_id: '123456789012345678',
-    discord_redirect_uri: 'http://localhost:8080/api/v1/auth/callback',
+    discordClientId: '123456789012345678',
+    discordRedirectUri: 'http://localhost:8080/api/v1/auth/callback',
     connected: true,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -496,9 +496,27 @@ function exitDemoMode(): void {
   window.sessionStorage.removeItem(DEMO_FLAG_KEY);
 }
 
+// The API contract is snake_case JSON (see CLAUDE.md); the dashboard works in camelCase.
+// Keys are converted here, at the single network boundary, so pages and types never see snake_case.
+function convertKeys(value: unknown, convert: (key: string) => string): unknown {
+  if (Array.isArray(value)) return value.map(v => convertKeys(v, convert));
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [convert(k), convertKeys(v, convert)])
+    );
+  }
+  return value;
+}
+const snakeToCamel = (key: string) => key.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+const camelToSnake = (key: string) => key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const body = typeof options?.body === 'string'
+    ? JSON.stringify(convertKeys(JSON.parse(options.body), camelToSnake))
+    : options?.body;
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
+    body,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -508,7 +526,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API Error: ${res.status} ${res.statusText}`);
   }
-  return await res.json() as T;
+  return convertKeys(await res.json(), snakeToCamel) as T;
 }
 
 export const ShrimpyAPI = {
@@ -531,8 +549,8 @@ export const ShrimpyAPI = {
   getPublicConfig: async (): Promise<PublicConfig> => {
     if (isDemoMode()) {
       return {
-        client_id: '123456789012345678',
-        redirect_uri: 'http://localhost:8080/api/v1/auth/callback'
+        clientId: '123456789012345678',
+        redirectUri: 'http://localhost:8080/api/v1/auth/callback'
       };
     }
     return fetchJSON<PublicConfig>('/api/v1/config');
@@ -606,7 +624,7 @@ export const ShrimpyAPI = {
     }
     await fetchJSON(`/api/v1/guilds/${guildId}/auto-roles`, {
       method: 'POST',
-      body: JSON.stringify({ role_id: roleId })
+      body: JSON.stringify({ roleId })
     });
   },
 
@@ -627,7 +645,7 @@ export const ShrimpyAPI = {
     }
     await fetchJSON(`/api/v1/guilds/${guildId}/staff-roles`, {
       method: 'POST',
-      body: JSON.stringify({ role_id: roleId })
+      body: JSON.stringify({ roleId })
     });
   },
 
@@ -1066,7 +1084,8 @@ export const ShrimpyAPI = {
     }
     return fetchJSON<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles`, {
       method: 'POST',
-      body: JSON.stringify(rr)
+      // The create endpoint only takes the embed fields; mappings are added separately.
+      body: JSON.stringify({ channelId: rr.channelId, title: rr.title, description: rr.description })
     });
   },
 
@@ -1077,7 +1096,7 @@ export const ShrimpyAPI = {
     if (isDemoMode()) return;
     await fetchJSON(`/api/v1/guilds/${guildId}/reaction-roles/${msgId}/emojis`, {
       method: 'POST',
-      body: JSON.stringify({ emoji, role_id: roleId })
+      body: JSON.stringify({ emoji, roleId })
     });
   },
 

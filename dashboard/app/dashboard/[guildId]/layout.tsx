@@ -76,10 +76,9 @@ export default function DashboardLayout({
     const timer = setTimeout(() => {
       setMounted(true);
       setTheme(getSavedTheme());
+      setGuildsLoaded(false);
+      loadData();
     }, 0);
-
-    setGuildsLoaded(false);
-    loadData();
 
     return () => clearTimeout(timer);
   }, [loadData]);
@@ -94,7 +93,7 @@ export default function DashboardLayout({
   // Auto-recheck when the tab regains focus while the invite gate is showing — the
   // invite opens in another tab, so returning here is a strong signal to re-verify.
   useEffect(() => {
-    const guildNotJoined = guilds.find(g => g.id === guildId)?.bot_joined === false;
+    const guildNotJoined = guilds.find(g => g.id === guildId)?.botJoined === false;
     if (!guildNotJoined) return;
 
     const onFocus = () => { handleRecheck(); };
@@ -119,8 +118,8 @@ export default function DashboardLayout({
   // Returns null (rather than a fake link) when config hasn't loaded, so we never
   // send users to Discord's "Unknown Application" error with a bogus client_id.
   const getInviteUrl = (targetGuildId: string): string | null => {
-    if (!config?.client_id) return null;
-    return `https://discord.com/api/oauth2/authorize?client_id=${config.client_id}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands&guild_id=${targetGuildId}`;
+    if (!config?.clientId) return null;
+    return `https://discord.com/api/oauth2/authorize?client_id=${config.clientId}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands&guild_id=${targetGuildId}`;
   };
 
   const handleLogout = async () => {
@@ -142,9 +141,9 @@ export default function DashboardLayout({
 
   // Gate the config pages when the bot isn't in this guild. The Discord-backed
   // config endpoints would otherwise return nothing and the pages render empty.
-  // Only block on an explicit `false` so demo guilds (bot_joined undefined) pass through.
+  // Only block on an explicit `false` so demo guilds (botJoined undefined) pass through.
   const currentGuild = guilds.find(g => g.id === guildId);
-  const needsInvite = currentGuild?.bot_joined === false;
+  const needsInvite = currentGuild?.botJoined === false;
 
   const getPageTitle = () => {
     const current = navigationItems.find(item => pathname.startsWith(item.href));
@@ -167,8 +166,8 @@ export default function DashboardLayout({
             onChange={handleGuildChange}
             placeholder="Select a server..."
             options={[
-              ...guilds.filter(g => g.bot_joined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Invited" })),
-              ...guilds.filter(g => !g.bot_joined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Not Invited" })),
+              ...guilds.filter(g => g.botJoined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Invited" })),
+              ...guilds.filter(g => !g.botJoined).map(g => ({ value: g.id, label: g.name, icon: g.icon, group: "Not Invited" })),
             ]}
           />
         </div>

@@ -75,9 +75,9 @@ type guildConfigResponse struct {
 	ID           string   `json:"id"`
 	Nickname     *string  `json:"nickname"`
 	Prefix       string   `json:"prefix"`
-	LogChannelID *string  `json:"logChannelId"`
-	AutoRoles    []string `json:"autoRoles"`
-	StaffRoles   []string `json:"staffRoles"`
+	LogChannelID *string  `json:"log_channel_id"`
+	AutoRoles    []string `json:"auto_roles"`
+	StaffRoles   []string `json:"staff_roles"`
 }
 
 // GetConfig returns the Shrimpy database configuration for a specific guild, including
@@ -143,7 +143,7 @@ func (h *Handler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if language, ok := updates["language"].(string); ok && len(language) <= 10 {
 		allowedUpdates["language"] = language
 	}
-	if logCh, ok := updates["logChannelId"]; ok {
+	if logCh, ok := updates["log_channel_id"]; ok {
 		if logCh == nil || logCh == "" {
 			allowedUpdates["log_channel_id"] = nil
 		} else if logChVal, err := strconv.ParseInt(fmt.Sprintf("%v", logCh), 10, 64); err == nil {

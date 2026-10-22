@@ -16,7 +16,7 @@ import Dropdown from "@/components/Dropdown";
 import EmojiInsertButton from "@/components/EmojiPicker/EmojiInsertButton";
 import { useEmojiInsert } from "@/components/EmojiPicker/useEmojiInsert";
 import { useToast } from "@/hooks/useToast";
-import { Skeleton, SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
+import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
 
 export default function WelcomePage() {
   const params = useParams();

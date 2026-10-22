@@ -59,7 +59,7 @@ type EmbedMedia struct {
 
 type EmbedAuthor struct {
 	Name    string  `json:"name"`
-	IconURL *string `json:"iconUrl,omitempty"`
+	IconURL *string `json:"icon_url,omitempty"`
 	URL     *string `json:"url,omitempty"`
 }
 
@@ -73,7 +73,7 @@ type EmbedImage struct {
 
 type EmbedFooter struct {
 	Text    string  `json:"text"`
-	IconURL *string `json:"iconUrl,omitempty"`
+	IconURL *string `json:"icon_url,omitempty"`
 }
 
 // Attachment represents a file attached to a ticket message, stored as JSONB.
