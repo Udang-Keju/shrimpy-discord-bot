@@ -7,6 +7,7 @@ import (
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/model"
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/welcome/repository"
+	"github.com/Udang-Keju/shrimpy-discord-bot/internal/pkg/discordutil"
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -100,63 +101,23 @@ func (s *WelcomeService) SendWelcome(ctx context.Context, dg *discordgo.Session,
 		}
 	}
 
-	// 2. Send Channel Greeting if channel and message/embed are configured
+	// 2. Send Channel Greeting (plain text, embed, or both) if a channel is configured
 	if cfg.ChannelID != nil {
-		channelIDStr := fmt.Sprintf("%d", *cfg.ChannelID)
-		var textContent string
-		if cfg.ChannelMessage != nil {
-			textContent = replaceVars(*cfg.ChannelMessage)
+		media, _ := cfg.GetMedia()
+		fields := discordutil.EmbedFields{
+			Title:       cfg.EmbedTitle,
+			Description: cfg.EmbedDesc,
+			Color:       cfg.EmbedColor,
+			Media:       media,
 		}
+		content, embed := discordutil.BuildContentAndEmbed(cfg.ChannelMessage, fields, replaceVars)
 
-		var embed *discordgo.MessageEmbed
-		media, err := cfg.GetMedia()
-		if err == nil && media != nil {
-			embed = &discordgo.MessageEmbed{}
-			if cfg.EmbedColor != nil {
-				embed.Color = int(*cfg.EmbedColor)
+		if content != "" || embed != nil {
+			params := &discordgo.MessageSend{Content: content}
+			if embed != nil {
+				params.Embeds = []*discordgo.MessageEmbed{embed}
 			}
-
-			if media.Author != nil {
-				embed.Author = &discordgo.MessageEmbedAuthor{
-					Name: replaceVars(media.Author.Name),
-				}
-				if media.Author.IconURL != nil {
-					embed.Author.IconURL = *media.Author.IconURL
-				}
-				if media.Author.URL != nil {
-					embed.Author.URL = *media.Author.URL
-				}
-			}
-
-			if media.Thumbnail != nil {
-				embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
-					URL: media.Thumbnail.URL,
-				}
-			}
-
-			if media.Image != nil {
-				embed.Image = &discordgo.MessageEmbedImage{
-					URL: media.Image.URL,
-				}
-			}
-
-			if media.Footer != nil {
-				embed.Footer = &discordgo.MessageEmbedFooter{
-					Text: replaceVars(media.Footer.Text),
-				}
-				if media.Footer.IconURL != nil {
-					embed.Footer.IconURL = *media.Footer.IconURL
-				}
-			}
-		}
-
-		if textContent != "" || embed != nil {
-			params := &discordgo.MessageSend{
-				Content: textContent,
-				Embed:   embed,
-			}
-			_, err = dg.ChannelMessageSendComplex(channelIDStr, params)
-			if err != nil {
+			if _, err := dg.ChannelMessageSendComplex(fmt.Sprintf("%d", *cfg.ChannelID), params); err != nil {
 				return fmt.Errorf("failed to send welcome message to channel: %w", err)
 			}
 		}
