@@ -129,13 +129,17 @@ export interface CategoryHandlerRole {
 
 export interface WelcomeConfig {
   guildId: string;
-  sendDm: boolean;
-  dmText: string;
-  sendChannel: boolean;
+  enabled: boolean;
+  // Plain-text DM sent to the joiner; empty ⇒ no DM.
+  dmMessage: string;
+  // Channel greeting target; empty ⇒ no public greeting. The greeting itself is plain
+  // text (content) and/or an embed (title, description, color, media).
   channelId: string;
-  welcomeText: string;
-  cardStyle: 'dark' | 'light';
-  avatarEmoji: string;
+  content: string;
+  title: string;
+  description: string;
+  color?: number;
+  media?: EmbedMedia;
 }
 
 export interface TranslationChannelConfig {
@@ -351,13 +355,13 @@ const mockTickets: Ticket[] = [
 const mockWelcomeConfigs: Record<string, WelcomeConfig> = {
   '123456789012345678': {
     guildId: '123456789012345678',
-    sendDm: true,
-    dmText: 'Thanks for joining Shrimpy Sandbox server! Make sure to read the rules.',
-    sendChannel: true,
+    enabled: true,
+    dmMessage: 'Thanks for joining Shrimpy Sandbox server! Make sure to read the rules.',
     channelId: 'general',
-    welcomeText: 'Welcome to Shrimpy Server!',
-    cardStyle: 'dark',
-    avatarEmoji: '🦐'
+    content: '',
+    title: 'Welcome to {server}!',
+    description: 'Hey {user}, glad you are here! You are member #{membercount}.',
+    color: 0x5865F2,
   }
 };
 
@@ -697,13 +701,12 @@ export const ShrimpyAPI = {
     if (isDemoMode()) {
       return mockWelcomeConfigs[guildId] || {
         guildId,
-        sendDm: false,
-        dmText: '',
-        sendChannel: false,
+        enabled: false,
+        dmMessage: '',
         channelId: '',
-        welcomeText: 'Welcome!',
-        cardStyle: 'dark',
-        avatarEmoji: '🦐'
+        content: '',
+        title: '',
+        description: '',
       };
     }
     return fetchJSON<WelcomeConfig>(`/api/v1/guilds/${guildId}/welcome`);

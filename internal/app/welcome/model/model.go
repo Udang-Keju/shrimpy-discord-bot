@@ -14,6 +14,8 @@ type WelcomeConfig struct {
 	DMMessage      *string        `gorm:"column:dm_message"`
 	ChannelID      *int64         `gorm:"column:channel_id"`
 	ChannelMessage *string        `gorm:"column:channel_message"`
+	EmbedTitle     *string        `gorm:"column:embed_title"`
+	EmbedDesc      *string        `gorm:"column:embed_description"`
 	EmbedColor     *int32         `gorm:"column:embed_color"`
 	EmbedMedia     datatypes.JSON `gorm:"column:embed_media;type:jsonb"`
 	CreatedAt      time.Time

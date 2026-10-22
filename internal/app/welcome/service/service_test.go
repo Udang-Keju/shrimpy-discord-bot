@@ -259,3 +259,40 @@ func TestWelcomeService_SendWelcome(t *testing.T) {
 		})
 	}
 }
+
+func TestWelcomeService_SendWelcome_Embed(t *testing.T) {
+	color := int32(0x5865F2)
+	repo := &MockWelcomeRepository{
+		GetFunc: func(c context.Context, id int64) (*model.WelcomeConfig, error) {
+			return &model.WelcomeConfig{
+				GuildID:    12345,
+				Enabled:    true,
+				ChannelID:  int64Ptr(888999),
+				EmbedTitle: stringPtr("Welcome to {server}!"),
+				EmbedDesc:  stringPtr("{username} is member #{membercount}"),
+				EmbedColor: &color,
+			}, nil
+		},
+	}
+	svc := service.NewWelcomeService(repo)
+
+	var channelBody string
+	dg, _ := discordgo.New("Bot Token")
+	dg.Client.Transport = &mockTransport{roundTrip: func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/v9/guilds/12345":
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"id":"12345","name":"Shrimpy Server","member_count":105}`))}, nil
+		case "/api/v9/channels/888999/messages":
+			b, _ := io.ReadAll(req.Body)
+			channelBody = string(b)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+		}
+		return &http.Response{StatusCode: 400, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}}
+
+	member := &discordgo.Member{User: &discordgo.User{ID: "67890", Username: "joininguser"}}
+	assert.NoError(t, svc.SendWelcome(context.Background(), dg, 12345, member))
+	assert.Contains(t, channelBody, `"embeds"`)
+	assert.Contains(t, channelBody, "Welcome to Shrimpy Server!")
+	assert.Contains(t, channelBody, "joininguser is member #105")
+}

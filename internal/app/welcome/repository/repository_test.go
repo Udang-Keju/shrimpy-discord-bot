@@ -27,6 +27,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		dm_message TEXT,
 		channel_id INTEGER,
 		channel_message TEXT,
+		embed_title TEXT,
+		embed_description TEXT,
 		embed_color INTEGER,
 		embed_media TEXT,
 		created_at DATETIME,

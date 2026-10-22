@@ -35,7 +35,7 @@ func (r *WelcomeRepo) Upsert(ctx context.Context, cfg *model.WelcomeConfig) (*mo
 			Columns: []clause.Column{{Name: "guild_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{
 				"enabled", "dm_message", "channel_id", "channel_message",
-				"embed_color", "embed_media",
+				"embed_title", "embed_description", "embed_color", "embed_media",
 			}),
 		}).
 		Create(cfg)

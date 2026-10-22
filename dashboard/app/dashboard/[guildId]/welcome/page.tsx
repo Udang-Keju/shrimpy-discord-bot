@@ -5,8 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Save,
-  Eye,
-  Sparkles,
   Plus,
   Trash2
 } from "lucide-react";
@@ -15,8 +13,49 @@ import { ShrimpyAPI, WelcomeConfig, DiscordChannel, DiscordRole, DiscordEmoji } 
 import Dropdown from "@/components/Dropdown";
 import EmojiInsertButton from "@/components/EmojiPicker/EmojiInsertButton";
 import { useEmojiInsert } from "@/components/EmojiPicker/useEmojiInsert";
+import MessageEditor from "@/components/MessageEditor/MessageEditor";
+import MessagePreview from "@/components/MessageEditor/MessagePreview";
+import { MessageDraft, colorToHex, createDraft, draftHasContent, draftToFields } from "@/components/MessageEditor/messageDraft";
 import { useToast } from "@/hooks/useToast";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
+
+const defaultDraft = () => createDraft({
+  embedTitle: "Welcome to {server}!",
+  embedDescription: "Hey {user}, glad you're here! You are member #{membercount}.",
+});
+
+// Example values the live preview substitutes for the template variables the bot resolves on join.
+const previewVars = (text: string) => text
+  .replace(/\{(user|mention)\}/g, "@NewMember")
+  .replace(/\{username\}/g, "NewMember")
+  .replace(/\{server\}/g, "Shrimpy Sandbox")
+  .replace(/\{membercount\}/g, "128");
+
+// A copy of the draft with every text field resolved, for the preview only.
+const resolveDraft = (d: MessageDraft): MessageDraft => ({
+  ...d,
+  content: previewVars(d.content),
+  embedTitle: previewVars(d.embedTitle),
+  embedDescription: previewVars(d.embedDescription),
+  authorName: previewVars(d.authorName),
+  footerText: previewVars(d.footerText),
+});
+
+const configToDraft = (c: WelcomeConfig): MessageDraft => {
+  if (!c.content && !c.title && !c.description && !c.media) return defaultDraft();
+  return createDraft({
+    content: c.content,
+    embedTitle: c.title,
+    embedDescription: c.description,
+    embedColor: colorToHex(c.color),
+    authorName: c.media?.author?.name ?? "",
+    authorIconUrl: c.media?.author?.iconUrl ?? "",
+    thumbnailUrl: c.media?.thumbnail?.url ?? "",
+    imageUrl: c.media?.image?.url ?? "",
+    footerText: c.media?.footer?.text ?? "",
+    footerIconUrl: c.media?.footer?.iconUrl ?? "",
+  });
+};
 
 export default function WelcomePage() {
   const params = useParams();
@@ -24,6 +63,12 @@ export default function WelcomePage() {
   const { showToast } = useToast();
 
   const [config, setConfig] = useState<WelcomeConfig | null>(null);
+  const [draft, setDraft] = useState(defaultDraft);
+  // The toggles gate which greetings are sent; the underlying text/channel survive toggling off.
+  const [sendChannel, setSendChannel] = useState(false);
+  const [sendDm, setSendDm] = useState(false);
+  const [channelId, setChannelId] = useState("");
+  const [dmText, setDmText] = useState("");
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [roles, setRoles] = useState<DiscordRole[]>([]);
   const [customEmojis, setCustomEmojis] = useState<DiscordEmoji[]>([]);
@@ -45,6 +90,11 @@ export default function WelcomePage() {
           ShrimpyAPI.getDiscordEmojis(guildId)
         ]);
         setConfig(confData);
+        setDraft(configToDraft(confData));
+        setSendChannel(!!confData.channelId);
+        setChannelId(confData.channelId || (chansData[0]?.id ?? ""));
+        setSendDm(!!confData.dmMessage);
+        setDmText(confData.dmMessage);
         setChannels(chansData);
         setRoles(rolesData);
         setCustomEmojis(emojiData);
@@ -89,9 +139,33 @@ export default function WelcomePage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!config) return;
+    if (sendChannel && !channelId) {
+      showToast("Pick a channel for the public greeting!", "warning");
+      return;
+    }
+    if (sendChannel && !draftHasContent(draft)) {
+      showToast("Add plain text or embed content to the public greeting!", "warning");
+      return;
+    }
+    if (sendDm && !dmText.trim()) {
+      showToast("Enter the direct message text!", "warning");
+      return;
+    }
+    const f = draftToFields(draft);
+    const payload: WelcomeConfig = {
+      guildId: config.guildId,
+      enabled: config.enabled,
+      dmMessage: sendDm ? dmText : "",
+      channelId: sendChannel ? channelId : "",
+      content: f.content ?? "",
+      title: f.embedTitle ?? "",
+      description: f.embedDescription ?? "",
+      color: f.embedColor,
+      media: f.embedMedia,
+    };
     setSaving(true);
     try {
-      await ShrimpyAPI.saveWelcomeConfig(guildId, config);
+      await ShrimpyAPI.saveWelcomeConfig(guildId, payload);
       showToast("Welcome settings saved successfully!", "success");
     } catch (err) {
       console.error(err);
@@ -101,12 +175,7 @@ export default function WelcomePage() {
     }
   };
 
-  const updateField = <K extends keyof WelcomeConfig>(key: K, val: WelcomeConfig[K]) => {
-    if (!config) return;
-    setConfig(prev => prev ? ({ ...prev, [key]: val }) : null);
-  };
-
-  const insertDmEmoji = useEmojiInsert(dmTextRef, config?.dmText ?? "", v => updateField('dmText', v));
+  const insertDmEmoji = useEmojiInsert(dmTextRef, dmText, setDmText);
 
   if (loading) return (
     <div>
@@ -126,91 +195,70 @@ export default function WelcomePage() {
   return (
     <div>
       <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionTitle}>Welcome Greetings Onboarding</h2>
-        <p className={styles.sectionDesc}>Customize public banner channels and direct messages sent automatically when a user joins the server.</p>
+        <h2 className={styles.sectionTitle}>Welcome Greetings</h2>
+        <p className={styles.sectionDesc}>Customize the public welcome message (plain text and/or embed) and the direct message sent automatically when a user joins the server.</p>
       </div>
 
       <div className={styles.grid}>
         {/* Configuration settings form */}
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
           
-          {/* Card customization knobs */}
+          {/* Master switch */}
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>Banner Image Knobs</h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className={styles.gridHalf} style={{ display: 'grid', gap: 'var(--space-4)' }}>
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Avatar Emoji</label>
-                  <Dropdown
-                    value={config.avatarEmoji}
-                    onChange={val => updateField('avatarEmoji', val)}
-                    options={[
-                      { value: "🦐", label: "🦐 Shrimp" },
-                      { value: "🐠", label: "🐠 Fish" },
-                      { value: "🌊", label: "🌊 Wave" },
-                      { value: "🌴", label: "🌴 Palm" },
-                      { value: "🐙", label: "🐙 Octopus" },
-                    ]}
-                  />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Banner Theme Style</label>
-                  <Dropdown
-                    value={config.cardStyle}
-                    onChange={val => updateField('cardStyle', val as 'dark' | 'light')}
-                    options={[
-                      { value: "dark", label: "Deep Blue Dark" },
-                      { value: "light", label: "Warm Apricot Light" },
-                    ]}
-                  />
-                </div>
+            <div className={styles.formGroupRow} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold' }}>Enable welcome greetings</div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Turn every greeting below on or off without losing your settings.</div>
               </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Banner Greeting Title</label>
-                <input 
-                  className={styles.input} 
-                  type="text" 
-                  value={config.welcomeText} 
-                  onChange={e => updateField('welcomeText', e.target.value)} 
-                  required 
+              <label className={styles.toggle}>
+                <input
+                  type="checkbox"
+                  checked={config.enabled}
+                  onChange={e => setConfig({ ...config, enabled: e.target.checked })}
                 />
-              </div>
+                <span className={styles.slider}></span>
+              </label>
             </div>
           </div>
 
           {/* Channel Onboarding Greeting settings */}
           <div className={styles.card}>
             <h3 className={styles.cardTitle}>Public Announcement Greeting</h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div className={styles.formGroupRow} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold' }}>Post Public Greeting Card</div>
-                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Send welcoming cards to a target guild channel.</div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'bold' }}>Post public greeting</div>
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Send a welcome message to a target guild channel.</div>
                 </div>
                 <label className={styles.toggle}>
-                  <input 
-                    type="checkbox" 
-                    checked={config.sendChannel} 
-                    onChange={e => updateField('sendChannel', e.target.checked)} 
+                  <input
+                    type="checkbox"
+                    checked={sendChannel}
+                    onChange={e => setSendChannel(e.target.checked)}
                   />
                   <span className={styles.slider}></span>
                 </label>
               </div>
 
-              {config.sendChannel && (
-                <div className={styles.formGroup}>
-                  <label className={styles.label}>Announcement Channel Target</label>
-                  <Dropdown
-                    value={config.channelId}
-                    onChange={val => updateField('channelId', val)}
-                    placeholder="Select a channel..."
-                    options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
-                  />
-                </div>
+              {sendChannel && (
+                <>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>Announcement Channel Target</label>
+                    <Dropdown
+                      value={channelId}
+                      onChange={setChannelId}
+                      placeholder="Select a channel..."
+                      options={channels.map(c => ({ value: c.id, label: `#${c.name}` }))}
+                    />
+                  </div>
+
+                  <p className={styles.sectionDesc} style={{ fontSize: '12px', margin: 0 }}>
+                    Template variables, replaced when a member joins: <code>{'{user}'}</code> (mention), <code>{'{username}'}</code>,
+                    {' '}<code>{'{server}'}</code>, <code>{'{membercount}'}</code>.
+                  </p>
+                  <MessageEditor draft={draft} onChange={setDraft} customEmojis={customEmojis} />
+                </>
               )}
             </div>
           </div>
@@ -228,14 +276,14 @@ export default function WelcomePage() {
                 <label className={styles.toggle}>
                   <input 
                     type="checkbox" 
-                    checked={config.sendDm} 
-                    onChange={e => updateField('sendDm', e.target.checked)} 
+                    checked={sendDm}
+                    onChange={e => setSendDm(e.target.checked)}
                   />
                   <span className={styles.slider}></span>
                 </label>
               </div>
 
-              {config.sendDm && (
+              {sendDm && (
                 <div className={styles.formGroup}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <label className={styles.label}>Private Greeting Content</label>
@@ -245,8 +293,8 @@ export default function WelcomePage() {
                     ref={dmTextRef}
                     className={styles.textarea}
                     rows={4}
-                    value={config.dmText}
-                    onChange={e => updateField('dmText', e.target.value)}
+                    value={dmText}
+                    onChange={e => setDmText(e.target.value)}
                     placeholder="Enter welcome message instructions..."
                     required
                   />
@@ -304,66 +352,9 @@ export default function WelcomePage() {
           </button>
         </form>
 
-        {/* Right Column: Rendering Preview card */}
-        <div>
-          <div className={styles.card} style={{ position: 'sticky', top: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 'var(--space-2)' }}>
-              <Eye size={16} style={{ color: 'var(--color-accent)' }} />
-              <h3 className={styles.cardTitle}>Live Card Banner Preview</h3>
-            </div>
-
-            {/* Embedded customizer widget (reused styling) */}
-            <div 
-              style={{
-                background: config.cardStyle === "light" ? 'linear-gradient(135deg, #fffbeb 0%, #fff8f2 100%)' : 'linear-gradient(135deg, #1e1b4b 0%, #110f24 100%)',
-                border: config.cardStyle === "light" ? '1px solid #fed7aa' : '1px solid #312e81',
-                borderRadius: '16px',
-                padding: '24px',
-                textAlign: 'center',
-                boxShadow: 'var(--shadow-sm)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-            >
-              <div 
-                style={{
-                  position: 'absolute', width: '150px', height: '150px',
-                  background: 'radial-gradient(circle, rgba(255, 123, 107, 0.2) 0%, transparent 70%)',
-                  top: '-50px', left: '-50px', pointerEvents: 'none'
-                }}
-              ></div>
-              
-              <div 
-                style={{
-                  width: '80px', height: '80px', borderRadius: '50%',
-                  border: '4px solid var(--color-primary)', margin: '0 auto 16px',
-                  background: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                }}
-              >
-                {config.avatarEmoji}
-              </div>
-              
-              <h3 style={{ fontSize: '20px', marginBottom: '8px', color: config.cardStyle === "light" ? '#1a0f1f' : '#ffffff' }}>
-                {config.welcomeText}
-              </h3>
-              
-              <p style={{ color: config.cardStyle === "light" ? '#7a5c6e' : '#a5b4fc', fontSize: '14px', marginBottom: '16px' }}>
-                We are excited to have you here! Feel free to assign yourself some roles.
-              </p>
-              
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', fontSize: '12px', color: config.cardStyle === "light" ? 'var(--color-primary)' : '#6366f1' }}>
-                <span>ID: #99318</span>
-                <span>•</span>
-                <span>Server: Shrimpy Sandbox</span>
-              </div>
-            </div>
-
-            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: 'var(--space-2)' }}>
-              <Sparkles size={12} style={{ color: 'var(--color-accent)' }} />
-              <span>Renders instantly inside Discord on join event when active.</span>
-            </div>
-          </div>
+        {/* Right Column: Live Discord preview */}
+        <div style={{ position: 'sticky', top: '24px', alignSelf: 'start' }}>
+          <MessagePreview draft={resolveDraft(draft)} />
         </div>
       </div>
     </div>

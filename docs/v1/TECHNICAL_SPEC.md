@@ -267,6 +267,8 @@ erDiagram
         TEXT dm_message
         BIGINT channel_id
         TEXT channel_message
+        TEXT embed_title
+        TEXT embed_description
         INTEGER embed_color
         JSONB embed_media
         TIMESTAMPTZ created_at
@@ -445,6 +447,8 @@ CREATE TABLE welcome_config (
     dm_message      TEXT,
     channel_id      BIGINT,
     channel_message TEXT,
+    embed_title     TEXT,                              -- migration 016
+    embed_description TEXT,                            -- migration 016
     embed_color     INTEGER,                           -- Discord decimal color int; NULL = no color bar
     embed_media     JSONB        NOT NULL DEFAULT '{}', -- { author:{name,icon_url,url}, thumbnail:{url}, image:{url}, footer:{text,icon_url} }
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
