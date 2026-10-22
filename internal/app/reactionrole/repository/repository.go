@@ -69,6 +69,7 @@ func (r *ReactionRoleRepo) UpdateMessage(ctx context.Context, msg *model.Reactio
 	result := r.db.WithContext(ctx).
 		Model(msg).
 		Updates(map[string]interface{}{
+			"content":           msg.Content,
 			"embed_title":       msg.EmbedTitle,
 			"embed_description": msg.EmbedDescription,
 			"embed_color":       msg.EmbedColor,

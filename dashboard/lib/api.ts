@@ -227,8 +227,11 @@ export interface ReactionRole {
   id: string; // Message ID
   guildId: string;
   channelId: string;
+  content?: string;
   title: string;
   description: string;
+  color?: number;
+  media?: EmbedMedia;
   mappings: ReactionRoleMapping[];
 }
 
@@ -1084,8 +1087,8 @@ export const ShrimpyAPI = {
     }
     return fetchJSON<ReactionRole>(`/api/v1/guilds/${guildId}/reaction-roles`, {
       method: 'POST',
-      // The create endpoint only takes the embed fields; mappings are added separately.
-      body: JSON.stringify({ channelId: rr.channelId, title: rr.title, description: rr.description })
+      // The create endpoint only takes the message fields; mappings are added separately.
+      body: JSON.stringify({ channelId: rr.channelId, content: rr.content, title: rr.title, description: rr.description, color: rr.color, media: rr.media })
     });
   },
 

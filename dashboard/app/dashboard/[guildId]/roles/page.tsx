@@ -15,7 +15,15 @@ import Dropdown from "@/components/Dropdown";
 import EmojiPicker from "@/components/EmojiPicker/EmojiPicker";
 import EmojiView from "@/components/EmojiView/EmojiView";
 import { useToast } from "@/hooks/useToast";
+import MessageEditor from "@/components/MessageEditor/MessageEditor";
+import MessagePreview from "@/components/MessageEditor/MessagePreview";
+import { createDraft, draftHasContent, draftToFields } from "@/components/MessageEditor/messageDraft";
 import { SkeletonCard, SkeletonHeader } from "@/components/Skeleton/Skeleton";
+
+const defaultDraft = () => createDraft({
+  embedTitle: "Select Your Roles",
+  embedDescription: "React below to pick up or drop server tags.",
+});
 
 export default function ReactionRolesPage() {
   const params = useParams();
@@ -29,8 +37,7 @@ export default function ReactionRolesPage() {
   const [loading, setLoading] = useState(true);
 
   // Form states for new panel
-  const [newTitle, setNewTitle] = useState("Select Your Roles");
-  const [newDesc, setNewDesc] = useState("React below to pick up or drop server tags.");
+  const [draft, setDraft] = useState(defaultDraft);
   const [newChannelId, setNewChannelId] = useState("");
   const [mappings, setMappings] = useState<ReactionRoleMapping[]>([]);
 
@@ -100,6 +107,10 @@ export default function ReactionRolesPage() {
 
   const handleCreateRR = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!draftHasContent(draft)) {
+      showToast("Add plain text or embed content to the message!", "warning");
+      return;
+    }
     if (mappings.length === 0) {
       showToast("Please add at least one emoji-to-role mapping!", "warning");
       return;
@@ -107,9 +118,17 @@ export default function ReactionRolesPage() {
 
     // Snapshot then reset the form synchronously so the next panel can be built while
     // the bot posts the embed and adds reactions (a multi-round-trip operation).
-    const snapshot = { channelId: newChannelId, title: newTitle, description: newDesc, mappings };
-    setNewTitle("Select Your Roles");
-    setNewDesc("React below to pick up or drop server tags.");
+    const f = draftToFields(draft);
+    const snapshot = {
+      channelId: newChannelId,
+      content: f.content,
+      title: f.embedTitle ?? "",
+      description: f.embedDescription ?? "",
+      color: f.embedColor,
+      media: f.embedMedia,
+      mappings,
+    };
+    setDraft(defaultDraft());
     setMappings([]);
 
     const toastId = showToast("Publishing reaction role panel...", "loading");
@@ -171,15 +190,7 @@ export default function ReactionRolesPage() {
                 />
               </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Widget Title Header</label>
-                <input className={styles.input} type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} required />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Widget Description Text</label>
-                <textarea className={styles.textarea} rows={3} value={newDesc} onChange={e => setNewDesc(e.target.value)} required />
-              </div>
+              <MessageEditor draft={draft} onChange={setDraft} customEmojis={customEmojis} />
 
               {/* Mapping editor block */}
               <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '16px', backgroundColor: 'rgba(0,0,0,0.1)' }}>
@@ -248,8 +259,20 @@ export default function ReactionRolesPage() {
           </div>
         </div>
 
-        {/* Right Column: Active widgets list */}
+        {/* Right Column: Preview + active widgets list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          <MessagePreview draft={draft}>
+            {mappings.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                {mappings.map(m => (
+                  <span key={m.emoji} style={{ background: '#2f3136', border: '1px solid #4f545c', borderRadius: '8px', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px', color: '#dcddde', fontSize: '12px' }}>
+                    <EmojiView emoji={m.emoji} size={14} />1
+                  </span>
+                ))}
+              </div>
+            )}
+          </MessagePreview>
+
           <div className={styles.card}>
             <h3 className={styles.cardTitle}>Active Reaction Desks</h3>
             <p className={styles.sectionDesc} style={{ fontSize: '12px', marginBottom: '8px' }}>
@@ -275,7 +298,7 @@ export default function ReactionRolesPage() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div>
-                        <div style={{ fontWeight: 'bold' }}>{rr.title}</div>
+                        <div style={{ fontWeight: 'bold' }}>{rr.title || rr.content}</div>
                         <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                           Message: `{rr.id}` in #{channels.find(c => c.id === rr.channelId)?.name || rr.channelId}
                         </div>
