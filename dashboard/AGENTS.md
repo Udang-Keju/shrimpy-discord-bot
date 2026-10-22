@@ -15,6 +15,10 @@ Before building or changing dashboard UI, read these (paths relative to this `da
 
 **Routing reminder** (USER_JOURNEY §5): `/servers` = pick a server · `/dashboard/[guildId]/…` = manage one server · bare `/dashboard` redirects to `/servers`.
 
+## API key casing
+
+The REST API speaks `snake_case` JSON; the dashboard speaks camelCase. `fetchJSON` in `lib/api.ts` converts keys in both directions (request bodies camel→snake, responses snake→camel), so types, mocks and components use camelCase (`botJoined`, `roleId`, `embedMedia`) and never spell out `snake_case` API keys by hand. Any new network call must go through `fetchJSON`, not a bare `fetch`, if it sends or receives a JSON body.
+
 ## Async mutations & toast feedback
 
 Every create/update/delete that calls `ShrimpyAPI` (`lib/api.ts`) must give the user a toast via `useToast()` (`hooks/useToast.ts` → `components/Toast/ToastProvider.tsx`):

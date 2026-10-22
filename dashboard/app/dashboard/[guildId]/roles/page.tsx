@@ -48,7 +48,14 @@ export default function ReactionRolesPage() {
           ShrimpyAPI.getDiscordRoles(guildId),
           ShrimpyAPI.getDiscordEmojis(guildId)
         ]);
-        setReactionRoles(rrData);
+        // The API returns role IDs only; resolve display names from the guild's roles.
+        setReactionRoles(rrData.map(rr => ({
+          ...rr,
+          mappings: rr.mappings.map(m => ({
+            ...m,
+            roleName: rolesData.find(r => r.id === m.roleId)?.name ?? m.roleName ?? m.roleId,
+          })),
+        })));
         setChannels(chansData);
         setRoles(rolesData);
         setCustomEmojis(emojiData);

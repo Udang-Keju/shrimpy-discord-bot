@@ -76,8 +76,8 @@ export default function ServersPage() {
   // No fallback here: an invite link built from a fake client_id silently
   // sends users to Discord's "Unknown Application" error after redirect.
   const getInviteUrl = (guildId?: string) => {
-    if (!config?.client_id) return null;
-    let url = `https://discord.com/api/oauth2/authorize?client_id=${config.client_id}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands`;
+    if (!config?.clientId) return null;
+    let url = `https://discord.com/api/oauth2/authorize?client_id=${config.clientId}&permissions=${INVITE_PERMISSIONS}&scope=bot+applications.commands`;
     if (guildId) {
       url += `&guild_id=${guildId}`;
     }
@@ -86,7 +86,7 @@ export default function ServersPage() {
 
   // Mirrors the backend AdminMiddleware: bot owner, or Administrator of a guild with the bot.
   // The server re-checks; this only decides whether to show the link.
-  const canManageBot = user?.is_owner === true || guilds.some((g) => g.is_admin && g.bot_joined);
+  const canManageBot = user?.isOwner === true || guilds.some((g) => g.isAdmin && g.botJoined);
 
   const getServerInitials =(name: string) => {
     return name
@@ -209,7 +209,7 @@ export default function ServersPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
             {guilds.map((g) => {
               const isHovered = hoveredCard === g.id;
-              const hasJoined = g.bot_joined === true;
+              const hasJoined = g.botJoined === true;
 
               return (
                 <div

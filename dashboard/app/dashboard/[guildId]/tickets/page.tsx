@@ -19,7 +19,7 @@ import {
 import styles from "@/app/dashboard/[guildId]/dashboard.module.css";
 import { ShrimpyAPI, Ticket } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
-import { Skeleton, SkeletonHeader } from "@/components/Skeleton/Skeleton";
+import { Skeleton } from "@/components/Skeleton/Skeleton";
 
 export default function TicketsPage() {
   const params = useParams();
