@@ -1348,7 +1348,7 @@ Railway hosts the Go binary as a **persistent, always-on service** on the Hobby 
 
 ```dockerfile
 # --- Build Stage ---
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -1556,7 +1556,7 @@ jobs:
       
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.26' }
+        with: { go-version: '1.27' }
       - run: go test ./...
       
       - name: Setup Node
