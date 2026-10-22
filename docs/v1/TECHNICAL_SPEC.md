@@ -556,6 +556,8 @@ CREATE TABLE users (
 
 > [!NOTE]
 > All API endpoints are prefixed with `/api/v1`. All responses use `application/json`. Authentication uses a `Bearer` token (Discord OAuth2 access token validated server-side). The Go backend proxies Discord user info validation.
+>
+> **JSON key casing:** every request and response body uses `snake_case` keys (`channel_id`, `bot_joined`, `embed_media`), including nested objects. Snowflake IDs are strings. The dashboard converts to/from camelCase in its API client; the wire format is always snake_case.
 
 ### 4.1 Authentication
 
@@ -627,13 +629,13 @@ DELETE /api/v1/guilds/:guildId/panels/:panelId/categories/:catId/handler-roles/:
 ```json
 {
   "name": "Main Support Panel",
-  "channelId": "123456789012345678",
-  "panelStyle": "buttons",
-  "embedTitle": "Open a Support Ticket",
-  "embedDescription": "Click a button below to get help.",
-  "embedColor": 16736107,
-  "embedMedia": {
-    "author": { "name": "Shrimpy Support", "iconUrl": "https://example.com/logo.png" },
+  "channel_id": "123456789012345678",
+  "panel_style": "buttons",
+  "embed_title": "Open a Support Ticket",
+  "embed_description": "Click a button below to get help.",
+  "embed_color": 16736107,
+  "embed_media": {
+    "author": { "name": "Shrimpy Support", "icon_url": "https://example.com/logo.png" },
     "footer": { "text": "Response time: 24h" }
   }
 }
@@ -643,22 +645,22 @@ DELETE /api/v1/guilds/:guildId/panels/:panelId/categories/:catId/handler-roles/:
 ```json
 {
   "name": "Technical Support",
-  "buttonLabel": "Tech Support",
+  "button_label": "Tech Support",
   "emoji": "🛠️",
-  "buttonStyle": "PRIMARY",
-  "buttonDescription": "Get help with technical issues",
-  "ticketDestination": "thread",
-  "ticketNameTemplate": "{category}-{number}",
-  "ticketOpenTitle": "New Tech Support Ticket",
-  "ticketOpenMessage": "Hey {mention}, please describe your issue.",
-  "ticketOpenColor": 16736107,
-  "ticketOpenMedia": {
+  "button_style": "PRIMARY",
+  "button_description": "Get help with technical issues",
+  "ticket_destination": "thread",
+  "ticket_name_template": "{category}-{number}",
+  "ticket_open_title": "New Tech Support Ticket",
+  "ticket_open_message": "Hey {mention}, please describe your issue.",
+  "ticket_open_color": 16736107,
+  "ticket_open_media": {
     "thumbnail": { "url": "https://example.com/tech-icon.png" }
   },
-  "maxTicketsPerUser": 2,
-  "autoCloseHours": 48,
-  "transcriptChannelId": "987654321098765432",
-  "allowUserClose": true
+  "max_tickets_per_user": 2,
+  "auto_close_hours": 48,
+  "transcript_channel_id": "987654321098765432",
+  "allow_user_close": true
 }
 ```
 
@@ -857,7 +859,7 @@ GET    /api/v1/guilds/:guildId/discord/voice-channels     # Voice channels avail
 
 `POST` body: `{ "format", "timezone" (default "UTC"), "refreshMinutes" (5, 10, 15, 30 or 60; default 5), "emoji"?, "channelId"?, "categoryId"? }`. Omit `channelId` to have the bot create a voice channel (under `categoryId`, if given) that members can see but not join; pass an existing voice channel's ID to link it instead. A linked channel is never deleted by the API. Invalid input returns `400 VALIDATION_ERROR`, an unknown clock `404 NOT_FOUND`.
 
-`GET …/timezones` returns `[{ "id": "Asia/Jakarta", "offsetMinutes": 420, "label": "(GMT+07:00) Asia/Jakarta" }, …]`, sorted from the most negative offset up. Offsets are computed per request so DST shifts are reflected. Only these zones are accepted.
+`GET …/timezones` returns `[{ "id": "Asia/Jakarta", "offset_minutes": 420, "label": "(GMT+07:00) Asia/Jakarta" }, …]`, sorted from the most negative offset up. Offsets are computed per request so DST shifts are reflected. Only these zones are accepted.
 
 > [!NOTE]
 > **Refresh and rate limits.** A background worker (started in `main.go` next to the ticket auto-close scheduler) wakes every 5 minutes (and once at startup) and renames each clock whose own `refresh_minutes` interval has elapsed (tracked in memory, so every clock refreshes right after a restart). Discord limits channel renames to about 2 per 10 minutes per channel, so the worker skips a channel whose name has not changed (tracked in `last_name`) and bounds each rename with a 10 s timeout so one rate-limited channel cannot stall the rest. The time therefore can lag by a few minutes. The bot needs **Manage Channels**.

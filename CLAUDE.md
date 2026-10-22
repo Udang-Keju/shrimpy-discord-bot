@@ -295,6 +295,8 @@ Use Supabase's **Transaction mode** connection string (port 6543) with `?pgbounc
 - Logging: Use `fmt.Printf` for structured logs (future: migrate to `slog`)
 - Database: Use GORM for ORM; raw SQL for complex queries
 - REST responses: Use `internal/pkg/apiutil` helpers (`WriteJSON`, `WriteError`)
+- **API JSON is `snake_case`, always** — every key in every request and response body (`channel_id`, `role_id`, `bot_joined`, `embed_media`, `icon_url`), including nested objects, hand-built `apiutil.JSONResponse` maps, keys read from decoded `map[string]interface{}` bodies, and JSONB blobs passed through to the client. Set an explicit `json:"snake_case"` tag on every field of a DTO or model that is serialized to the API; never rely on Go's default field names and never write a `camelCase` tag. Snowflake IDs are sent as strings (`json:"guild_id,string"` or `strconv.FormatInt`) because JS can't hold 64-bit integers. Exceptions are third-party wire formats we don't own (Discord, DeepL, Google, LibreTranslate), which keep their own casing. Dashboard code stays idiomatic camelCase: `ShrimpyAPI`'s `fetchJSON` (`dashboard/lib/api.ts`) converts keys at the network boundary, so never hand-write `snake_case` keys in dashboard components or types
+- Changing a persisted JSONB key (e.g. `EmbedMedia`) needs a migration that rewrites existing rows, as in `migrations/014_embed_media_snake_case`
 - Discord embeds: Use `discordutil.EmbedMedia` struct for consistent embed media handling
 
 ## Important Notes
