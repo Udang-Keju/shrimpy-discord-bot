@@ -100,7 +100,7 @@ func (h *BotHandler) HandleReactionRoleCommand(s *discordgo.Session, i *discordg
 
 		chID, _ := strconv.ParseInt(channel.ID, 10, 64)
 
-		msg, err := h.reactionRoleSvc.Create(context.Background(), s, guildID, chID, title, desc, nil, nil)
+		msg, err := h.reactionRoleSvc.Create(context.Background(), s, service.CreateParams{GuildID: guildID, ChannelID: chID, Title: title, Description: desc})
 		if err != nil {
 			return "", err
 		}

@@ -21,6 +21,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		guild_id INTEGER NOT NULL,
 		channel_id INTEGER NOT NULL,
 		message_id INTEGER,
+		content TEXT,
 		embed_title TEXT,
 		embed_description TEXT,
 		embed_color INTEGER,

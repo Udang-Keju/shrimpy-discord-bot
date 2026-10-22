@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -34,12 +35,15 @@ type emojiMappingResponse struct {
 // reactionRoleResponse is the dashboard-facing shape of a reaction role message.
 // Snowflake IDs are strings because JS numbers cannot hold 64-bit integers.
 type reactionRoleResponse struct {
-	ID          string                 `json:"id"`
-	GuildID     string                 `json:"guild_id"`
-	ChannelID   string                 `json:"channel_id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Mappings    []emojiMappingResponse `json:"mappings"`
+	ID          string                  `json:"id"`
+	GuildID     string                  `json:"guild_id"`
+	ChannelID   string                  `json:"channel_id"`
+	Content     string                  `json:"content"`
+	Title       string                  `json:"title"`
+	Description string                  `json:"description"`
+	Color       *int32                  `json:"color,omitempty"`
+	Media       *discordutil.EmbedMedia `json:"media,omitempty"`
+	Mappings    []emojiMappingResponse  `json:"mappings"`
 }
 
 func toReactionRoleResponse(m *model.ReactionRoleMessage) reactionRoleResponse {
@@ -48,6 +52,13 @@ func toReactionRoleResponse(m *model.ReactionRoleMessage) reactionRoleResponse {
 		GuildID:   strconv.FormatInt(m.GuildID, 10),
 		ChannelID: strconv.FormatInt(m.ChannelID, 10),
 		Mappings:  make([]emojiMappingResponse, 0, len(m.Emojis)),
+	}
+	if m.Content != nil {
+		resp.Content = *m.Content
+	}
+	resp.Color = m.EmbedColor
+	if media, err := m.GetMedia(); err == nil {
+		resp.Media = media
 	}
 	if m.EmbedTitle != nil {
 		resp.Title = *m.EmbedTitle
@@ -94,10 +105,11 @@ func (h *Handler) GetReactionRole(w http.ResponseWriter, r *http.Request) {
 }
 
 type createReactionRolePayload struct {
-	ChannelID   string                 `json:"channel_id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description"`
-	Color       *int32                 `json:"color"`
+	ChannelID   string                  `json:"channel_id"`
+	Content     string                  `json:"content"`
+	Title       string                  `json:"title"`
+	Description string                  `json:"description"`
+	Color       *int32                  `json:"color"`
 	Media       *discordutil.EmbedMedia `json:"media"`
 }
 
@@ -123,7 +135,19 @@ func (h *Handler) CreateReactionRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := h.reactionSvc.Create(r.Context(), dg, guildID, chID, payload.Title, payload.Description, payload.Color, payload.Media)
+	msg, err := h.reactionSvc.Create(r.Context(), dg, service.CreateParams{
+		GuildID:     guildID,
+		ChannelID:   chID,
+		Content:     payload.Content,
+		Title:       payload.Title,
+		Description: payload.Description,
+		Color:       payload.Color,
+		Media:       payload.Media,
+	})
+	if errors.Is(err, service.ErrEmptyMessage) {
+		apiutil.WriteError(w, http.StatusBadRequest, "BAD_REQUEST", "Add plain text or embed content to the message")
+		return
+	}
 	if err != nil {
 		apiutil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create reaction role: "+err.Error())
 		return

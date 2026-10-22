@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Udang-Keju/shrimpy-discord-bot/internal/app/reactionrole/model"
@@ -43,16 +44,59 @@ func (s *ReactionRoleService) Get(ctx context.Context, messageID string) (*model
 	return s.repo.GetMessage(ctx, messageID)
 }
 
-// Create creates a reaction role message in the DB, posts the embed on Discord, and stores the message ID.
-func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session, guildID int64, channelID int64, title, desc string, color *int32, media *discordutil.EmbedMedia) (*model.ReactionRoleMessage, error) {
-	msg := &model.ReactionRoleMessage{
-		GuildID:          guildID,
-		ChannelID:        channelID,
-		EmbedTitle:       &title,
-		EmbedDescription: &desc,
-		EmbedColor:       color,
+// ErrEmptyMessage is returned when a reaction role message has neither plain text nor embed content.
+var ErrEmptyMessage = errors.New("message needs plain text or embed content")
+
+// CreateParams holds the message content for a new reaction role message. Content is plain
+// text (Discord markdown); the embed fields are all optional, but at least one of Content or
+// an embed field must be set.
+type CreateParams struct {
+	GuildID     int64
+	ChannelID   int64
+	Content     string
+	Title       string
+	Description string
+	Color       *int32
+	Media       *discordutil.EmbedMedia
+}
+
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
 	}
-	if err := msg.SetMedia(media); err != nil {
+	return &s
+}
+
+// Create creates a reaction role message in the DB, posts it on Discord (plain text, embed, or both), and stores the message ID.
+func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session, p CreateParams) (*model.ReactionRoleMessage, error) {
+	fields := discordutil.EmbedFields{
+		Title:       nilIfEmpty(p.Title),
+		Description: nilIfEmpty(p.Description),
+		Color:       p.Color,
+		Media:       p.Media,
+	}
+	content, embed := discordutil.BuildContentAndEmbed(nilIfEmpty(p.Content), fields, func(s string) string { return s })
+	if content == "" && embed == nil {
+		return nil, ErrEmptyMessage
+	}
+	// An embed with only a color has nothing to show, and Discord rejects it.
+	if embed != nil && embed.Title == "" && embed.Description == "" && embed.Author == nil &&
+		embed.Thumbnail == nil && embed.Image == nil && embed.Footer == nil {
+		embed = nil
+		if content == "" {
+			return nil, ErrEmptyMessage
+		}
+	}
+
+	msg := &model.ReactionRoleMessage{
+		GuildID:          p.GuildID,
+		ChannelID:        p.ChannelID,
+		Content:          nilIfEmpty(content),
+		EmbedTitle:       fields.Title,
+		EmbedDescription: fields.Description,
+		EmbedColor:       p.Color,
+	}
+	if err := msg.SetMedia(p.Media); err != nil {
 		return nil, err
 	}
 
@@ -61,42 +105,15 @@ func (s *ReactionRoleService) Create(ctx context.Context, dg *discordgo.Session,
 		return nil, err
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Title:       title,
-		Description: desc,
+	channelID := p.ChannelID
+	send := &discordgo.MessageSend{Content: content}
+	if embed != nil {
+		send.Embeds = []*discordgo.MessageEmbed{embed}
 	}
-	if color != nil {
-		embed.Color = int(*color)
-	}
-
-	if media != nil {
-		if media.Author != nil {
-			embed.Author = &discordgo.MessageEmbedAuthor{Name: media.Author.Name}
-			if media.Author.IconURL != nil {
-				embed.Author.IconURL = *media.Author.IconURL
-			}
-			if media.Author.URL != nil {
-				embed.Author.URL = *media.Author.URL
-			}
-		}
-		if media.Thumbnail != nil {
-			embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: media.Thumbnail.URL}
-		}
-		if media.Image != nil {
-			embed.Image = &discordgo.MessageEmbedImage{URL: media.Image.URL}
-		}
-		if media.Footer != nil {
-			embed.Footer = &discordgo.MessageEmbedFooter{Text: media.Footer.Text}
-			if media.Footer.IconURL != nil {
-				embed.Footer.IconURL = *media.Footer.IconURL
-			}
-		}
-	}
-
-	dgMsg, err := dg.ChannelMessageSendEmbed(fmt.Sprintf("%d", channelID), embed)
+	dgMsg, err := dg.ChannelMessageSendComplex(fmt.Sprintf("%d", channelID), send)
 	if err != nil {
 		_ = s.repo.DeleteMessage(ctx, created.ID)
-		return nil, fmt.Errorf("failed to post Discord embed: %w", err)
+		return nil, fmt.Errorf("failed to post Discord message: %w", err)
 	}
 
 	discordMsgID, err := discordutil.ParseID(dgMsg.ID)

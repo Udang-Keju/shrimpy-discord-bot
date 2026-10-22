@@ -13,6 +13,7 @@ type ReactionRoleMessage struct {
 	GuildID          int64          `gorm:"column:guild_id;not null"`
 	ChannelID        int64          `gorm:"column:channel_id;not null"`
 	MessageID        *int64         `gorm:"column:message_id"`
+	Content          *string        `gorm:"column:content"`
 	EmbedTitle       *string        `gorm:"column:embed_title"`
 	EmbedDescription *string        `gorm:"column:embed_description"`
 	EmbedColor       *int32         `gorm:"column:embed_color"`
@@ -39,10 +40,10 @@ func (r *ReactionRoleMessage) SetMedia(m *discordutil.EmbedMedia) (err error) {
 
 // ReactionRoleEmoji maps to the reaction_role_emojis table.
 type ReactionRoleEmoji struct {
-	ID        string    `gorm:"primaryKey;type:uuid"`
-	MessageID string    `gorm:"column:message_id;not null;type:uuid"`
-	Emoji     string    `gorm:"column:emoji;not null"`
-	RoleID    int64     `gorm:"column:role_id;not null"`
+	ID        string `gorm:"primaryKey;type:uuid"`
+	MessageID string `gorm:"column:message_id;not null;type:uuid"`
+	Emoji     string `gorm:"column:emoji;not null"`
+	RoleID    int64  `gorm:"column:role_id;not null"`
 	CreatedAt time.Time
 }
 

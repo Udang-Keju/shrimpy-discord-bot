@@ -185,11 +185,30 @@ func TestReactionRoleService_Create(t *testing.T) {
 		},
 	}
 
-	created, err := svc.Create(ctx, dg, guildID, channelID, title, desc, nil, nil)
+	created, err := svc.Create(ctx, dg, service.CreateParams{GuildID: guildID, ChannelID: channelID, Title: title, Description: desc})
 	assert.NoError(t, err)
 	assert.NotNil(t, created)
 	assert.True(t, discordCalled)
 	assert.Equal(t, int64(777), *created.MessageID)
+}
+
+func TestReactionRoleService_Create_Validation(t *testing.T) {
+	svc := service.NewReactionRoleService(&MockReactionRoleRepository{})
+	color := int32(0x5865F2)
+
+	tests := []struct {
+		name string
+		p    service.CreateParams
+	}{
+		{"nothing", service.CreateParams{ChannelID: 1}},
+		{"color only", service.CreateParams{ChannelID: 1, Color: &color}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.Create(context.Background(), nil, tt.p)
+			assert.ErrorIs(t, err, service.ErrEmptyMessage)
+		})
+	}
 }
 
 func TestReactionRoleService_AddRemoveDelete(t *testing.T) {
