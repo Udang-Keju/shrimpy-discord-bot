@@ -44,24 +44,24 @@ var (
 // TicketPanel maps to the ticket_panels table.
 type TicketPanel struct {
 	ID               string         `gorm:"primaryKey;type:uuid" json:"id"`
-	GuildID          int64          `gorm:"column:guild_id;not null" json:"guildId,string"`
+	GuildID          int64          `gorm:"column:guild_id;not null" json:"guild_id,string"`
 	Name             string         `gorm:"column:name;not null" json:"name"`
-	ChannelID        int64          `gorm:"column:channel_id;not null" json:"channelId,string"`
-	MessageID        *int64         `gorm:"column:message_id" json:"messageId,string,omitempty"`
-	PanelStyle       string         `gorm:"column:panel_style;default:'buttons'" json:"panelStyle"`
+	ChannelID        int64          `gorm:"column:channel_id;not null" json:"channel_id,string"`
+	MessageID        *int64         `gorm:"column:message_id" json:"message_id,string,omitempty"`
+	PanelStyle       string         `gorm:"column:panel_style;default:'buttons'" json:"panel_style"`
 	Content          *string        `gorm:"column:content" json:"content,omitempty"`
-	EmbedTitle       *string        `gorm:"column:embed_title" json:"embedTitle,omitempty"`
-	EmbedDescription *string        `gorm:"column:embed_description" json:"embedDescription,omitempty"`
-	EmbedColor       *int32         `gorm:"column:embed_color" json:"embedColor,omitempty"`
-	EmbedMedia       datatypes.JSON `gorm:"column:embed_media;type:jsonb" json:"embedMedia,omitempty"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
+	EmbedTitle       *string        `gorm:"column:embed_title" json:"embed_title,omitempty"`
+	EmbedDescription *string        `gorm:"column:embed_description" json:"embed_description,omitempty"`
+	EmbedColor       *int32         `gorm:"column:embed_color" json:"embed_color,omitempty"`
+	EmbedMedia       datatypes.JSON `gorm:"column:embed_media;type:jsonb" json:"embed_media,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 	// Associations
 	Categories []TicketCategory `gorm:"foreignKey:PanelID" json:"categories,omitempty"`
 	// HandlerRoleIDs is a transient, non-persisted field: when present (even if empty) on
 	// a create/update payload, the handler reconciles panel_handler_roles to match it
 	// exactly. Nil means "leave handler roles untouched" (e.g. responses from reads).
-	HandlerRoleIDs *[]string `gorm:"-" json:"handlerRoleIds,omitempty"`
+	HandlerRoleIDs *[]string `gorm:"-" json:"handler_role_ids,omitempty"`
 }
 
 // TableName overrides the default table name mapping.
@@ -72,9 +72,9 @@ func (TicketPanel) TableName() string { return "ticket_panels" }
 // handle the ticket — distinct from staff_roles, which gate dashboard access.
 type PanelHandlerRole struct {
 	ID        string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	PanelID   string    `gorm:"column:panel_id;not null;type:uuid" json:"panelId"`
-	RoleID    int64     `gorm:"column:role_id;not null" json:"roleId,string"`
-	CreatedAt time.Time `json:"createdAt"`
+	PanelID   string    `gorm:"column:panel_id;not null;type:uuid" json:"panel_id"`
+	RoleID    int64     `gorm:"column:role_id;not null" json:"role_id,string"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // TableName overrides the default table name mapping.
@@ -85,9 +85,9 @@ func (PanelHandlerRole) TableName() string { return "panel_handler_roles" }
 // additive to the panel's handler roles.
 type CategoryHandlerRole struct {
 	ID         string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	CategoryID string    `gorm:"column:category_id;not null;type:uuid" json:"categoryId"`
-	RoleID     int64     `gorm:"column:role_id;not null" json:"roleId,string"`
-	CreatedAt  time.Time `json:"createdAt"`
+	CategoryID string    `gorm:"column:category_id;not null;type:uuid" json:"category_id"`
+	RoleID     int64     `gorm:"column:role_id;not null" json:"role_id,string"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // TableName overrides the default table name mapping.
@@ -107,36 +107,36 @@ func (p *TicketPanel) SetMedia(m *discordutil.EmbedMedia) (err error) {
 // TicketCategory maps to the ticket_categories table.
 type TicketCategory struct {
 	ID                  string         `gorm:"primaryKey;type:uuid" json:"id"`
-	PanelID             string         `gorm:"column:panel_id;not null;type:uuid" json:"panelId"`
+	PanelID             string         `gorm:"column:panel_id;not null;type:uuid" json:"panel_id"`
 	Name                string         `gorm:"column:name;not null" json:"name"`
 	Emoji               *string        `gorm:"column:emoji" json:"emoji,omitempty"`
-	ButtonLabel         string         `gorm:"column:button_label;not null" json:"buttonLabel"`
-	ButtonStyle         string         `gorm:"column:button_style;default:'primary'" json:"buttonStyle"`
-	ButtonDescription   *string        `gorm:"column:button_description" json:"buttonDescription,omitempty"`
-	ButtonOrder         int16          `gorm:"column:button_order;default:0" json:"buttonOrder"`
-	TicketDestination   string         `gorm:"column:ticket_destination;default:'thread'" json:"ticketDestination"`
+	ButtonLabel         string         `gorm:"column:button_label;not null" json:"button_label"`
+	ButtonStyle         string         `gorm:"column:button_style;default:'primary'" json:"button_style"`
+	ButtonDescription   *string        `gorm:"column:button_description" json:"button_description,omitempty"`
+	ButtonOrder         int16          `gorm:"column:button_order;default:0" json:"button_order"`
+	TicketDestination   string         `gorm:"column:ticket_destination;default:'thread'" json:"ticket_destination"`
 	// ThreadParentChannelID is the text channel a private thread is started from (thread
 	// destination only). NULL ⇒ fall back to the panel's channel.
-	ThreadParentChannelID *int64 `gorm:"column:thread_parent_channel_id" json:"threadParentChannelId,string,omitempty"`
+	ThreadParentChannelID *int64 `gorm:"column:thread_parent_channel_id" json:"thread_parent_channel_id,string,omitempty"`
 	// ChannelCategoryID is the Discord channel group a dedicated channel is placed under
 	// (channel destination only). NULL ⇒ no group / guild root.
-	ChannelCategoryID   *int64         `gorm:"column:channel_category_id" json:"channelCategoryId,string,omitempty"`
-	TicketNameTemplate  string         `gorm:"column:ticket_name_template;default:'{category}-{number}'" json:"ticketNameTemplate"`
-	TicketOpenTitle     *string        `gorm:"column:ticket_open_title" json:"ticketOpenTitle,omitempty"`
-	TicketOpenMessage   *string        `gorm:"column:ticket_open_message" json:"ticketOpenMessage,omitempty"`
-	TicketOpenColor     *int32         `gorm:"column:ticket_open_color" json:"ticketOpenColor,omitempty"`
-	TicketOpenMedia     datatypes.JSON `gorm:"column:ticket_open_media;type:jsonb" json:"ticketOpenMedia,omitempty"`
-	TicketOpenContent   *string        `gorm:"column:ticket_open_content" json:"ticketOpenContent,omitempty"`
-	MaxTicketsPerUser   int            `gorm:"column:max_tickets_per_user;default:1" json:"maxTicketsPerUser"`
-	AutoCloseHours      *int           `gorm:"column:auto_close_hours" json:"autoCloseHours,omitempty"`
-	TranscriptChannelID *int64         `gorm:"column:transcript_channel_id" json:"transcriptChannelId,string,omitempty"`
-	AllowUserClose      bool           `gorm:"column:allow_user_close;default:true" json:"allowUserClose"`
-	CreatedAt           time.Time      `json:"createdAt"`
-	UpdatedAt           time.Time      `json:"updatedAt"`
+	ChannelCategoryID   *int64         `gorm:"column:channel_category_id" json:"channel_category_id,string,omitempty"`
+	TicketNameTemplate  string         `gorm:"column:ticket_name_template;default:'{category}-{number}'" json:"ticket_name_template"`
+	TicketOpenTitle     *string        `gorm:"column:ticket_open_title" json:"ticket_open_title,omitempty"`
+	TicketOpenMessage   *string        `gorm:"column:ticket_open_message" json:"ticket_open_message,omitempty"`
+	TicketOpenColor     *int32         `gorm:"column:ticket_open_color" json:"ticket_open_color,omitempty"`
+	TicketOpenMedia     datatypes.JSON `gorm:"column:ticket_open_media;type:jsonb" json:"ticket_open_media,omitempty"`
+	TicketOpenContent   *string        `gorm:"column:ticket_open_content" json:"ticket_open_content,omitempty"`
+	MaxTicketsPerUser   int            `gorm:"column:max_tickets_per_user;default:1" json:"max_tickets_per_user"`
+	AutoCloseHours      *int           `gorm:"column:auto_close_hours" json:"auto_close_hours,omitempty"`
+	TranscriptChannelID *int64         `gorm:"column:transcript_channel_id" json:"transcript_channel_id,string,omitempty"`
+	AllowUserClose      bool           `gorm:"column:allow_user_close;default:true" json:"allow_user_close"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
 	// HandlerRoleIDs is a transient, non-persisted field: when present (even if empty) on
 	// a create/update payload, the handler reconciles category_handler_roles to match it
 	// exactly. Nil means "leave handler roles untouched" (e.g. responses from reads).
-	HandlerRoleIDs *[]string `gorm:"-" json:"handlerRoleIds,omitempty"`
+	HandlerRoleIDs *[]string `gorm:"-" json:"handler_role_ids,omitempty"`
 }
 
 // TableName overrides the default table name mapping.

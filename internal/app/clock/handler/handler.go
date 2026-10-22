@@ -27,11 +27,11 @@ func NewHandler(clockSvc *service.ClockService) *Handler {
 // clockDTO shapes the API response. Snowflakes are strings in JSON.
 type clockDTO struct {
 	ID             string  `json:"id"`
-	ChannelID      string  `json:"channelId"`
+	ChannelID      string  `json:"channel_id"`
 	Kind           string  `json:"kind"`
 	Format         string  `json:"format"`
 	Timezone       string  `json:"timezone"`
-	RefreshMinutes int     `json:"refreshMinutes"`
+	RefreshMinutes int     `json:"refresh_minutes"`
 	Emoji          *string `json:"emoji"`
 	Managed        bool    `json:"managed"`
 	Name           string  `json:"name"` // channel name last written; "" until first rename
@@ -79,10 +79,10 @@ func (h *Handler) Timezones(w http.ResponseWriter, r *http.Request) {
 type createRequest struct {
 	Format         string  `json:"format"`
 	Timezone       string  `json:"timezone"`
-	RefreshMinutes int     `json:"refreshMinutes"`
+	RefreshMinutes int     `json:"refresh_minutes"`
 	Emoji          string  `json:"emoji"`
-	ChannelID      *string `json:"channelId"`
-	CategoryID     *string `json:"categoryId"`
+	ChannelID      *string `json:"channel_id"`
+	CategoryID     *string `json:"category_id"`
 }
 
 // Create adds a clock channel.
@@ -125,7 +125,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 type updateRequest struct {
 	Format         string `json:"format"`
 	Timezone       string `json:"timezone"`
-	RefreshMinutes int    `json:"refreshMinutes"`
+	RefreshMinutes int    `json:"refresh_minutes"`
 	Emoji          string `json:"emoji"`
 }
 

@@ -25,26 +25,26 @@ func NewHandler(translationSvc *service.TranslationService) *Handler {
 // never serialized — only whether one is set — so ciphertext never leaves the
 // backend.
 type channelDTO struct {
-	ChannelID          string  `json:"channelId"`
-	TargetLangOverride *string `json:"targetLangOverride"`
+	ChannelID          string  `json:"channel_id"`
+	TargetLangOverride *string `json:"target_lang_override"`
 }
 
 type emojiDTO struct {
 	Emoji              string  `json:"emoji"`
-	TargetLangOverride *string `json:"targetLangOverride"`
+	TargetLangOverride *string `json:"target_lang_override"`
 }
 
 type configDTO struct {
-	GuildID          string       `json:"guildId"`
+	GuildID          string       `json:"guild_id"`
 	Enabled          bool         `json:"enabled"`
-	AutoEnabled      bool         `json:"autoEnabled"`
-	ReactionEnabled  bool         `json:"reactionEnabled"`
-	ReactionDelivery string       `json:"reactionDelivery"` // "channel" or "dm"
+	AutoEnabled      bool         `json:"auto_enabled"`
+	ReactionEnabled  bool         `json:"reaction_enabled"`
+	ReactionDelivery string       `json:"reaction_delivery"` // "channel" or "dm"
 	Provider         string       `json:"provider"`
-	APIKey          string       `json:"apiKey"` // masked "***" when set, "" when unset
-	HasAPIKey       bool         `json:"hasApiKey"`
-	EndpointURL     *string      `json:"endpointUrl"`
-	TargetLang      *string      `json:"targetLang"`
+	APIKey          string       `json:"api_key"` // masked "***" when set, "" when unset
+	HasAPIKey       bool         `json:"has_api_key"`
+	EndpointURL     *string      `json:"endpoint_url"`
+	TargetLang      *string      `json:"target_lang"`
 	Channels        []channelDTO `json:"channels"`
 	Emojis          []emojiDTO   `json:"emojis"`
 }
@@ -77,13 +77,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 // saveRequest is the dashboard payload for the config PUT.
 type saveRequest struct {
 	Enabled          bool    `json:"enabled"`
-	AutoEnabled      bool    `json:"autoEnabled"`
-	ReactionEnabled  bool    `json:"reactionEnabled"`
-	ReactionDelivery string  `json:"reactionDelivery"`
+	AutoEnabled      bool    `json:"auto_enabled"`
+	ReactionEnabled  bool    `json:"reaction_enabled"`
+	ReactionDelivery string  `json:"reaction_delivery"`
 	Provider         string  `json:"provider"`
-	APIKey           string  `json:"apiKey"`
-	EndpointURL      *string `json:"endpointUrl"`
-	TargetLang       *string `json:"targetLang"`
+	APIKey           string  `json:"api_key"`
+	EndpointURL      *string `json:"endpoint_url"`
+	TargetLang       *string `json:"target_lang"`
 }
 
 // Save upserts the translation config (excluding channel/emoji lists).
@@ -118,8 +118,8 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 
 // channelRequest is the payload for adding an auto-translate channel.
 type channelRequest struct {
-	ChannelID          string  `json:"channelId"`
-	TargetLangOverride *string `json:"targetLangOverride"`
+	ChannelID          string  `json:"channel_id"`
+	TargetLangOverride *string `json:"target_lang_override"`
 }
 
 // AddChannel adds an auto-translate channel.
@@ -163,7 +163,7 @@ func (h *Handler) RemoveChannel(w http.ResponseWriter, r *http.Request) {
 // emojiRequest is the payload for adding a trigger emoji.
 type emojiRequest struct {
 	Emoji              string  `json:"emoji"`
-	TargetLangOverride *string `json:"targetLangOverride"`
+	TargetLangOverride *string `json:"target_lang_override"`
 }
 
 // AddEmoji adds a reaction trigger emoji.

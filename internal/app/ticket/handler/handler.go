@@ -497,15 +497,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 // resolved usernames/category name that the Ticket model does not carry directly.
 type ticketDTO struct {
 	ID              string  `json:"id"`
-	GuildID         string  `json:"guildId"`
-	ChannelID       string  `json:"channelId"`
-	CreatorID       string  `json:"creatorId"`
-	CreatorUsername string  `json:"creatorUsername"`
+	GuildID         string  `json:"guild_id"`
+	ChannelID       string  `json:"channel_id"`
+	CreatorID       string  `json:"creator_id"`
+	CreatorUsername string  `json:"creator_username"`
 	Status          string  `json:"status"`
-	AssignedTo      *string `json:"assignedTo,omitempty"`
-	CategoryName    string  `json:"categoryName"`
-	CreatedAt       string  `json:"createdAt"`
-	ClosedAt        *string `json:"closedAt,omitempty"`
+	AssignedTo      *string `json:"assigned_to,omitempty"`
+	CategoryName    string  `json:"category_name"`
+	CreatedAt       string  `json:"created_at"`
+	ClosedAt        *string `json:"closed_at,omitempty"`
 }
 
 func newTicketDTO(t *model.Ticket, resolveName func(int64) string) ticketDTO {
@@ -836,15 +836,15 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutil.WriteJSON(w, http.StatusOK, apiutil.JSONResponse{
-		"memberCount": memberCount,
+		"member_count": memberCount,
 		"tickets": apiutil.JSONResponse{
-			"open":            stats.Open,
-			"claimed":         stats.Claimed,
-			"resolved":        stats.Resolved,
-			"closedThisMonth": stats.ClosedThisMonth,
-			"archivedTotal":   stats.ArchivedTotal,
+			"open":              stats.Open,
+			"claimed":           stats.Claimed,
+			"resolved":          stats.Resolved,
+			"closed_this_month": stats.ClosedThisMonth,
+			"archived_total":    stats.ArchivedTotal,
 		},
-		"avgResolutionMinutes": stats.AvgResolutionMin,
-		"topCategory":          topCategoryName,
+		"avg_resolution_minutes": stats.AvgResolutionMin,
+		"top_category":           topCategoryName,
 	})
 }

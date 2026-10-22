@@ -79,7 +79,7 @@ var timezones = []string{
 // given instant.
 type TimezoneOption struct {
 	ID            string `json:"id"`            // IANA name, e.g. "Asia/Jakarta"
-	OffsetMinutes int    `json:"offsetMinutes"` // minutes east of GMT at the reference instant
+	OffsetMinutes int    `json:"offset_minutes"` // minutes east of GMT at the reference instant
 	Label         string `json:"label"`         // "(GMT+07:00) Asia/Jakarta"
 }
 
