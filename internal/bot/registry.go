@@ -142,6 +142,7 @@ func (r *Registry) StartSession(
 
 	dg.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMessages |
+		discordgo.IntentsGuildMembers |
 		discordgo.IntentsGuildMessageReactions |
 		discordgo.IntentMessageContent
 
