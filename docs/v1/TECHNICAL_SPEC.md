@@ -486,6 +486,7 @@ CREATE TABLE reaction_role_messages (
     guild_id          BIGINT       NOT NULL REFERENCES guilds(guild_id) ON DELETE CASCADE,
     channel_id        BIGINT       NOT NULL,
     message_id        VARCHAR(30),
+    content           TEXT,
     embed_title       TEXT,
     embed_description TEXT,
     embed_color       INTEGER,
